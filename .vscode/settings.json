@@ -1,0 +1,35 @@
+{
+  "//": "Shared VS Code workspace settings for CampusRPG. Each member must set QT_DIR and QT_MINGW_BIN env vars (see README §2.3).",
+
+  "cmake.sourceDirectory": "${workspaceFolder}/campus-rpg",
+  "cmake.buildDirectory": "${workspaceFolder}/campus-rpg/build",
+  "cmake.configureOnOpen": true,
+
+  "cmake.generator": "MinGW Makefiles",
+  "cmake.configureSettings": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_PREFIX_PATH": "${env:QT_DIR}",
+    "CMAKE_EXPORT_COMPILE_COMMANDS": true
+  },
+  "cmake.environment": {
+    "CXX": "${env:QT_MINGW_BIN}/g++.exe"
+  },
+
+  "C_Cpp.default.cppStandard": "c++20",
+  "C_Cpp.default.intelliSenseMode": "windows-gcc-x64",
+
+  "files.associations": {
+    "*.ui": "xml",
+    "*.qrc": "xml"
+  },
+  "search.exclude": {
+    "**/build": true,
+    "**/build-vs": true
+  },
+
+  "extensions.recommendations": [
+    "ms-vscode.cpptools",
+    "ms-vscode.cmake-tools",
+    "ms-vscode.cpptools-extension-pack"
+  ]
+}

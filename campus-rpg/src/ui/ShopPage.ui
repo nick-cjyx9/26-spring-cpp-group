@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ShopPage</class>
+ <widget class="QWidget" name="ShopPage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>500</width>
+    <height>350</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Shop</string>
+  </property>
+  <layout class="QHBoxLayout" name="horizontalLayout">
+   <item>
+    <layout class="QVBoxLayout" name="shopLayout">
+     <item>
+      <widget class="QLabel" name="shopLabel">
+       <property name="text">
+        <string>Shop Items</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QListWidget" name="shopList"/>
+     </item>
+     <item>
+      <widget class="QPushButton" name="buyButton">
+       <property name="text">
+        <string>Buy</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QVBoxLayout" name="inventoryLayout">
+     <item>
+      <widget class="QLabel" name="inventoryLabel">
+       <property name="text">
+        <string>Your Items (sell for half price)</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QListWidget" name="inventoryList"/>
+     </item>
+     <item>
+      <widget class="QPushButton" name="sellButton">
+       <property name="text">
+        <string>Sell</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -30,8 +30,6 @@ Release/
 x64/
 x86/
 
-# IDE 配置
-.vscode/
 .idea/
 *.sln
 *.vcxproj
@@ -56,9 +54,51 @@ pnpm-lock.yaml
 .DS_Store
 Thumbs.db
 
-# 大型数据文件与归档
-*.zip
-*.rar
-*.7z
-*.tar
-*.gz
+# Build directories
+build/
+out/
+cmake-build-*/
+
+# Qt
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.autosave
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.pdb
+*.ilk
+*.idb
+*.obj
+x64/
+x86/
+Debug/
+Release/
+
+# CLion / JetBrains
+.idea/
+
+*.code-workspace
+
+# Database / save files generated at runtime
+*.db
+*.sav
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log

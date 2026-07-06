@@ -1,0 +1,47 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug CampusRPG (MinGW/gdb)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/campus-rpg/build/CampusRPG.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/campus-rpg/build",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "${env:QT_MINGW_BIN}/gdb.exe",
+      "setupCommands": [
+        {
+          "text": "-enable-pretty-printer",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "cmake-build",
+      "visualizerFile": "c:\\Users\\Nick\\AppData\\Roaming\\Code\\User\\workspaceStorage\\8fb5bef46c071bb2a8a02e3aa95925c6\\tonka3000.qtvsctools\\qt.natvis.xml"
+    },
+    {
+      "name": "Debug CampusRPGTests (MinGW/gdb)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/campus-rpg/build/tests/CampusRPGTests.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/campus-rpg/build/tests",
+      "environment": [],
+      "externalConsole": true,
+      "MIMode": "gdb",
+      "miDebuggerPath": "${env:QT_MINGW_BIN}/gdb.exe",
+      "setupCommands": [
+        {
+          "text": "-enable-pretty-printer",
+          "ignoreFailures": true
+        }
+      ],
+      "preLaunchTask": "cmake-build",
+      "visualizerFile": "c:\\Users\\Nick\\AppData\\Roaming\\Code\\User\\workspaceStorage\\8fb5bef46c071bb2a8a02e3aa95925c6\\tonka3000.qtvsctools\\qt.natvis.xml"
+    }
+  ]
+}
