@@ -1,0 +1,44 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  build-and-test:
+    name: PR Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          cache: true
+
+      - name: Configure
+        working-directory: campus-rpg
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        working-directory: campus-rpg
+        run: cmake --build build --parallel
+
+      - name: Test
+        working-directory: campus-rpg
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Lint / Basic checks
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          echo "Repository structure check"
+          test -f campus-rpg/CMakeLists.txt
+          test -f campus-rpg/tests/CMakeLists.txt
+          test -f campus-rpg/tests/test_core.cpp

@@ -1,0 +1,51 @@
+name: Auto Build
+
+on:
+  push:
+    branches: [main, dev]
+
+jobs:
+  build-and-test:
+    name: Auto Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          cache: true
+
+      - name: Configure
+        working-directory: campus-rpg
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        working-directory: campus-rpg
+        run: cmake --build build --parallel
+
+      - name: Test
+        working-directory: campus-rpg
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Package artifacts
+        if: matrix.os == 'windows-latest'
+        run: |
+          mkdir -p dist
+          copy campus-rpg/build/CampusRPG.exe dist/
+          copy campus-rpg/build/tests/CampusRPGTests.exe dist/
+
+      - name: Upload Windows artifacts
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusRPG-windows
+          path: dist/
+          if-no-files-found: error
