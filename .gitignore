@@ -1,0 +1,64 @@
+# ============================================================
+# 个人隐私信息保护
+# 任何包含真实姓名、学号、联系方式等个人信息的文件，
+# 请保存为 .secret.xxx 格式（如 小组成员及分工.secret.md）。
+# 以下规则确保这些文件不会被提交到 GitHub。
+# ============================================================
+*.secret.*
+
+# ============================================================
+# C++ 项目常见忽略项
+# ============================================================
+# 编译输出
+*.exe
+*.out
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+
+# 构建目录
+build/
+build-*/
+cmake-build-*/
+out/
+Debug/
+Release/
+x64/
+x86/
+
+# IDE 配置
+.vscode/
+.idea/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.user
+*.suo
+*.ncb
+*.sdf
+*.opensdf
+
+# 依赖与包管理
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 日志与临时文件
+*.log
+*.tmp
+*.temp
+*.cache
+.DS_Store
+Thumbs.db
+
+# 大型数据文件与归档
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
