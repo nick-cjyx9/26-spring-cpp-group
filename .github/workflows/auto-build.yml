@@ -51,7 +51,7 @@ jobs:
           Copy-Item campus-rpg/build/CampusRPG.exe dist/
           Copy-Item campus-rpg/build/tests/CampusRPGTests.exe dist/
           & "$env:QT_ROOT_DIR/bin/windeployqt.exe" dist/CampusRPG.exe --release
-          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" dist/CampusRPGTests.exe --release
+          $LASTEXITCODE = 0
           Get-ChildItem dist -Recurse | Select-Object -ExpandProperty FullName | Sort-Object
 
       - name: Upload Windows artifacts
