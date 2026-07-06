@@ -12,15 +12,14 @@
       "environment": [],
       "externalConsole": true,
       "MIMode": "gdb",
-      "miDebuggerPath": "${env:QT_MINGW_BIN}/gdb.exe",
+      "miDebuggerPath": "${env:MINGW_BIN}/gdb.exe",
       "setupCommands": [
         {
           "text": "-enable-pretty-printer",
           "ignoreFailures": true
         }
       ],
-      "preLaunchTask": "cmake-build",
-      "visualizerFile": "c:\\Users\\Nick\\AppData\\Roaming\\Code\\User\\workspaceStorage\\8fb5bef46c071bb2a8a02e3aa95925c6\\tonka3000.qtvsctools\\qt.natvis.xml"
+      "preLaunchTask": "cmake-build"
     },
     {
       "name": "Debug CampusRPGTests (MinGW/gdb)",
@@ -33,15 +32,14 @@
       "environment": [],
       "externalConsole": true,
       "MIMode": "gdb",
-      "miDebuggerPath": "${env:QT_MINGW_BIN}/gdb.exe",
+      "miDebuggerPath": "${env:MINGW_BIN}/gdb.exe",
       "setupCommands": [
         {
           "text": "-enable-pretty-printer",
           "ignoreFailures": true
         }
       ],
-      "preLaunchTask": "cmake-build",
-      "visualizerFile": "c:\\Users\\Nick\\AppData\\Roaming\\Code\\User\\workspaceStorage\\8fb5bef46c071bb2a8a02e3aa95925c6\\tonka3000.qtvsctools\\qt.natvis.xml"
+      "preLaunchTask": "cmake-build"
     }
   ]
 }

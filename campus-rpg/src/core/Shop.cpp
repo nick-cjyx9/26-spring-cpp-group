@@ -13,12 +13,14 @@ bool Shop::buy(size_t index, Character &buyer, Inventory &targetInventory)
 {
     if (index >= items_.size())
         return false;
+    if (targetInventory.isFull())
+        return false;
+
     int price = items_[index]->value();
     if (!buyer.spendGold(price))
         return false;
 
-    targetInventory.addItem(items_[index]->clone());
-    return true;
+    return targetInventory.addItem(items_[index]->clone());
 }
 
 bool Shop::sell(size_t inventoryIndex, Character &seller, Inventory &sellerInventory)

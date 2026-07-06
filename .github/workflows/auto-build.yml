@@ -22,13 +22,6 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.8.*'
-          arch: ${{ runner.os == 'Windows' && 'win64_msvc2022_64' || '' }}
-          cache: true
-
       - name: Configure
         working-directory: campus-rpg
         env:
@@ -50,8 +43,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item campus-rpg/build/CampusRPG.exe dist/
           Copy-Item campus-rpg/build/tests/CampusRPGTests.exe dist/
-          & "$env:QT_ROOT_DIR/bin/windeployqt.exe" dist/CampusRPG.exe --release
-          $LASTEXITCODE = 0
+          Copy-Item campus-rpg/build/_deps/sfml-build/lib/*.dll dist/ -ErrorAction SilentlyContinue
+          Copy-Item campus-rpg/build/*.dll dist/ -ErrorAction SilentlyContinue
           Get-ChildItem dist -Recurse | Select-Object -ExpandProperty FullName | Sort-Object
 
       - name: Upload Windows artifacts

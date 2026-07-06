@@ -13,8 +13,12 @@ std::string Item::typeString() const
         return "Food";
     case ItemType::Potion:
         return "Potion";
+    case ItemType::SpRecovery:
+        return "SP";
     case ItemType::Equipment:
         return "Equipment";
+    case ItemType::Persona:
+        return "Persona";
     }
     return "Unknown";
 }
@@ -47,17 +51,47 @@ void PotionItem::use(Character &character)
     character.heal(healAmount_);
 }
 
+SpItem::SpItem(std::string id, std::string name, std::string description, int value, int spAmount)
+    : Item(std::move(id), std::move(name), std::move(description), value, ItemType::SpRecovery),
+      spAmount_(spAmount) {}
+
+std::unique_ptr<Item> SpItem::clone() const
+{
+    return std::make_unique<SpItem>(id_, name_, description_, value_, spAmount_);
+}
+
+void SpItem::use(Character &character)
+{
+    character.recoverSp(spAmount_);
+}
+
 EquipmentItem::EquipmentItem(std::string id, std::string name, std::string description, int value,
-                             int attackBonus, int defenseBonus)
+                             int attackBonus, int defenseBonus, int speedBonus)
     : Item(std::move(id), std::move(name), std::move(description), value, ItemType::Equipment),
-      attackBonus_(attackBonus), defenseBonus_(defenseBonus) {}
+      attackBonus_(attackBonus), defenseBonus_(defenseBonus), speedBonus_(speedBonus) {}
 
 std::unique_ptr<Item> EquipmentItem::clone() const
 {
-    return std::make_unique<EquipmentItem>(id_, name_, description_, value_, attackBonus_, defenseBonus_);
+    return std::make_unique<EquipmentItem>(id_, name_, description_, value_, attackBonus_, defenseBonus_, speedBonus_);
 }
 
 void EquipmentItem::use(Character &character)
 {
-    character.equip(std::make_shared<EquipmentItem>(id_, name_, description_, value_, attackBonus_, defenseBonus_));
+    character.equip(std::make_shared<EquipmentItem>(id_, name_, description_, value_,
+                                                    attackBonus_, defenseBonus_, speedBonus_));
+}
+
+PersonaItem::PersonaItem(std::string id, std::string name, std::string description, int value,
+                         std::string personaId)
+    : Item(std::move(id), std::move(name), std::move(description), value, ItemType::Persona),
+      personaId_(std::move(personaId)) {}
+
+std::unique_ptr<Item> PersonaItem::clone() const
+{
+    return std::make_unique<PersonaItem>(id_, name_, description_, value_, personaId_);
+}
+
+void PersonaItem::use(Character & /*character*/)
+{
+    // Persona acquisition is handled by GameManager / inventory logic.
 }

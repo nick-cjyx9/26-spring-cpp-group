@@ -22,13 +22,6 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.8.*'
-          arch: ${{ runner.os == 'Windows' && 'win64_msvc2022_64' || '' }}
-          cache: true
-
       - name: Configure
         working-directory: campus-rpg
         env:

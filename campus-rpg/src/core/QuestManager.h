@@ -18,9 +18,9 @@ public:
     Quest *getQuest(const std::string &id);
     const Quest *getQuest(const std::string &id) const;
 
-    std::vector<Quest *> availableQuests();
-    std::vector<Quest *> acceptedQuests();
-    std::vector<Quest *> completedQuests();
+    std::vector<Quest *> availableQuests() const;
+    std::vector<Quest *> acceptedQuests() const;
+    std::vector<Quest *> completedQuests() const;
 
     bool acceptQuest(const std::string &id);
     bool completeQuest(const std::string &id, int killCount = 0);

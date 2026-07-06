@@ -26,35 +26,35 @@ const Quest *QuestManager::getQuest(const std::string &id) const
     return nullptr;
 }
 
-std::vector<Quest *> QuestManager::availableQuests()
+std::vector<Quest *> QuestManager::availableQuests() const
 {
     std::vector<Quest *> result;
-    for (auto &[id, quest] : quests_)
+    for (const auto &[id, quest] : quests_)
     {
         if (!quest.isAccepted())
-            result.push_back(&quest);
+            result.push_back(const_cast<Quest *>(&quest));
     }
     return result;
 }
 
-std::vector<Quest *> QuestManager::acceptedQuests()
+std::vector<Quest *> QuestManager::acceptedQuests() const
 {
     std::vector<Quest *> result;
-    for (auto &[id, quest] : quests_)
+    for (const auto &[id, quest] : quests_)
     {
         if (quest.isAccepted() && !quest.isCompleted())
-            result.push_back(&quest);
+            result.push_back(const_cast<Quest *>(&quest));
     }
     return result;
 }
 
-std::vector<Quest *> QuestManager::completedQuests()
+std::vector<Quest *> QuestManager::completedQuests() const
 {
     std::vector<Quest *> result;
-    for (auto &[id, quest] : quests_)
+    for (const auto &[id, quest] : quests_)
     {
         if (quest.isCompleted() && !quest.isRewarded())
-            result.push_back(&quest);
+            result.push_back(const_cast<Quest *>(&quest));
     }
     return result;
 }

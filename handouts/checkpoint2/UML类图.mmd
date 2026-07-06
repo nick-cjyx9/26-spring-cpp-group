@@ -1,249 +1,181 @@
 ---
-title: CampusRPG 系统 UML 类图
+title: CampusRPG 2D 系统 UML 类图
 ---
 classDiagram
     direction TB
 
-    %% ==================== Core Domain Models ====================
-    class Character {
-        +string name_
-        +int level_
-        +int hp_, maxHp_
-        +int exp_, expToNextLevel_
-        +int gold_
-        +int baseAttack_, baseDefense_
-        +int equipmentAttackBonus_, equipmentDefenseBonus_
-        +Character(string name, int maxHp, int attack, int defense)
-        +string name() const
-        +int level() const
-        +int hp() const
-        +int maxHp() const
-        +int exp() const
-        +int expToNextLevel() const
-        +int gold() const
-        +int attack() const
-        +int defense() const
-        +void takeDamage(int damage)
-        +void heal(int amount)
-        +void addGold(int amount)
-        +bool spendGold(int amount)
-        +void gainExp(int amount)
-        +void equip(shared_ptr~EquipmentItem~ equipment)
-        +bool isAlive() const
-        -void levelUp()
+    %% Engine Interfaces
+    class IRenderer {
+        <<interface>>
+        +clear()
+        +present()
+        +drawRect(Rect, Color)
+        +drawTexture(string, Vec2)
+        +drawText(string, Vec2, int)
+    }
+    class IWindow {
+        <<interface>>
+        +isOpen()
+        +close()
+        +pollEvents(IInput)
+        +renderer()
+    }
+    class IInput {
+        <<interface>>
+        +isKeyPressed(Key)
+        +wasKeyJustPressed(Key)
+    }
+    class IScene {
+        <<interface>>
+        +handleInput(IInput)
+        +update(float)
+        +render(IRenderer)
     }
 
+    IWindow --> IRenderer
+    IScene ..> IInput
+    IScene ..> IRenderer
+
+    %% Engine Implementations
+    class SfmlRenderer
+    class SfmlWindow
+    class SfmlInput
+    class MockRenderer
+    class MockInput
+
+    IRenderer <|-- SfmlRenderer
+    IRenderer <|-- MockRenderer
+    IWindow <|-- SfmlWindow
+    IInput <|-- SfmlInput
+    IInput <|-- MockInput
+
+    %% Core Domain
+    class Character {
+        -name, level, hp, sp, exp, gold
+        -base stats, equipment bonuses
+        -currentPersona
+        +takeDamage/heal/gainExp/equip
+    }
+    class Persona {
+        -name, arcana, level
+        -stats, affinities
+        -skills
+        +affinity()/learnSkill()
+    }
+    class Skill {
+        -name, element, power, cost
+        +canUse()/use()
+    }
     class Item {
         <<abstract>>
-        +string id_, name_, description_
-        +int value_
-        +ItemType type_
-        +Item(...)
-        +virtual unique_ptr~Item~ clone() = 0
-        +virtual void use(Character&) = 0
-        +string id/name/description() const
-        +int value() const
-        +ItemType type() const
-        +string typeString() const
+        -id, name, description, value
+        +clone()/use()
     }
-
-    class FoodItem {
-        +int healAmount_
-        +FoodItem(...)
-        +unique_ptr~Item~ clone() override
-        +void use(Character&) override
-    }
-    class PotionItem {
-        +int healAmount_
-        +PotionItem(...)
-        +unique_ptr~Item~ clone() override
-        +void use(Character&) override
-    }
-    class EquipmentItem {
-        +int attackBonus_, defenseBonus_
-        +EquipmentItem(...)
-        +unique_ptr~Item~ clone() override
-        +void use(Character&) override
-        +int attackBonus() const
-        +int defenseBonus() const
-    }
-
-    Item <|-- FoodItem
-    Item <|-- PotionItem
-    Item <|-- EquipmentItem
-
+    class FoodItem
+    class PotionItem
+    class SpItem
+    class EquipmentItem
+    class PersonaItem
     class Inventory {
-        -vector~unique_ptr~Item~~ items_
-        +void addItem(unique_ptr~Item~ item)
-        +bool removeItem(size_t index)
-        +bool useItem(size_t index, Character&)
-        +void clear()
-        +size_t size() const
-        +bool empty() const
-        +Item* itemAt(size_t index) const
+        -items
+        +add/remove/use
     }
-    Inventory "1" *-- "0..*" Item : owns
-
-    class Quest {
-        +string id_, name_, description_, condition_
-        +int rewardGold_, rewardExp_
-        +bool accepted_, completed_, rewarded_
-        +Quest(...)
-        +bool checkCompletion(int killCount) const
-        +void accept()/complete()/reward()
-        +bool isAccepted/Completed/Rewarded() const
-    }
-
-    class QuestManager {
-        -map~string, Quest~ quests_
-        +void addQuest(const Quest&)
-        +Quest* getQuest(string id)
-        +vector~Quest*~ availableQuests()
-        +vector~Quest*~ acceptedQuests()
-        +vector~Quest*~ completedQuests()
-        +bool acceptQuest(string id)
-        +bool completeQuest(string id, int killCount)
-        +bool rewardQuest(string id)
-    }
-    QuestManager "1" *-- "0..*" Quest : manages
-
     class Enemy {
         <<abstract>>
-        +string id_, name_
-        +int hp_, maxHp_, attack_, defense_
-        +int rewardExp_, rewardGold_
-        +Enemy(...)
-        +virtual string battleCry() = 0
-        +void takeDamage(int damage)
-        +bool isAlive() const
+        -hp, attack, defense, speed
+        -affinities, skills
+        +battleCry()/clone()
     }
-    class Slime {
-        +Slime()
-        +string battleCry() override
+    class Slime
+    class Goblin
+    class Boss
+    class BattleSystem {
+        -player, enemies, log
+        +startBattle/playerAttack/useSkill/flee
     }
-    class Goblin {
-        +Goblin()
-        +string battleCry() override
+    class Shop
+    class Quest
+    class QuestManager
+    class SocialLink
+    class SocialLinkManager
+    class Entity {
+        <<abstract>>
+        -position, bounds
+        +move()/intersects()
     }
-    class Boss {
-        +Boss()
-        +string battleCry() override
+    class PlayerEntity
+    class NpcEntity
+    class EnemyEntity
+    class TileMap {
+        -tiles, entities
+        +isWalkable()/entitiesAt()
     }
+
+    Character --> Persona
+    Persona *-- Skill
+    Item <|-- FoodItem
+    Item <|-- PotionItem
+    Item <|-- SpItem
+    Item <|-- EquipmentItem
+    Item <|-- PersonaItem
+    Inventory *-- Item
     Enemy <|-- Slime
     Enemy <|-- Goblin
     Enemy <|-- Boss
+    Enemy *-- Skill
+    BattleSystem ..> Character
+    BattleSystem ..> Enemy
+    QuestManager *-- Quest
+    SocialLinkManager *-- SocialLink
+    Entity <|-- PlayerEntity
+    Entity <|-- NpcEntity
+    Entity <|-- EnemyEntity
+    TileMap *-- Entity
 
-    class Shop {
-        -vector~unique_ptr~Item~~ items_
-        +void addItem(unique_ptr~Item~ item)
-        +bool buy(size_t index, Character& buyer, Inventory& target)
-        +bool sell(size_t index, Character& seller, Inventory& sellerInv)
-    }
-    Shop "1" *-- "0..*" Item : sells
+    %% Persistence
+    class DatabaseManager
+    class SaveRepository
+    SaveRepository ..> DatabaseManager
+    SaveRepository ..> Character
+    SaveRepository ..> Inventory
+    SaveRepository ..> SocialLinkManager
+    SaveRepository ..> QuestManager
 
-    class BattleSystem {
-        -Character* player_
-        -Enemy* enemy_
-        -vector~string~ log_
-        +void startBattle(Character&, Enemy&)
-        +bool playerAttack()
-        +bool enemyAttack()
-        +bool isOver() const
-        +bool playerWon() const
-        +vector~string~ log() const
-        +void appendLog(string message)
-    }
-    BattleSystem ..> Character : uses
-    BattleSystem ..> Enemy : uses
-
-    %% ==================== Persistence Layer ====================
-    class DatabaseManager {
-        <<singleton>>
-        +static DatabaseManager& instance()
-        +bool initDatabase(QString dbPath)
-        +void closeDatabase()
-        +bool isOpen() const
-        +QSqlDatabase database() const
-    }
-
-    class SaveRepository {
-        +bool saveCharacter(const Character&)
-        +bool loadCharacter(Character&)
-        +bool saveInventory(const Inventory&)
-        +bool loadInventory(Inventory&)
-        +bool saveQuests(const QuestManager&)
-        +bool loadQuests(QuestManager&)
-        +bool saveAll(...)
-        +bool loadAll(...)
-    }
-    SaveRepository ..> DatabaseManager : uses
-    SaveRepository ..> Character : uses
-    SaveRepository ..> Inventory : uses
-    SaveRepository ..> QuestManager : uses
-
-    %% ==================== Manager Layer ====================
+    %% Manager
     class GameManager {
         <<singleton>>
-        +static GameManager& instance()
-        +void newGame(string playerName)
-        +Character& character()
-        +Inventory& inventory()
-        +Shop& shop()
-        +QuestManager& questManager()
-        +unique_ptr~Enemy~ createEnemy(size_t index)
-        +void initDefaultShop()
-        +void initDefaultQuests()
-        +void initDefaultEnemies()
+        +newGame/save/load/enterScene
+        +character()/inventory()/shop()
+        +questManager()/socialLinkManager()
+        +currentMap()/battleSystem()
     }
-    GameManager "1" *-- "1" Character
-    GameManager "1" *-- "1" Inventory
-    GameManager "1" *-- "1" Shop
-    GameManager "1" *-- "1" QuestManager
-    GameManager "1" o-- "0..*" Enemy : templates
+    GameManager *-- Character
+    GameManager *-- Inventory
+    GameManager *-- Shop
+    GameManager *-- QuestManager
+    GameManager *-- SocialLinkManager
+    GameManager *-- TileMap
+    GameManager *-- BattleSystem
+    GameManager --> IScene
 
-    %% ==================== UI Layer ====================
-    class MainWindow {
-        +MainWindow(QWidget* parent)
-        +~MainWindow()
-        -Ui::MainWindow* ui
-        -CharacterPage* characterPage_
-        -InventoryPage* inventoryPage_
-        -ShopPage* shopPage_
-        -QuestPage* questPage_
-        -BattlePage* battlePage_
-    }
-    MainWindow "1" *-- "1" CharacterPage
-    MainWindow "1" *-- "1" InventoryPage
-    MainWindow "1" *-- "1" ShopPage
-    MainWindow "1" *-- "1" QuestPage
-    MainWindow "1" *-- "1" BattlePage
+    %% Scenes
+    class TownScene
+    class NightScene
+    class BattleScene
+    class ShopScene
+    class InventoryScene
+    class DialogueScene
 
-    class CharacterPage {
-        +CharacterPage(QWidget* parent)
-        +void refresh()
-    }
-    class InventoryPage {
-        +InventoryPage(QWidget* parent)
-        +void refresh()
-    }
-    class ShopPage {
-        +ShopPage(QWidget* parent)
-        +void refresh()
-    }
-    class QuestPage {
-        +QuestPage(QWidget* parent)
-        +void refresh()
-    }
-    class BattlePage {
-        +BattlePage(QWidget* parent)
-        +void refresh()
-        -BattleSystem battleSystem_
-        -unique_ptr~Enemy~ currentEnemy_
-    }
-    MainWindow ..> GameManager : accesses
-    CharacterPage ..> GameManager : accesses
-    InventoryPage ..> GameManager : accesses
-    ShopPage ..> GameManager : accesses
-    QuestPage ..> GameManager : accesses
-    BattlePage ..> GameManager : accesses
-    BattlePage *-- BattleSystem
+    IScene <|-- TownScene
+    IScene <|-- NightScene
+    IScene <|-- BattleScene
+    IScene <|-- ShopScene
+    IScene <|-- InventoryScene
+    IScene <|-- DialogueScene
+
+    TownScene ..> GameManager
+    NightScene ..> GameManager
+    BattleScene ..> GameManager
+    ShopScene ..> GameManager
+    InventoryScene ..> GameManager
+    DialogueScene ..> GameManager

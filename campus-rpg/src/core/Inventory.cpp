@@ -1,11 +1,13 @@
 #include "Inventory.h"
 
-void Inventory::addItem(std::unique_ptr<Item> item)
+Inventory::Inventory(size_t capacity) : capacity_(capacity) {}
+
+bool Inventory::addItem(std::unique_ptr<Item> item)
 {
-    if (item)
-    {
-        items_.push_back(std::move(item));
-    }
+    if (!item || isFull())
+        return false;
+    items_.push_back(std::move(item));
+    return true;
 }
 
 bool Inventory::removeItem(size_t index)

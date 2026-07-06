@@ -9,7 +9,9 @@ enum class ItemType
 {
     Food,
     Potion,
-    Equipment
+    SpRecovery,
+    Equipment,
+    Persona
 };
 
 class Item
@@ -65,19 +67,50 @@ private:
     int healAmount_ = 0;
 };
 
+class SpItem : public Item
+{
+public:
+    SpItem(std::string id, std::string name, std::string description, int value, int spAmount);
+
+    std::unique_ptr<Item> clone() const override;
+    void use(Character &character) override;
+
+    int spAmount() const { return spAmount_; }
+
+private:
+    int spAmount_ = 0;
+};
+
 class EquipmentItem : public Item
 {
 public:
     EquipmentItem(std::string id, std::string name, std::string description, int value,
-                  int attackBonus, int defenseBonus);
+                  int attackBonus, int defenseBonus, int speedBonus = 0);
 
     std::unique_ptr<Item> clone() const override;
     void use(Character &character) override;
 
     int attackBonus() const { return attackBonus_; }
     int defenseBonus() const { return defenseBonus_; }
+    int speedBonus() const { return speedBonus_; }
 
 private:
     int attackBonus_ = 0;
     int defenseBonus_ = 0;
+    int speedBonus_ = 0;
+};
+
+class PersonaItem : public Item
+{
+public:
+    PersonaItem(std::string id, std::string name, std::string description, int value,
+                std::string personaId);
+
+    std::unique_ptr<Item> clone() const override;
+    void use(Character &character) override;
+
+    const std::string &personaId() const { return personaId_; }
+
+private:
+    std::string personaId_;
 };

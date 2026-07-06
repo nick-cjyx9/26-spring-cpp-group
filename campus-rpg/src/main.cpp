@@ -1,15 +1,39 @@
-#include "MainWindow.h"
+#include "GameManager.h"
+#include "DatabaseManager.h"
+#include "SfmlWindow.h"
 
-#include <QApplication>
+#include <SFML/System/Clock.hpp>
 
-int main(int argc, char *argv[])
+#include <iostream>
+
+int main()
 {
-    QApplication app(argc, argv);
-    app.setApplicationName("CampusRPG");
-    app.setOrganizationName("CampusRPG");
+    if (!DatabaseManager::instance().initDatabase("campus_rpg.db"))
+    {
+        std::cerr << "Failed to initialize database.\n";
+        return 1;
+    }
 
-    MainWindow window;
-    window.show();
+    GameManager::instance().newGame("Player");
 
-    return app.exec();
+    engine::SfmlWindow window(800, 600, "Campus RPG");
+    engine::SfmlInput input;
+
+    sf::Clock clock;
+    while (window.isOpen())
+    {
+        window.pollEvents(input);
+
+        float dt = clock.restart().asSeconds();
+
+        auto *scene = GameManager::instance().currentScene();
+        if (scene)
+        {
+            scene->handleInput(input);
+            scene->update(dt);
+            scene->render(window.renderer());
+        }
+    }
+
+    return 0;
 }

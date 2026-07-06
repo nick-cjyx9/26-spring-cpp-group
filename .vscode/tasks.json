@@ -9,9 +9,9 @@
         "-B", "build",
         "-S", ".",
         "-DCMAKE_BUILD_TYPE=Release",
-        "-DCMAKE_PREFIX_PATH=${env:QT_DIR}",
         "-G", "MinGW Makefiles",
-        "-DCMAKE_CXX_COMPILER=${env:QT_MINGW_BIN}/g++.exe"
+        "-DCMAKE_C_COMPILER=${env:MINGW_BIN}/gcc.exe",
+        "-DCMAKE_CXX_COMPILER=${env:MINGW_BIN}/g++.exe"
       ],
       "options": { "cwd": "${workspaceFolder}/campus-rpg" },
       "problemMatcher": []
@@ -39,6 +39,7 @@
       "label": "run-app",
       "type": "shell",
       "command": "${workspaceFolder}/campus-rpg/build/CampusRPG.exe",
+      "options": { "cwd": "${workspaceFolder}/campus-rpg/build" },
       "dependsOn": "cmake-build",
       "problemMatcher": []
     }

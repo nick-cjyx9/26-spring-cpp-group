@@ -1,5 +1,5 @@
 {
-  "//": "Shared VS Code workspace settings for CampusRPG. Each member must set QT_DIR and QT_MINGW_BIN env vars (see README §2.3).",
+  "//": "Shared VS Code workspace settings for CampusRPG. Set MINGW_BIN to your MinGW bin directory (e.g. E:/Qt/Tools/mingw1310_64/bin) for IntelliSense and build tasks.",
 
   "cmake.sourceDirectory": "${workspaceFolder}/campus-rpg",
   "cmake.buildDirectory": "${workspaceFolder}/campus-rpg/build",
@@ -8,23 +8,24 @@
   "cmake.generator": "MinGW Makefiles",
   "cmake.configureSettings": {
     "CMAKE_BUILD_TYPE": "Release",
-    "CMAKE_PREFIX_PATH": "${env:QT_DIR}",
-    "CMAKE_EXPORT_COMPILE_COMMANDS": true
+    "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+    "CMAKE_C_COMPILER": "${env:MINGW_BIN}/gcc.exe",
+    "CMAKE_CXX_COMPILER": "${env:MINGW_BIN}/g++.exe"
   },
   "cmake.environment": {
-    "CXX": "${env:QT_MINGW_BIN}/g++.exe"
+    "CXX": "${env:MINGW_BIN}/g++.exe"
   },
 
   "C_Cpp.default.cppStandard": "c++20",
   "C_Cpp.default.intelliSenseMode": "windows-gcc-x64",
 
   "files.associations": {
-    "*.ui": "xml",
-    "*.qrc": "xml"
+    "*.h": "cpp"
   },
   "search.exclude": {
     "**/build": true,
-    "**/build-vs": true
+    "**/build-vs": true,
+    "**/_deps": true
   },
 
   "extensions.recommendations": [
