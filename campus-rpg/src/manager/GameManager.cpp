@@ -5,6 +5,7 @@
 #include "SaveRepository.h"
 #include "DatabaseManager.h"
 
+#include "TitleScene.h"
 #include "TownScene.h"
 #include "NightScene.h"
 #include "BattleScene.h"
@@ -42,7 +43,7 @@ void GameManager::newGame(const std::string &playerName)
     if (starter)
         character_.setPersona(starter);
 
-    enterScene(SceneType::Town);
+    enterScene(SceneType::Title);
 }
 
 void GameManager::save()
@@ -67,6 +68,9 @@ void GameManager::enterScene(SceneType type)
     currentSceneType_ = type;
     switch (type)
     {
+    case SceneType::Title:
+        currentScene_ = std::make_unique<TitleScene>();
+        break;
     case SceneType::Town:
         currentScene_ = std::make_unique<TownScene>();
         break;

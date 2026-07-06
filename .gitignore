@@ -102,3 +102,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.log
+
+# Raw asset sources (large extracted packs)
+campus-rpg/resources/assets/
+

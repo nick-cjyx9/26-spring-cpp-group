@@ -11,7 +11,8 @@ classDiagram
         +present()
         +drawRect(Rect, Color)
         +drawTexture(string, Vec2)
-        +drawText(string, Vec2, int)
+        +drawTexture(string, Rect)
+        +drawText(string, Vec2, int, Color)
     }
     class IWindow {
         <<interface>>
@@ -24,6 +25,7 @@ classDiagram
         <<interface>>
         +isKeyPressed(Key)
         +wasKeyJustPressed(Key)
+        +endFrame()
     }
     class IScene {
         <<interface>>
@@ -159,23 +161,29 @@ classDiagram
     GameManager --> IScene
 
     %% Scenes
+    class TitleScene
     class TownScene
     class NightScene
     class BattleScene
     class ShopScene
     class InventoryScene
+    class CharacterScene
     class DialogueScene
 
+    IScene <|-- TitleScene
     IScene <|-- TownScene
     IScene <|-- NightScene
     IScene <|-- BattleScene
     IScene <|-- ShopScene
     IScene <|-- InventoryScene
+    IScene <|-- CharacterScene
     IScene <|-- DialogueScene
 
+    TitleScene ..> GameManager
     TownScene ..> GameManager
     NightScene ..> GameManager
     BattleScene ..> GameManager
     ShopScene ..> GameManager
     InventoryScene ..> GameManager
+    CharacterScene ..> GameManager
     DialogueScene ..> GameManager

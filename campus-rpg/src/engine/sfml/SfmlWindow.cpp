@@ -43,9 +43,6 @@ void SfmlWindow::pollEvents(IInput &input)
                 input_->onSfmlKeyReleased(event.key.code);
         }
     }
-
-    if (input_)
-        input_->endFrame();
 }
 
 IRenderer &SfmlWindow::renderer()

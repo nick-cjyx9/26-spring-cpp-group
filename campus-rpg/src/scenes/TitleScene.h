@@ -2,7 +2,7 @@
 
 #include "IScene.h"
 
-class TownScene : public engine::IScene
+class TitleScene : public engine::IScene
 {
 public:
     void handleInput(engine::IInput &input) override;
@@ -10,9 +10,5 @@ public:
     void render(engine::IRenderer &renderer) override;
 
 private:
-    void tryInteract();
-
-    float moveSpeed_ = 180.0f;
-    float moveX_ = 0.0f;
-    float moveY_ = 0.0f;
+    int selectedIndex_ = 0;
 };

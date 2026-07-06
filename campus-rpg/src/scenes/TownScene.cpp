@@ -8,7 +8,7 @@ namespace
     engine::Rect interactionArea(const Entity &player)
     {
         engine::Vec2 pos = player.position();
-        return {pos.x - 24.0f, pos.y - 24.0f, 48.0f, 48.0f};
+        return {pos.x - 28.0f, pos.y - 28.0f, 56.0f, 56.0f};
     }
 
     bool canMoveTo(engine::Vec2 pos, const TileMap &map)
@@ -58,7 +58,6 @@ void TownScene::handleInput(engine::IInput &input)
     if (input.wasKeyJustPressed(engine::Key::N))
     {
         GameManager::instance().setNight(true);
-        // Spawn enemy entities on the map for night combat.
         TileMap &map = GameManager::instance().currentMap();
         engine::Vec2 playerPos{100, 100};
         PlayerEntity *player = findPlayer(map);
@@ -95,31 +94,45 @@ void TownScene::render(engine::IRenderer &renderer)
 {
     renderer.clear();
 
-    TileMap &map = GameManager::instance().currentMap();
-    for (int y = 0; y < map.height(); ++y)
-    {
-        for (int x = 0; x < map.width(); ++x)
-        {
-            engine::Color color = map.tileAt(x, y).isWalkable() ? engine::Color(60, 60, 60) : engine::Color(30, 30, 30);
-            renderer.drawRect({x * 32.0f, y * 32.0f, 32.0f, 32.0f}, color);
-        }
-    }
+    // Background scaled to fill window
+    renderer.drawTexture("town_bg", {0, 0, 800, 600});
 
+    TileMap &map = GameManager::instance().currentMap();
+
+    // Draw shop area label
+    renderer.drawRect({0, 0, 140, 140}, engine::Color(80, 80, 120, 120));
+    renderer.drawText("shop", {45, 55}, 20, engine::Color::white());
+
+    // Draw school area label
+    renderer.drawRect({620, 100, 180, 450}, engine::Color(80, 120, 80, 120));
+    renderer.drawText("school", {670, 300}, 20, engine::Color::white());
+
+    // Draw entities
     for (const auto &entity : map.entities())
     {
         if (!entity)
             continue;
-        engine::Color color;
         if (entity->type() == "player")
-            color = engine::Color::blue();
+        {
+            auto b = entity->worldBounds();
+            renderer.drawTexture("player", {b.x, b.y, 48, 48});
+        }
         else if (entity->type() == "npc")
-            color = engine::Color::green();
-        else
-            color = engine::Color::red();
-        renderer.drawRect(entity->worldBounds(), color);
+        {
+            auto b = entity->worldBounds();
+            renderer.drawTexture("npc", {b.x, b.y, 48, 48});
+        }
     }
 
-    renderer.drawText("Town (Morning) - WASD/Arrows: move, E: talk, I: inventory, C: character", {10, 10}, 16, engine::Color::white());
+    // HUD
+    renderer.drawRect({620, 10, 170, 70}, engine::Color(0, 0, 0, 180));
+    renderer.drawText("bkpk", {635, 20}, 18, engine::Color::white());
+    renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()),
+                      {720, 20}, 18, engine::Color::yellow());
+
+    // Interaction hint
+    renderer.drawText("E: talk  I: inventory  C: char  N: night",
+                      {180, 570}, 16, engine::Color::white());
 }
 
 void TownScene::tryInteract()
@@ -133,5 +146,12 @@ void TownScene::tryInteract()
     if (npc)
     {
         GameManager::instance().enterScene(SceneType::Dialogue);
+        return;
+    }
+
+    // Check if near shop area
+    if (player->position().x < 140 && player->position().y < 140)
+    {
+        GameManager::instance().enterScene(SceneType::Shop);
     }
 }

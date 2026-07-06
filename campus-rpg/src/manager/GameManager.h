@@ -15,6 +15,7 @@
 
 enum class SceneType
 {
+    Title,
     Town,
     Night,
     Battle,
@@ -54,6 +55,9 @@ public:
     bool isNight() const { return isNight_; }
     void setNight(bool night) { isNight_ = night; }
 
+    bool shouldQuit() const { return shouldQuit_; }
+    void quit() { shouldQuit_ = true; }
+
     void initDefaultShop();
     void initDefaultQuests();
     void initDefaultEnemies();
@@ -79,4 +83,5 @@ private:
     SceneType currentSceneType_ = SceneType::Town;
 
     bool isNight_ = false;
+    bool shouldQuit_ = false;
 };

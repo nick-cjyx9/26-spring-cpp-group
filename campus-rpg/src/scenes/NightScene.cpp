@@ -82,29 +82,37 @@ void NightScene::render(engine::IRenderer &renderer)
 {
     renderer.clear();
 
-    TileMap &map = GameManager::instance().currentMap();
-    for (int y = 0; y < map.height(); ++y)
-    {
-        for (int x = 0; x < map.width(); ++x)
-        {
-            engine::Color color = map.tileAt(x, y).isWalkable() ? engine::Color(40, 40, 60) : engine::Color(20, 20, 30);
-            renderer.drawRect({x * 32.0f, y * 32.0f, 32.0f, 32.0f}, color);
-        }
-    }
+    // Reuse town background scaled to fill window.
+    renderer.drawTexture("town_bg", {0, 0, 800, 600});
 
+    // Dark overlay for night atmosphere.
+    renderer.drawRect({0, 0, 800, 600}, engine::Color(10, 10, 40, 180));
+
+    TileMap &map = GameManager::instance().currentMap();
+
+    // Draw entities
     for (const auto &entity : map.entities())
     {
         if (!entity)
             continue;
-        engine::Color color;
         if (entity->type() == "player")
-            color = engine::Color::blue();
+        {
+            auto b = entity->worldBounds();
+            renderer.drawTexture("player", {b.x, b.y, 48, 48});
+        }
         else if (entity->type() == "enemy")
-            color = engine::Color::red();
-        else
-            color = engine::Color::gray();
-        renderer.drawRect(entity->worldBounds(), color);
+        {
+            auto b = entity->worldBounds();
+            renderer.drawTexture("shadow", {b.x, b.y, 48, 48});
+        }
     }
 
-    renderer.drawText("Town (Night) - WASD/Arrows: move, touch shadows to fight, Esc: sleep", {10, 10}, 16, engine::Color::white());
+    // HUD
+    renderer.drawRect({620, 10, 170, 70}, engine::Color(0, 0, 0, 180));
+    renderer.drawText("bkpk", {635, 20}, 18, engine::Color::white());
+    renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()),
+                      {720, 20}, 18, engine::Color::yellow());
+
+    renderer.drawText("Night - touch shadows to fight, Esc: sleep",
+                      {180, 570}, 16, engine::Color::white());
 }

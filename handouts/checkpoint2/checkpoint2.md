@@ -30,13 +30,15 @@
 - 抽象引擎接口 `IRenderer` / `IWindow` / `IInput` 及 SFML/Mock 实现方案。
 - Core 域模型类图：`Character`、`Persona`、`Skill`、`Item` 体系、`Enemy` 体系、`BattleSystem`、`Shop`、`Quest`、`SocialLink`、`Entity`、`TileMap`。
 - Data 层 SQLite schema 扩展设计。
-- 用户界面改为 SFML 2D 场景系统：`TownScene`、`NightScene`、`BattleScene`、`ShopScene`、`InventoryScene`、`DialogueScene`。
+- 用户界面改为 SFML 2D 场景系统：`TitleScene`、`TownScene`、`NightScene`、`BattleScene`、`ShopScene`、`InventoryScene`、`CharacterScene`、`DialogueScene`。
 
 **开发中模块（检查点 3 前完成）**：
-- SFML 引擎具体实现。
-- 场景代码实现。
-- SQLite3 持久化代码迁移（从 QtSql 改为 SQLite3 C API 或继续保留 QtSql 待决定）。
-- 单元测试与 Mock 场景测试。
+- [x] SFML 引擎具体实现。
+- [x] 场景代码实现。
+- [x] SQLite3 持久化代码迁移（已改用 SQLite3 C API）。
+- [x] 单元测试与 Mock 场景测试。
+- [ ] UI 美术资源精调与瓦片地图正式化。
+- [ ] 更多任务条件与战斗掉落联动。
 
 **已完成的软件工程/挑战任务（规划）**：
 - 数据库技术：SQLite3 持久化。

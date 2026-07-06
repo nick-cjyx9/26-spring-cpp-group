@@ -25,6 +25,7 @@ The C++ project lives in `campus-rpg/`, **not** at the repo root. All build comm
 │   ├── tests/
 │   │   ├── test_core.cpp
 │   │   └── mocks/             # mock engine implementations
+│   ├── resources/             # runtime assets (textures, fonts)
 │   └── CMakeLists.txt
 ├── docs/                        # design docs
 ├── handouts/
@@ -51,7 +52,7 @@ Core (pure C++ domain models) + Data (SQLite3 persistence)
 - `src/data/`: `DatabaseManager` + `SaveRepository` handle SQLite3.
 - `src/engine/interfaces/`: abstract engine interfaces (`IRenderer`, `IWindow`, `IInput`).
 - `src/engine/sfml/`: SFML concrete implementations.
-- `src/scenes/`: 2D scene system (`TownScene`, `NightScene`, `BattleScene`, etc.).
+- `src/scenes/`: 2D scene system (`TitleScene`, `TownScene`, `NightScene`, `BattleScene`, `ShopScene`, `InventoryScene`, `CharacterScene`, `DialogueScene`).
 
 ### CMake library layout
 

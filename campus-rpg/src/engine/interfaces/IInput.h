@@ -14,6 +14,7 @@ public:
 
     virtual bool isKeyPressed(Key key) const = 0;
     virtual bool wasKeyJustPressed(Key key) = 0;
+    virtual void endFrame() = 0;
 };
 
 } // namespace engine

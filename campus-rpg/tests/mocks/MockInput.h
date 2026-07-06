@@ -39,7 +39,7 @@ public:
             currentStates_[idx] = pressed;
     }
 
-    void endFrame()
+    void endFrame() override
     {
         previousStates_ = currentStates_;
     }

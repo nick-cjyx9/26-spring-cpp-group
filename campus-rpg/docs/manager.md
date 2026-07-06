@@ -35,11 +35,14 @@ void enterScene(SceneType type);
 ```
 
 `GameManager` 持有 `std::unique_ptr<IScene> currentScene_`，根据游戏阶段切换：
+- `TitleScene`：标题菜单
 - `TownScene`：早晨
 - `NightScene`：夜晚
 - `BattleScene`：战斗
 - `ShopScene` / `InventoryScene` / `CharacterScene`：功能界面
 - `DialogueScene`：对话
+
+同时提供 `shouldQuit()` / `quit()`，用于场景请求退出程序（如标题画面选择 exit）。
 
 ## 当前功能
 

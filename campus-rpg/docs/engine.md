@@ -14,7 +14,8 @@ public:
     virtual void present() = 0;
     virtual void drawRect(const Rect& rect, Color color) = 0;
     virtual void drawTexture(const std::string& textureId, const Vec2& pos) = 0;
-    virtual void drawText(const std::string& text, const Vec2& pos, int size) = 0;
+    virtual void drawTexture(const std::string& textureId, const Rect& dstRect) = 0;
+    virtual void drawText(const std::string& text, const Vec2& pos, int size, Color color) = 0;
 };
 ```
 
@@ -43,6 +44,7 @@ public:
     virtual ~IInput() = default;
     virtual bool isKeyPressed(Key key) const = 0;
     virtual bool wasKeyJustPressed(Key key) = 0;
+    virtual void endFrame() = 0;
 };
 ```
 
@@ -67,16 +69,21 @@ Mock 实现放在 `tests/mocks/`，只被 `CampusRPGTests` 链接。
 ## 游戏循环 GameLoop
 
 ```cpp
-while (window.isOpen()) {
+while (window.isOpen() && !GameManager::instance().shouldQuit()) {
     window.pollEvents(input);
     float dt = clock.restart().asSeconds();
-    currentScene->handleInput(input);
-    currentScene->update(dt);
-    renderer.clear();
-    currentScene->render(renderer);
-    renderer.present();
+    if (auto *scene = GameManager::instance().currentScene())
+        scene->handleInput(input);
+    if (auto *scene = GameManager::instance().currentScene())
+        scene->update(dt);
+    if (auto *scene = GameManager::instance().currentScene())
+        scene->render(window.renderer());
+    window.renderer().present();
+    input.endFrame();
 }
 ```
+
+注意：`handleInput` 可能切换场景并销毁旧场景对象，因此必须在每次调用前重新获取当前场景指针，避免悬空指针崩溃。
 
 ## 场景系统
 
@@ -91,11 +98,13 @@ public:
 ```
 
 具体场景：
+- `TitleScene`：标题画面与主菜单。
 - `TownScene`：早晨城镇/学校移动、NPC 对话、进入商店、等到夜晚。
 - `NightScene`：夜晚同地图，敌人游荡，碰撞触发战斗。
 - `BattleScene`：简化回合制战斗界面。
 - `ShopScene`：商店买卖界面。
 - `InventoryScene`：背包/角色状态界面。
+- `CharacterScene`：角色属性与 Persona 展示。
 - `DialogueScene`：对话展示。
 
 `GameManager` 持有 `std::unique_ptr<IScene> currentScene_` 并负责切换。

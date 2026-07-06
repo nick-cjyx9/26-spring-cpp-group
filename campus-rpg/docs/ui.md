@@ -12,6 +12,7 @@
 
 | 场景 | 文件 | 职责 |
 |---|---|---|
+| `TitleScene` | `src/scenes/TitleScene.*` | 标题画面，开始游戏 / 读取游戏 / 退出 |
 | `TownScene` | `src/scenes/TownScene.*` | 早晨城镇/学校地图，角色移动、NPC 对话、进入功能 |
 | `NightScene` | `src/scenes/NightScene.*` | 夜晚同地图，敌人游荡，碰撞触发战斗 |
 | `BattleScene` | `src/scenes/BattleScene.*` | 简化回合制战斗界面 |
@@ -25,31 +26,35 @@
 - 每个场景实现 `IScene` 接口：`handleInput`、`update`、`render`。
 - 所有业务操作通过 `GameManager::instance()` 完成。
 - 场景不直接访问 `DatabaseManager` / `SaveRepository`。
-- 2D 资源使用简单几何图形 + 文字即可，不强制要求美术素材。
+- 2D 资源使用 `resources/textures/` 下的 PNG 精灵 + 几何图形 + 文字；运行时自动复制到构建目录。},{
 
 ## 导航流程
 
 ```text
 GameLoop
+ ├── TitleScene（标题菜单）
+ │    └── TownScene（开始游戏）
  ├── TownScene（早晨）
  │    ├── DialogueScene（与 NPC 对话）
  │    ├── ShopScene
  │    ├── InventoryScene / CharacterScene
- │    └── NightScene（选择等到夜晚）
+ │    └── NightScene（按 N 进入夜晚）
  ├── NightScene（夜晚）
  │    └── BattleScene（碰到敌人）
  └── BattleScene
-      └── TownScene 或 NightScene（战斗结束）
+      └── TownScene（战斗结束）
 ```
 
 ## 输入约定
 
 | 按键 | 功能 |
 |---|---|
+| ↑/↓ / Enter | 标题菜单选择 |
 | WASD / 方向键 | 角色移动 |
 | E / Enter | 交互（对话、进门） |
 | I | 打开背包 |
 | C | 打开角色面板 |
+| N | 从城镇进入夜晚 |
 | Esc | 返回/关闭面板 |
 
 ## 错误提示

@@ -20,19 +20,20 @@ int main()
     engine::SfmlInput input;
 
     sf::Clock clock;
-    while (window.isOpen())
+    while (window.isOpen() && !GameManager::instance().shouldQuit())
     {
         window.pollEvents(input);
 
         float dt = clock.restart().asSeconds();
 
-        auto *scene = GameManager::instance().currentScene();
-        if (scene)
-        {
+        if (auto *scene = GameManager::instance().currentScene())
             scene->handleInput(input);
+        if (auto *scene = GameManager::instance().currentScene())
             scene->update(dt);
+        if (auto *scene = GameManager::instance().currentScene())
             scene->render(window.renderer());
-        }
+        window.renderer().present();
+        input.endFrame();
     }
 
     return 0;

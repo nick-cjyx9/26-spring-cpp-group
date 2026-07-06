@@ -25,6 +25,8 @@ struct DrawTextureCall
 {
     std::string textureId;
     engine::Vec2 pos;
+    engine::Rect dstRect;
+    bool hasDstRect = false;
 };
 
 class MockRenderer : public engine::IRenderer
@@ -40,7 +42,12 @@ public:
 
     void drawTexture(const std::string &textureId, const engine::Vec2 &pos) override
     {
-        textureCalls_.push_back({textureId, pos});
+        textureCalls_.push_back({textureId, pos, {}, false});
+    }
+
+    void drawTexture(const std::string &textureId, const engine::Rect &dstRect) override
+    {
+        textureCalls_.push_back({textureId, {}, dstRect, true});
     }
 
     void drawText(const std::string &text, const engine::Vec2 &pos, int size, engine::Color color) override

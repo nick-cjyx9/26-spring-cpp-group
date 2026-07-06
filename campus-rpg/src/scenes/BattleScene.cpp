@@ -70,40 +70,54 @@ void BattleScene::render(engine::IRenderer &renderer)
 {
     renderer.clear();
 
+    // Reuse town background scaled to fill window with dark overlay.
+    renderer.drawTexture("town_bg", {0, 0, 800, 600});
+    renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 20, 200));
+
     auto &battle = GameManager::instance().battleSystem();
     auto &character = GameManager::instance().character();
     Enemy *enemy = battle.enemyAt(0);
 
-    renderer.drawText("Battle", {10, 10}, 24, engine::Color::white());
-
+    // Enemy sprite
     if (enemy)
     {
-        renderer.drawText(enemy->name() + " HP: " + std::to_string(enemy->hp()) + "/" + std::to_string(enemy->maxHp()),
-                          {10, 50}, 18, engine::Color::red());
+        renderer.drawTexture("shadow", {520, 120, 96, 96});
+        renderer.drawText(enemy->name(), {520, 80}, 22, engine::Color::white());
+        renderer.drawText("HP " + std::to_string(enemy->hp()) + "/" + std::to_string(enemy->maxHp()),
+                          {520, 260}, 18, engine::Color::red());
     }
 
-    renderer.drawText(character.name() + " HP: " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()) +
-                          " SP: " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()),
-                      {10, 90}, 18, engine::Color::green());
+    // Player sprite
+    renderer.drawTexture("player", {150, 280, 64, 64});
+    renderer.drawText(character.name(), {150, 260}, 22, engine::Color::white());
+    renderer.drawText("HP " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()) +
+                          "  SP " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()),
+                      {150, 390}, 16, engine::Color::green());
 
+    // Action menu panel
+    renderer.drawRect({20, 420, 240, 160}, engine::Color(0, 0, 0, 200));
     const char *actions[] = {"Attack", "Skill", "Item", "Guard", "Switch Persona", "Flee"};
     for (int i = 0; i < 6; ++i)
     {
         engine::Color color = (i == selectedAction_) ? engine::Color::yellow() : engine::Color::white();
-        renderer.drawText(std::string((i == selectedAction_ ? "> " : "  ")) + actions[i], {10.0f, 130.0f + i * 25.0f}, 18, color);
+        renderer.drawText(std::string((i == selectedAction_ ? "> " : "  ")) + actions[i],
+                          {35.0f, 435.0f + i * 24.0f}, 18, color);
     }
 
-    renderer.drawText("Log:", {300, 130}, 18, engine::Color::white());
+    // Battle log panel
+    renderer.drawRect({300, 420, 470, 160}, engine::Color(0, 0, 0, 200));
+    renderer.drawText("Log:", {315, 435}, 18, engine::Color::white());
     const auto &log = battle.log();
-    for (size_t i = 0; i < log.size() && i < 10; ++i)
+    for (size_t i = 0; i < log.size() && i < 6; ++i)
     {
-        renderer.drawText(log[log.size() - 1 - i], {300, 155.0f + static_cast<float>(i) * 20.0f}, 14, engine::Color::white());
+        renderer.drawText(log[log.size() - 1 - i], {315, 460.0f + static_cast<float>(i) * 19.0f}, 14, engine::Color::white());
     }
 
     if (battle.isOver())
     {
         std::string msg = battle.playerWon() ? "Victory! Press Enter." : "Defeat... Press Enter.";
-        renderer.drawText(msg, {10, 320}, 20, engine::Color::yellow());
+        renderer.drawRect({200, 260, 400, 60}, engine::Color(0, 0, 0, 220));
+        renderer.drawText(msg, {230, 280}, 24, engine::Color::yellow());
     }
 }
 
@@ -117,13 +131,9 @@ void BattleScene::processVictory()
     auto &character = GameManager::instance().character();
     character.gainExp(enemy->rewardExp());
     character.addGold(enemy->rewardGold());
-
-    // Simple quest progress.
-    GameManager::instance().questManager().completeQuest("quest_first", 1);
 }
 
 void BattleScene::processDefeat()
 {
-    // Reset player HP on defeat.
     GameManager::instance().character().heal(GameManager::instance().character().maxHp());
 }
