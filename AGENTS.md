@@ -2,14 +2,15 @@
 
 - DO NOT generate extra `.md` file unless user explicitly asks for it.
 - ALWAYS use PowerShell for build-related tasks; assume a Windows environment.
+- `gh` cli under powershell environment is provided.
 
 ## Repo Structure
 
-The C++ project lives in `campus-rpg/`, **not** at the repo root. All build commands run from inside `campus-rpg/`. The GitHub Actions workflow lives at the **repo root** `.github/workflows/ci.yml` (GHA only reads workflows from the repo root).
+The C++ project lives in `campus-rpg/`, **not** at the repo root. All build commands run from inside `campus-rpg/`. The GitHub Actions workflows live at the **repo root** `.github/workflows/` (`auto-build.yml` + `pr-check.yml`; GHA only reads workflows from the repo root).
 
 ```text
 26-spring-cpp-group/             # repo root
-├── .github/workflows/ci.yml     # GitHub Actions CI (build + test)
+├── .github/workflows/         # GitHub Actions CI (auto-build.yml + pr-check.yml)
 ├── campus-rpg/                  # the actual C++ project
 │   ├── CMakeLists.txt
 │   ├── src/
@@ -105,7 +106,7 @@ The C/C++ extension uses explicit `includePath` entries (not `compile_commands.j
 - **MinGW g++ not found**: point `CMAKE_CXX_COMPILER` at the g++ bundled with Qt, e.g. `E:/Qt/Tools/mingw1310_64/bin/g++.exe`. Mixing the system MinGW (e.g. `D:/mingw64`) with Qt's MinGW build can cause ABI mismatches.
 - **MSVC missing**: run from **Developer PowerShell for VS 2022** or execute `& "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"`.
 - **Test framework**: tests use a **pure-C++ lightweight runner** (`tests/test_core.cpp`) — no Qt, no event loop, no external test lib. The runner records failures without aborting (mirroring `QCOMPARE`/`QVERIFY` semantics), prints a `run: N failed: M` summary, and returns a non-zero exit code on failure so CTest picks it up. Qt Test was avoided because its `qExec` blocks in headless/non-interactive Windows sessions; the pure-C++ runner runs everywhere.
-- **CI**: GitHub Actions (`.github/workflows/ci.yml`) builds and tests on `windows-latest` and `ubuntu-latest` using `jurplel/install-qt-action`. Pushes trigger on `main`/`dev`; PRs target `main`.
+- **CI**: GitHub Actions (`.github/workflows/{auto-build.yml, pr-check.yml}`) build and test on `windows-latest` and `ubuntu-latest` using `jurplel/install-qt-action`. `auto-build` triggers on push to `main`/`dev`; `pr-check` triggers on PRs targeting `main`/`dev`. NOTE: no `dev` branch exists on origin yet — the `dev` triggers are inert until one is created.
 
 ## Development Notes
 
@@ -119,6 +120,19 @@ The C/C++ extension uses explicit `includePath` entries (not `compile_commands.j
   - Equipment currently adds stats permanently on use; add real equipment slots later.
   - Quest conditions only support `kill:N`; add `collect:id:N`, `level:N`, etc.
   - Save/load currently supports one slot; extend for multiple save slots.
+
+## File Ownership & Review (Coordination)
+
+Multiple issues touch the same hot files and risk merge conflicts / overwrites. To let each member focus on their own scope without stepping on each other, the following ownership and review rules apply:
+
+- **`src/core/Character.cpp/.h`** — **Coordination owner: nick-cjyx9**. Touched by #4 (persistence), #6 (equipment slots), #13 (balance/levelUp), #14 (validation). Any PR changing `Character.cpp/.h` must **open a PR (no direct push to main) and request review from nick-cjyx9**.
+- **`src/data/SaveRepository.cpp/.h` + `DatabaseManager.cpp/.h`** — **Owner: W0606**. Persistence layer (#4, #5, #18) is centralized here; other members expose read-only getters / propose interface changes via PR rather than editing the data layer directly.
+- **`src/manager/GameManager.cpp/.h`** — **Coordination owner: nick-cjyx9** (also the #17 integrator). Changes from #8 / #7 / #13 etc. go through PR review by nick.
+- **`src/ui/MainWindow.*` + page constructors** — touched by #10 (QStackedWidget refactor) and #6/#11 page changes. #10 lands first; afterward page/constructor signature changes should align with the stacked-widget parent scheme. When in doubt, coordinate via PR with the page's owning issue assignee.
+- **`src/core/Enemy.*`** — #8 (clone refactor) primarily; #13 only edits numeric constants (low conflict risk).
+- **`tests/test_core.cpp`** — #12 owner curates; other members adding tests for their feature append under their own clearly-named test functions.
+
+General rule: prefer **small, focused PRs over long-lived feature branches**, and rebase onto `main` before requesting review. Branch `main` is protected — all changes merge via PR with `PR Check` green.
 
 ## Testing Best Practices (simplified)
 

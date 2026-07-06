@@ -259,7 +259,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 ```text
 26-spring-cpp-group/
-├── .github/workflows/ci.yml   # GitHub Actions 持续集成（须在仓库根目录）
+├── .github/workflows/          # GitHub Actions（auto-build.yml + pr-check.yml，须在仓库根目录）
 ├── .vscode/                   # 共享的 VS Code 配置（IntelliSense/任务/调试）
 │   ├── c_cpp_properties.json
 │   ├── settings.json
