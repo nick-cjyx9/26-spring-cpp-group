@@ -17,14 +17,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Windows: set up the MSVC developer environment (cl.exe on PATH)
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.*'
+          arch: ${{ runner.os == 'Windows' && 'win64_msvc2022_64' || '' }}
           cache: true
 
       - name: Configure
         working-directory: campus-rpg
+        env:
+          CXX: ${{ runner.os == 'Windows' && 'cl.exe' || 'g++' }}
         run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
@@ -36,14 +44,15 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Package artifacts
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          mkdir -p dist
-          copy campus-rpg/build/CampusRPG.exe dist/
-          copy campus-rpg/build/tests/CampusRPGTests.exe dist/
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item campus-rpg/build/CampusRPG.exe -Destination dist/
+          Copy-Item campus-rpg/build/tests/CampusRPGTests.exe -Destination dist/
 
       - name: Upload Windows artifacts
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: CampusRPG-windows
