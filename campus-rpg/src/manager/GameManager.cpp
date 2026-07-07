@@ -19,7 +19,9 @@
 #include "StatusScene.h"
 #include "ArmoryScene.h"
 
+#include <algorithm>
 #include <map>
+#include <random>
 
 GameManager &GameManager::instance()
 {
@@ -38,18 +40,19 @@ void GameManager::seedDefaultState(const std::string &playerName)
     personas_.clear();
     isNight_ = false;
 
-    // Reset time system
+    // Reset day & NPC pool system
     day_ = 1;
-    hour_ = kDayStartHour;
-    lastRefreshDay_ = 1;
     talkCountToday_.clear();
+    todayNpcIds_.clear();
+    npcPool_.clear();
 
     initDefaultPersonas();
     initDefaultShop();
     initDefaultQuests();
     initDefaultEnemies();
-    initDefaultSocialLinks();
-    initDefaultMap();
+    initDefaultSocialLinks(); // builds the 10-NPC pool + dialogue
+    refreshDailyNpcs();        // pick today's 2 NPCs, reset talk counts
+    initDefaultMap();          // place player + today's NPCs
     initDefaultEquipment();
 
     // Equip starter Persona.
@@ -137,6 +140,9 @@ bool GameManager::loadFromSlot(int slotId)
             character_.setPersona(p);
     }
 
+    // Names/portraits were just overwritten from the save; rebuild the generic
+    // dialogue so the embedded names match the loaded identity.
+    applyNpcDialogueTemplates();
     recomputeSocialLinkBonuses();
     return true;
 }
@@ -324,149 +330,171 @@ void GameManager::initDefaultEnemies()
 void GameManager::initDefaultSocialLinks()
 {
     socialLinkManager_ = SocialLinkManager();
-    socialLinkManager_.addLink(SocialLink("sl_yosuke", "Yosuke", "Magician"));
-    socialLinkManager_.addLink(SocialLink("sl_chie", "Chie", "Chariot"));
-    socialLinkManager_.addLink(SocialLink("sl_yukiko", "Yukiko", "Priestess"));
-    initSocialLinkRankData();
+    generateNpcPool();
 }
 
-void GameManager::initSocialLinkRankData()
+void GameManager::generateNpcPool()
 {
-    auto fill = [](SocialLink &link, std::vector<std::string> dialogues)
+    // A persistent pool of kNpcPoolSize unique NPCs per save. Names are picked
+    // without replacement from a fixed English name list; portraits are chosen
+    // randomly (with replacement) from the 3 available textures; arcana is
+    // deterministic by index so stat-reward mapping stays stable across loads.
+    static const std::vector<std::string> kNamePool = {
+        "Aiden", "Bella", "Caleb", "Diana", "Ethan", "Fiona", "Gavin", "Hannah",
+        "Ivan", "Julia", "Kevin", "Luna", "Mason", "Nora", "Oscar", "Piper",
+        "Quinn", "Rita", "Sean", "Tina"};
+    static const std::vector<std::string> kPortraits = {
+        "npc_yosuke", "npc_chie", "npc_yukiko"};
+    static const std::vector<std::string> kArcanas = {
+        "Magician", "Chariot", "Priestess", "Fool", "Hierophant"};
+
+    std::mt19937 rng(std::random_device{}());
+
+    std::vector<std::string> names = kNamePool;
+    std::shuffle(names.begin(), names.end(), rng);
+
+    npcPool_.clear();
+    for (int i = 0; i < kNpcPoolSize; ++i)
     {
-        for (int r = 0; r <= SocialLink::kMaxRank && r < static_cast<int>(dialogues.size()); ++r)
-        {
-            SocialLinkRankData data;
-            data.dialogue = dialogues[r];
-            link.setRankData(r, std::move(data));
-        }
+        NpcDefinition def;
+        def.id = "sl_npc_" + std::to_string(i);
+        def.name = (i < static_cast<int>(names.size())) ? names[i] : ("NPC" + std::to_string(i));
+        def.portraitId = kPortraits[rng() % kPortraits.size()];
+        def.arcana = kArcanas[i % kArcanas.size()];
+        npcPool_.push_back(def);
+
+        SocialLink link(def.id, def.name, def.arcana);
+        link.setPortraitId(def.portraitId);
+        socialLinkManager_.addLink(std::move(link));
+    }
+
+    applyNpcDialogueTemplates();
+}
+
+void GameManager::applyNpcDialogueTemplates()
+{
+    // Generic, name-agnostic dialogue shared by every pool NPC. The NPC's name
+    // is prepended at fill time so the displayed text matches the loaded identity.
+    static const std::vector<std::string> kLines = {
+        "Oh, hey! Good to see you around.",
+        "I was just thinking about our last chat.",
+        "You know, I really enjoy these little talks.",
+        "I feel like we're starting to click, you know?",
+        "Honestly, you're one of the few people I can be myself around.",
+        "Hey, whatever happens out there, I've got your back. Always.",
+        "I don't say this often, but... thanks for sticking with me.",
+        "You bring out a side of me I'd kind of forgotten existed.",
+        "This bond we're building... it means more than you think.",
+        "You're my truest friend. I hope you know that.",
+        "So this is what a real bond feels like. Let's keep going, together."};
+
+    auto statFor = [](const std::string &arcana) -> PersonaStat {
+        if (arcana == "Magician") return PersonaStat::Strength;
+        if (arcana == "Chariot") return PersonaStat::Agility;
+        if (arcana == "Priestess") return PersonaStat::Magic;
+        if (arcana == "Fool") return PersonaStat::Luck;
+        return PersonaStat::Endurance;
     };
 
-    // Yosuke — Magician. Reward at rank 3: +1 Strength. Rank 6: +2 Strength. Rank 9: +3 Strength.
-    if (SocialLink *y = socialLinkManager_.getLink("sl_yosuke"))
+    for (SocialLink *link : socialLinkManager_.allLinks())
     {
-        fill(*y, {
-                     "Yosuke: \"Heh, you finally came. I was starting to think you'd bail on me.\"",
-                     "Yosuke: \"Oh? You actually showed up. Guess you're not so boring after all.\"",
-                     "Yosuke: \"Listen up, partner. You can drop the act around me. I see right through you.\"",
-                     "Yosuke: \"We've been through a lot, huh? Thanks for having my back out there.\"",
-                     "Yosuke: \"Hey, don't underestimate me! I'm not just some sidekick, you know.\"",
-                     "Yosuke: \"Even if it's hell ahead, with you beside me... no, with ME beside YOU, we'll break through!\"",
-                     "Yosuke: \"Ha... you really got me. Guess I'm stuck with you for life, partner.\"",
-                     "Yosuke: \"I never thought I'd meet someone who makes me want to be stronger... just to protect them.\"",
-                     "Yosuke: \"Even if the world ends, as long as we're standing, hope never dies!\"",
-                     "Yosuke: \"True brothers devour each other's souls. Come on, let's go!\"",
-                     "Yosuke: \"So this is... a true bond. My chest is burning like fire!\"",
-                 });
-        if (SocialLinkRankData *r3 = y->rankData(3))
+        if (!link)
+            continue;
+        for (int r = 0; r <= SocialLink::kMaxRank && r < static_cast<int>(kLines.size()); ++r)
         {
-            r3->reward.hasStatBonus = true;
-            r3->reward.stat = PersonaStat::Strength;
-            r3->reward.statBonus = 1;
+            SocialLinkRankData data;
+            data.dialogue = link->name() + ": \"" + kLines[r] + "\"";
+            link->setRankData(r, std::move(data));
         }
-        if (SocialLinkRankData *r6 = y->rankData(6))
-        {
-            r6->reward.hasStatBonus = true;
-            r6->reward.stat = PersonaStat::Strength;
-            r6->reward.statBonus = 2;
-        }
-        if (SocialLinkRankData *r9 = y->rankData(9))
-        {
-            r9->reward.hasStatBonus = true;
-            r9->reward.stat = PersonaStat::Strength;
-            r9->reward.statBonus = 3;
-        }
+        PersonaStat stat = statFor(link->arcana());
+        auto setReward = [&](int rank, int bonus) {
+            if (SocialLinkRankData *d = link->rankData(rank))
+            {
+                d->reward.hasStatBonus = true;
+                d->reward.stat = stat;
+                d->reward.statBonus = bonus;
+            }
+        };
+        setReward(3, 1);
+        setReward(6, 2);
+        setReward(9, 3);
     }
+}
 
-    // Chie — Chariot. Reward at rank 3: +1 Agility. Rank 6: +2 Agility. Rank 9: +3 Agility.
-    if (SocialLink *c = socialLinkManager_.getLink("sl_chie"))
-    {
-        fill(*c, {
-                     "Chie: \"Heh, right on time! I was just itching for a spar. Don't hold back!\"",
-                     "Chie: \"Not bad, you actually kept up with me. Guess you've got some moves.\"",
-                     "Chie: \"Listen up! If you're teaming up with me, you'd better be ready to push past your limits!\"",
-                     "Chie: \"I'll crush anyone who tries to hurt you. That's my way of protecting what matters!\"",
-                     "Chie: \"Ha! See that? That's our combo move. Unstoppable!\"",
-                     "Chie: \"Whatever stands in our way, no matter who it is, just kick it all down!\"",
-                     "Chie: \"Strength isn't for bullying the weak. I'll use these hands to protect everyone I love!\"",
-                     "Chie: \"Thanks... for believing in me when I didn't. In return, I'll get stronger, so strong you'll rely on me!\"",
-                     "Chie: \"Every step we took wasn't for nothing. Each one is proof of our bond!\"",
-                     "Chie: \"Rival and best friend, huh? Heh, not bad. You're stuck as my opponent for life!\"",
-                     "Chie: \"Burn! Don't you dare fall until the very end, because I'll drag you back up!\"",
-                 });
-        if (SocialLinkRankData *r3 = c->rankData(3))
-        {
-            r3->reward.hasStatBonus = true;
-            r3->reward.stat = PersonaStat::Agility;
-            r3->reward.statBonus = 1;
-        }
-        if (SocialLinkRankData *r6 = c->rankData(6))
-        {
-            r6->reward.hasStatBonus = true;
-            r6->reward.stat = PersonaStat::Agility;
-            r6->reward.statBonus = 2;
-        }
-        if (SocialLinkRankData *r9 = c->rankData(9))
-        {
-            r9->reward.hasStatBonus = true;
-            r9->reward.stat = PersonaStat::Agility;
-            r9->reward.statBonus = 3;
-        }
-    }
+void GameManager::refreshDailyNpcs()
+{
+    talkCountToday_.clear();
+    todayNpcIds_.clear();
 
-    // Yukiko — Priestess. Reward at rank 3: +1 Magic. Rank 6: +2 Magic. Rank 9: +3 Magic.
-    if (SocialLink *y = socialLinkManager_.getLink("sl_yukiko"))
+    std::vector<std::string> ids;
+    ids.reserve(npcPool_.size());
+    for (const auto &def : npcPool_)
+        ids.push_back(def.id);
+
+    std::mt19937 rng(std::random_device{}());
+    std::shuffle(ids.begin(), ids.end(), rng);
+    for (int i = 0; i < kNpcsPerDay && i < static_cast<int>(ids.size()); ++i)
+        todayNpcIds_.push_back(ids[i]);
+}
+
+void GameManager::rebuildMapNpcs()
+{
+    if (!currentMap_)
+        return;
+    TileMap &map = *currentMap_;
+
+    engine::Vec2 playerPos{100.0f, 100.0f};
+    for (const auto &e : map.entities())
     {
-        fill(*y, {
-                     "Yukiko: \"Oh... welcome. I've prepared some tea. Please, sit down.\"",
-                     "Yukiko: \"Whenever I'm with you, my heart feels so calm. I wonder why?\"",
-                     "Yukiko: \"Lately I keep thinking... if I were braver, could I get closer to you?\"",
-                     "Yukiko: \"Would you... tell me what true freedom really is? I want to know.\"",
-                     "Yukiko: \"Family, tradition, duty... I'm starting to see them in my own way now.\"",
-                     "Yukiko: \"Thank you... for always staying by my side. I'll treasure this warmth forever.\"",
-                     "Yukiko: \"I want to be someone you can lean on too. Not always protected, but standing beside you.\"",
-                     "Yukiko: \"I'm not afraid anymore. Because with you here, even the dark feels gentle... right?\"",
-                     "Yukiko: \"No matter what tomorrow brings, I'll face it with a smile. Because you taught me courage.\"",
-                     "Yukiko: \"You are... the most precious person to me. More than anything in this world.\"",
-                     "Yukiko: \"Let's walk together, toward the light at the end. I'll always, always be by your side.\"",
-                 });
-        if (SocialLinkRankData *r3 = y->rankData(3))
-        {
-            r3->reward.hasStatBonus = true;
-            r3->reward.stat = PersonaStat::Magic;
-            r3->reward.statBonus = 1;
-        }
-        if (SocialLinkRankData *r6 = y->rankData(6))
-        {
-            r6->reward.hasStatBonus = true;
-            r6->reward.stat = PersonaStat::Magic;
-            r6->reward.statBonus = 2;
-        }
-        if (SocialLinkRankData *r9 = y->rankData(9))
-        {
-            r9->reward.hasStatBonus = true;
-            r9->reward.stat = PersonaStat::Magic;
-            r9->reward.statBonus = 3;
-        }
+        if (e && e->type() == "player")
+            playerPos = e->position();
     }
+    map.clearEntities();
+    map.addEntity(std::make_unique<PlayerEntity>(playerPos));
+
+    static const engine::Vec2 kSpots[kNpcsPerDay] = {
+        engine::Vec2{200.0f, 150.0f}, engine::Vec2{300.0f, 200.0f}};
+    for (size_t i = 0; i < todayNpcIds_.size() && i < kNpcsPerDay; ++i)
+        map.addEntity(std::make_unique<NpcEntity>(kSpots[i], todayNpcIds_[i]));
+}
+
+void GameManager::advanceDay()
+{
+    ++day_;
+    refreshDailyNpcs();
+    rebuildMapNpcs();
+}
+
+const GameManager::NpcDefinition *GameManager::findNpc(const std::string &id) const
+{
+    for (const auto &def : npcPool_)
+        if (def.id == id)
+            return &def;
+    return nullptr;
+}
+
+int GameManager::talkCountToday(const std::string &npcId) const
+{
+    auto it = talkCountToday_.find(npcId);
+    return it != talkCountToday_.end() ? it->second : 0;
 }
 
 std::string GameManager::talkToNpc(const std::string &socialLinkId)
 {
     const int kDailyPoints = 10;
 
-    // Track talk count for this NPC today; only first 3 talks grant points.
     int &count = talkCountToday_[socialLinkId];
-    bool canGain = (count < kMaxTalksPerNpc);
+    const SocialLink *link = socialLinkManager_.getLink(socialLinkId);
 
-    int beforeRank = 0;
-    if (const SocialLink *before = socialLinkManager_.getLink(socialLinkId))
-        beforeRank = before->rank();
+    // Hard cap: each NPC can be talked to kMaxTalksPerNpc times per day.
+    if (count >= kMaxTalksPerNpc)
+    {
+        std::string name = link ? link->name() : "...";
+        return name + " has nothing more to say today. Come back tomorrow.";
+    }
 
-    if (canGain)
-        socialLinkManager_.addPoints(socialLinkId, kDailyPoints);
-
-    // Increment talk count regardless (so even beyond 3, time still passes).
+    int beforeRank = link ? link->rank() : 0;
+    socialLinkManager_.addPoints(socialLinkId, kDailyPoints);
     ++count;
 
     // Fire the rank-up callback for every rank gained during this talk so
@@ -483,47 +511,7 @@ std::string GameManager::talkToNpc(const std::string &socialLinkId)
 
     recomputeSocialLinkBonuses();
 
-    // Each conversation costs 4 in-game hours.
-    advanceTime(kTalkCostHours);
-
     return socialLinkManager_.dialogueFor(socialLinkId);
-}
-
-std::string GameManager::timeString() const
-{
-    // Format: "Day 1  08:00"
-    std::string h = (hour_ < 10 ? "0" : "") + std::to_string(hour_);
-    return "Day " + std::to_string(day_) + "  " + h + ":00";
-}
-
-void GameManager::advanceTime(int hours)
-{
-    hour_ += hours;
-    while (hour_ >= 24)
-    {
-        hour_ -= 24;
-        day_++;
-    }
-    // Refresh daily talk counts when a new day reaches 8:00 AM.
-    if (day_ > lastRefreshDay_ && hour_ >= kDayStartHour)
-    {
-        talkCountToday_.clear();
-        lastRefreshDay_ = day_;
-    }
-}
-
-bool GameManager::canGainPoints(const std::string &npcId) const
-{
-    auto it = talkCountToday_.find(npcId);
-    if (it == talkCountToday_.end())
-        return true;
-    return it->second < kMaxTalksPerNpc;
-}
-
-int GameManager::talkCountToday(const std::string &npcId) const
-{
-    auto it = talkCountToday_.find(npcId);
-    return it != talkCountToday_.end() ? it->second : 0;
 }
 
 void GameManager::recomputeSocialLinkBonuses()
@@ -575,10 +563,11 @@ void GameManager::initDefaultMap()
     // Player start.
     currentMap_->addEntity(std::make_unique<PlayerEntity>(engine::Vec2{100.0f, 100.0f}));
 
-    // NPCs for Social Link.
-    currentMap_->addEntity(std::make_unique<NpcEntity>(engine::Vec2{200.0f, 150.0f}, "sl_yosuke"));
-    currentMap_->addEntity(std::make_unique<NpcEntity>(engine::Vec2{300.0f, 200.0f}, "sl_chie"));
-    currentMap_->addEntity(std::make_unique<NpcEntity>(engine::Vec2{150.0f, 250.0f}, "sl_yukiko"));
+    // Today's NPCs (kNpcsPerDay of them, picked by refreshDailyNpcs()).
+    static const engine::Vec2 kNpcSpots[kNpcsPerDay] = {
+        engine::Vec2{200.0f, 150.0f}, engine::Vec2{300.0f, 200.0f}};
+    for (size_t i = 0; i < todayNpcIds_.size() && i < kNpcsPerDay; ++i)
+        currentMap_->addEntity(std::make_unique<NpcEntity>(kNpcSpots[i], todayNpcIds_[i]));
 }
 
 // ---- Equipment system ----

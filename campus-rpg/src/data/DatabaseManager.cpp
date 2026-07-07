@@ -143,6 +143,8 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             id TEXT NOT NULL,
             rank INTEGER DEFAULT 0,
             points INTEGER DEFAULT 0,
+            name TEXT,
+            portrait TEXT,
             PRIMARY KEY (slot_id, id)
         );
 
@@ -170,6 +172,34 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         sqlite3_free(errMsg);
         return false;
     }
+
+    // Schema v2: ensure social_link has name/portrait columns (persistent NPC
+    // identity). Fresh DBs already get them from CREATE TABLE above; existing
+    // v1 DBs need an in-place ALTER. Idempotent via PRAGMA table_info check.
+    auto addColumnIfMissing = [this](const char *table, const char *col, const char *typeDef) {
+        sqlite3_stmt *info = nullptr;
+        std::string pragma = std::string("PRAGMA table_info(") + table + ")";
+        if (sqlite3_prepare_v2(db_, pragma.c_str(), -1, &info, nullptr) != SQLITE_OK)
+            return;
+        bool found = false;
+        while (sqlite3_step(info) == SQLITE_ROW)
+        {
+            const char *cn = reinterpret_cast<const char *>(sqlite3_column_text(info, 1));
+            if (cn && std::string(cn) == col)
+            {
+                found = true;
+                break;
+            }
+        }
+        sqlite3_finalize(info);
+        if (!found)
+        {
+            std::string alter = std::string("ALTER TABLE ") + table + " ADD COLUMN " + col + " " + typeDef + ";";
+            sqlite3_exec(db_, alter.c_str(), nullptr, nullptr, nullptr);
+        }
+    };
+    addColumnIfMissing("social_link", "name", "TEXT");
+    addColumnIfMissing("social_link", "portrait", "TEXT");
 
     if (version < 1)
     {
@@ -222,7 +252,7 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             }
         }
 
-        sqlite3_exec(db_, "PRAGMA user_version = 1;", nullptr, nullptr, nullptr);
+        sqlite3_exec(db_, "PRAGMA user_version = 2;", nullptr, nullptr, nullptr);
     }
 
     initialized_ = true;

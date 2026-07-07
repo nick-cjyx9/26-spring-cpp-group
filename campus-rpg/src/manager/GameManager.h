@@ -108,10 +108,11 @@ public:
 
     // ---- Social Link integration ----
     // Called by DialogueScene when the player talks to an NPC.
-    // Adds the daily progression points, fires any pending rank-up callbacks
-    // (so the UI can play the 奶龙 laugh / fire-dance sound), recomputes
-    // stat bonuses on the character, and returns the link's current-rank
-    // dialogue text.
+    // Adds the daily progression points (up to kMaxTalksPerNpc talks/day),
+    // fires any pending rank-up callbacks, recomputes stat bonuses on the
+    // character, and returns the link's current-rank dialogue text. Once the
+    // daily talk cap is reached, returns a "no more today" message and grants
+    // nothing.
     std::string talkToNpc(const std::string &socialLinkId);
 
     // Recompute and apply all Social Link stat bonuses onto the character.
@@ -126,10 +127,32 @@ public:
     void initDefaultQuests();
     void initDefaultEnemies();
     void initDefaultSocialLinks();
-    void initSocialLinkRankData();
     void initDefaultPersonas();
     void initDefaultMap();
     void initDefaultEquipment();
+
+    // ---- NPC pool & day system ----
+    // A save holds a persistent pool of kNpcPoolSize unique NPCs (random name
+    // + random portrait). Each day, kNpcsPerDay of them are randomly picked to
+    // appear on the town map; each can be talked to kMaxTalksPerNpc times that
+    // day. Going from night back to day advances to the next day and refreshes
+    // the daily NPC selection.
+    struct NpcDefinition
+    {
+        std::string id;
+        std::string name;
+        std::string portraitId;
+        std::string arcana;
+    };
+    int day() const { return day_; }
+    void advanceDay(); // night -> day transition: day++, refresh NPCs on map.
+    const std::vector<std::string> &todayNpcIds() const { return todayNpcIds_; }
+    const NpcDefinition *findNpc(const std::string &id) const;
+    // Today's talk count for a given NPC id (capped at kMaxTalksPerNpc).
+    int talkCountToday(const std::string &npcId) const;
+    static constexpr int kNpcPoolSize = 10;
+    static constexpr int kNpcsPerDay = 2;
+    static constexpr int kMaxTalksPerNpc = 2;
 
     // ---- Equipment system ----
     struct EquippedGear
@@ -149,28 +172,18 @@ public:
     int selectedHeroIndex() const { return selectedHeroIndex_; }
     void setSelectedHeroIndex(int idx) { selectedHeroIndex_ = idx; }
 
-    // ---- Time system ----
-    // Day starts at 1, hour starts at 8 (8 AM). Each talk = +4h, each battle = +4h.
-    // Moving 4 tiles = +1h. Talk-count refreshes at 8 AM on a new day.
-    int day() const { return day_; }
-    int hour() const { return hour_; }
-    std::string timeString() const; // e.g. "Day 1  08:00"
-    void advanceTime(int hours);
-    // Whether this NPC can still grant Social Link points today (max 3 talks/day).
-    bool canGainPoints(const std::string &npcId) const;
-    int talkCountToday(const std::string &npcId) const;
-    static constexpr int kMaxTalksPerNpc = 3;
-    static constexpr int kTalkCostHours = 4;
-    static constexpr int kBattleCostHours = 4;
-    static constexpr int kTilesPerHour = 4;
-    static constexpr int kDayStartHour = 8;
-
 private:
     GameManager() = default;
 
     // Reset all game state to defaults and seed definitions. Does NOT switch
     // scenes, so loadFromSlot() can call it before overwriting with save data.
     void seedDefaultState(const std::string &playerName);
+
+    // NPC pool helpers.
+    void generateNpcPool();        // create kNpcPoolSize random NPCs + dialogue.
+    void applyNpcDialogueTemplates(); // (re)fill generic dialogue + rewards.
+    void refreshDailyNpcs();       // pick kNpcsPerDay random ids, reset counts.
+    void rebuildMapNpcs();         // clear non-player entities, place today's NPCs.
 
     Character character_;
     Inventory inventory_;
@@ -193,10 +206,10 @@ private:
     int currentSlotId_ = 1;
     int selectedHeroIndex_ = 0;
 
-    // Time system
+    // Day & NPC pool system
     int day_ = 1;
-    int hour_ = kDayStartHour;
-    int lastRefreshDay_ = 1;
+    std::vector<NpcDefinition> npcPool_;
+    std::vector<std::string> todayNpcIds_;
     std::map<std::string, int> talkCountToday_;
 
     RankUpCallback rankUpCallback_;

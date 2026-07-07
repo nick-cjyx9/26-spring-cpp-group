@@ -117,7 +117,7 @@ void SocialLinkScene::render(engine::IRenderer &renderer)
         // Portrait background
         renderer.drawRect({portX, portY, portW, portH}, engine::Color(35, 30, 50, 200));
         // Draw NPC texture, fitted into the portrait frame
-        std::string texId = npcTexId(link->id());
+        std::string texId = !link->portraitId().empty() ? link->portraitId() : npcTexId(link->id());
         renderer.drawTexture(texId, {portX + 3.0f, portY + 3.0f, portW - 6.0f, portH - 6.0f});
         // Portrait border
         drawBorder(renderer, portX, portY, portW, portH,

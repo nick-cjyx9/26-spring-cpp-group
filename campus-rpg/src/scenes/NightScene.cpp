@@ -45,7 +45,9 @@ void NightScene::handleInput(engine::IInput &input)
 
     if (input.wasKeyJustPressed(engine::Key::Escape))
     {
+        // Returning from night to day = next day: refresh NPCs on the map.
         GameManager::instance().setNight(false);
+        GameManager::instance().advanceDay();
         GameManager::instance().enterScene(SceneType::Town);
     }
 }

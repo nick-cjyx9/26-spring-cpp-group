@@ -98,11 +98,21 @@ void DialogueScene::update(float /*deltaTime*/)
                 npcId_ = static_cast<NpcEntity *>(npc)->socialLinkId();
         }
 
-        if (!npcId_.empty() && npcId_.size() > 3 && npcId_.substr(0, 3) == "sl_")
+        // Pick the NPC portrait from the SocialLink's stored portraitId (the
+        // pool NPCs carry a randomly-assigned texture id).
+        if (!npcId_.empty())
         {
-            std::string base = npcId_.substr(3);
-            npcTexId_ = "npc_" + base;
-            hasNpcTex_ = true;
+            const SocialLink *link = GameManager::instance().socialLinkManager().getLink(npcId_);
+            if (link && !link->portraitId().empty())
+            {
+                npcTexId_ = link->portraitId();
+                hasNpcTex_ = true;
+            }
+            else if (npcId_.size() > 3 && npcId_.substr(0, 3) == "sl_")
+            {
+                npcTexId_ = "npc_" + npcId_.substr(3);
+                hasNpcTex_ = true;
+            }
         }
 
         int heroIdx = GameManager::instance().selectedHeroIndex();

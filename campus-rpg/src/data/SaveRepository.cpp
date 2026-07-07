@@ -434,7 +434,7 @@ bool SaveRepository::saveSocialLinks_(int slotId, const SocialLinkManager &manag
     sqlite3_step(delStmt);
     sqlite3_finalize(delStmt);
 
-    const char *sql = "INSERT INTO social_link (slot_id, id, rank, points) VALUES (?, ?, ?, ?)";
+    const char *sql = "INSERT INTO social_link (slot_id, id, rank, points, name, portrait) VALUES (?, ?, ?, ?, ?, ?)";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return false;
@@ -448,6 +448,8 @@ bool SaveRepository::saveSocialLinks_(int slotId, const SocialLinkManager &manag
         sqlite3_bind_text(stmt, 2, link->id().c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmt, 3, link->rank());
         sqlite3_bind_int(stmt, 4, link->points());
+        sqlite3_bind_text(stmt, 5, link->name().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 6, link->portraitId().c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_step(stmt);
     }
 
@@ -461,7 +463,7 @@ bool SaveRepository::loadSocialLinks_(int slotId, SocialLinkManager &manager)
     if (!db)
         return false;
 
-    const char *sql = "SELECT id, rank, points FROM social_link WHERE slot_id = ?";
+    const char *sql = "SELECT id, rank, points, name, portrait FROM social_link WHERE slot_id = ?";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return false;
@@ -474,6 +476,20 @@ bool SaveRepository::loadSocialLinks_(int slotId, SocialLinkManager &manager)
         SocialLink *link = manager.getLink(id);
         if (link)
         {
+            // Restore the persistent NPC identity (name/portrait) from the save
+            // so the random pool stays stable across loads.
+            if (const char *nm = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)))
+            {
+                std::string name = nm;
+                if (!name.empty())
+                    link->setName(name);
+            }
+            if (const char *pt = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4)))
+            {
+                std::string portrait = pt;
+                if (!portrait.empty())
+                    link->setPortraitId(portrait);
+            }
             int rank = sqlite3_column_int(stmt, 1);
             int points = sqlite3_column_int(stmt, 2);
             while (link->rank() < rank && link->rank() < 10)
