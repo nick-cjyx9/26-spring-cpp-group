@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "SaveRepository.h"
+
 enum class SceneType
 {
     Title,
@@ -22,7 +24,8 @@ enum class SceneType
     Shop,
     Inventory,
     Character,
-    Dialogue
+    Dialogue,
+    SaveSlot
 };
 
 class GameManager
@@ -32,10 +35,32 @@ public:
 
     void newGame(const std::string &playerName);
 
+    // ---- Multi-slot save API (used by TitleScene / TownScene) ----
+    // Save current game state into the given slot (overwrites existing).
+    bool saveToSlot(int slotId);
+    // Load a slot into the running game. Call after newGame() so default
+    // quest/social-link definitions exist for progress to attach to.
+    bool loadFromSlot(int slotId);
+    // Create a brand-new game with the given character id and save it to slot.
+    bool createNewSave(int slotId, const std::string &characterId);
+    // Delete a save slot entirely.
+    bool deleteSaveSlot(int slotId);
+    // Query whether a slot has save data.
+    bool hasSaveSlot(int slotId);
+    // List up to maxSlotId slots with metadata for the load/save-slot UI.
+    std::vector<SaveSlotInfo> listSaveSlots(int maxSlotId = 3);
+    // The slot the current game session is bound to (1-based).
+    int currentSlotId() const { return currentSlotId_; }
+    void setCurrentSlotId(int slotId) { currentSlotId_ = slotId; }
+
+    // Legacy single-slot API (delegates to slot 1 / currentSlotId_).
     void save();
     void load();
 
     void enterScene(SceneType type);
+    // Enter the save-slot management screen. forSave=true opens it in Save
+    // mode (from Town); false opens it in Load mode (from Title).
+    void openSaveSlots(bool forSave);
     SceneType currentSceneType() const { return currentSceneType_; }
 
     Character &character() { return character_; }
@@ -68,6 +93,10 @@ public:
 private:
     GameManager() = default;
 
+    // Reset all game state to defaults and seed definitions. Does NOT switch
+    // scenes, so loadFromSlot() can call it before overwriting with save data.
+    void seedDefaultState(const std::string &playerName);
+
     Character character_;
     Inventory inventory_;
     Shop shop_;
@@ -84,4 +113,5 @@ private:
 
     bool isNight_ = false;
     bool shouldQuit_ = false;
+    int currentSlotId_ = 1;
 };

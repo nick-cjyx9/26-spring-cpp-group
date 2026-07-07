@@ -70,6 +70,10 @@ void TownScene::handleInput(engine::IInput &input)
         map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss"));
         GameManager::instance().enterScene(SceneType::Night);
     }
+    if (input.wasKeyJustPressed(engine::Key::F5))
+    {
+        GameManager::instance().openSaveSlots(true);
+    }
 }
 
 void TownScene::update(float deltaTime)
@@ -131,8 +135,8 @@ void TownScene::render(engine::IRenderer &renderer)
                       {720, 20}, 18, engine::Color::yellow());
 
     // Interaction hint
-    renderer.drawText("E: talk  I: inventory  C: char  N: night",
-                      {180, 570}, 16, engine::Color::white());
+    renderer.drawText("E: talk  I: inventory  C: char  N: night  F5: save",
+                      {140, 570}, 16, engine::Color::white());
 }
 
 void TownScene::tryInteract()

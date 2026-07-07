@@ -13,11 +13,12 @@ void TitleScene::handleInput(engine::IInput &input)
         switch (selectedIndex_)
         {
         case 0:
-            GameManager::instance().enterScene(SceneType::Town);
+            // start game -> save-slot management screen (create new / load).
+            GameManager::instance().openSaveSlots(false);
             break;
         case 1:
-            // Load game placeholder for demo.
-            GameManager::instance().enterScene(SceneType::Town);
+            // load game -> save-slot management screen.
+            GameManager::instance().openSaveSlots(false);
             break;
         case 2:
             GameManager::instance().quit();
@@ -49,4 +50,5 @@ void TitleScene::render(engine::IRenderer &renderer)
     }
 
     renderer.drawText("Use Up/Down and Enter", {280, 520}, 16, engine::Color::gray());
+    renderer.drawText("start game: create/load a save   load game: manage saves", {200, 545}, 14, engine::Color::gray());
 }

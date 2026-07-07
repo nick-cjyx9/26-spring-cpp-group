@@ -13,6 +13,7 @@
 #include "InventoryScene.h"
 #include "CharacterScene.h"
 #include "DialogueScene.h"
+#include "SaveSlotScene.h"
 
 GameManager &GameManager::instance()
 {
@@ -20,7 +21,7 @@ GameManager &GameManager::instance()
     return manager;
 }
 
-void GameManager::newGame(const std::string &playerName)
+void GameManager::seedDefaultState(const std::string &playerName)
 {
     character_ = Character(playerName, 100, 50, 10, 10, 10, 10, 10);
     inventory_ = Inventory(20);
@@ -42,25 +43,89 @@ void GameManager::newGame(const std::string &playerName)
     auto starter = findPersona("persona_izanagi");
     if (starter)
         character_.setPersona(starter);
+}
 
+void GameManager::newGame(const std::string &playerName)
+{
+    seedDefaultState(playerName);
     enterScene(SceneType::Title);
+}
+
+bool GameManager::saveToSlot(int slotId)
+{
+    SaveRepository repo;
+    bool ok = repo.saveAll(slotId, character_, inventory_, personas_,
+                           socialLinkManager_, questManager_);
+    if (ok)
+        currentSlotId_ = slotId;
+    return ok;
+}
+
+bool GameManager::loadFromSlot(int slotId)
+{
+    SaveRepository repo;
+    if (!repo.slotExists(slotId))
+        return false;
+
+    // Seed defaults so quest / social-link definitions exist for progress to
+    // attach to. The save data then overwrites character/inventory/persona/
+    // quest/social-link state. The name is replaced by the save's character.
+    seedDefaultState("Player");
+
+    if (!repo.loadAll(slotId, character_, inventory_, personas_,
+                      socialLinkManager_, questManager_))
+    {
+        // Load failed: leave the seeded default state intact so the game is
+        // still in a runnable state.
+        return false;
+    }
+
+    currentSlotId_ = slotId;
+
+    // Restore the currently-equipped persona from the save.
+    std::string currentId = repo.currentPersonaId(slotId);
+    if (!currentId.empty())
+    {
+        auto p = findPersona(currentId);
+        if (p)
+            character_.setPersona(p);
+    }
+    return true;
+}
+
+bool GameManager::createNewSave(int slotId, const std::string &characterId)
+{
+    seedDefaultState(characterId);
+    currentSlotId_ = slotId;
+    return saveToSlot(slotId);
+}
+
+bool GameManager::deleteSaveSlot(int slotId)
+{
+    SaveRepository repo;
+    return repo.deleteSlot(slotId);
+}
+
+bool GameManager::hasSaveSlot(int slotId)
+{
+    SaveRepository repo;
+    return repo.slotExists(slotId);
+}
+
+std::vector<SaveSlotInfo> GameManager::listSaveSlots(int maxSlotId)
+{
+    SaveRepository repo;
+    return repo.listSlots(maxSlotId);
 }
 
 void GameManager::save()
 {
-    SaveRepository repo;
-    repo.saveAll(character_, inventory_, personas_, socialLinkManager_, questManager_);
+    saveToSlot(currentSlotId_);
 }
 
 void GameManager::load()
 {
-    SaveRepository repo;
-    repo.loadAll(character_, inventory_, personas_, socialLinkManager_, questManager_);
-
-    std::string currentId = character_.currentPersona() ? character_.currentPersona()->id() : "";
-    auto p = findPersona(currentId);
-    if (p)
-        character_.setPersona(p);
+    loadFromSlot(currentSlotId_);
 }
 
 void GameManager::enterScene(SceneType type)
@@ -92,7 +157,17 @@ void GameManager::enterScene(SceneType type)
     case SceneType::Dialogue:
         currentScene_ = std::make_unique<DialogueScene>();
         break;
+    case SceneType::SaveSlot:
+        currentScene_ = std::make_unique<SaveSlotScene>(SaveSlotScene::Mode::Load);
+        break;
     }
+}
+
+void GameManager::openSaveSlots(bool forSave)
+{
+    currentSceneType_ = SceneType::SaveSlot;
+    currentScene_ = std::make_unique<SaveSlotScene>(
+        forSave ? SaveSlotScene::Mode::Save : SaveSlotScene::Mode::Load);
 }
 
 std::unique_ptr<Enemy> GameManager::createEnemy(size_t index) const

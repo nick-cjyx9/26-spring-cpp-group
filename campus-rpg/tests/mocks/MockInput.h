@@ -3,6 +3,7 @@
 #include "IInput.h"
 
 #include <array>
+#include <string>
 
 namespace tests
 {
@@ -39,14 +40,25 @@ public:
             currentStates_[idx] = pressed;
     }
 
+    std::string consumeTypedText() override
+    {
+        std::string text;
+        text.swap(typedBuffer_);
+        return text;
+    }
+
+    // Test helper: inject text as if the user typed it.
+    void typeText(const std::string &text) { typedBuffer_ += text; }
+
     void endFrame() override
     {
         previousStates_ = currentStates_;
     }
 
 private:
-    std::array<bool, static_cast<size_t>(engine::Key::Space) + 1> currentStates_;
-    std::array<bool, static_cast<size_t>(engine::Key::Space) + 1> previousStates_;
+    std::array<bool, static_cast<size_t>(engine::Key::Count)> currentStates_;
+    std::array<bool, static_cast<size_t>(engine::Key::Count)> previousStates_;
+    std::string typedBuffer_;
 };
 
 } // namespace tests

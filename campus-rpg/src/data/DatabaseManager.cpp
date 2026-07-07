@@ -23,9 +23,33 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         return false;
     }
 
+    // Schema versioning. Version 1 = multi-slot save schema (slot_id columns).
+    int version = 0;
+    sqlite3_stmt *vstmt = nullptr;
+    if (sqlite3_prepare_v2(db_, "PRAGMA user_version", -1, &vstmt, nullptr) == SQLITE_OK)
+    {
+        if (sqlite3_step(vstmt) == SQLITE_ROW)
+            version = sqlite3_column_int(vstmt, 0);
+        sqlite3_finalize(vstmt);
+    }
+
+    if (version < 1)
+    {
+        // Drop legacy single-slot tables (old schema had `id CHECK(id=1)` on
+        // `character`). Saves from the old schema are incompatible with the
+        // multi-slot layout, so we drop and recreate. Fresh DBs have nothing
+        // to drop.
+        sqlite3_exec(db_, "DROP TABLE IF EXISTS character;", nullptr, nullptr, nullptr);
+        sqlite3_exec(db_, "DROP TABLE IF EXISTS persona;", nullptr, nullptr, nullptr);
+        sqlite3_exec(db_, "DROP TABLE IF EXISTS inventory;", nullptr, nullptr, nullptr);
+        sqlite3_exec(db_, "DROP TABLE IF EXISTS social_link;", nullptr, nullptr, nullptr);
+        sqlite3_exec(db_, "DROP TABLE IF EXISTS quest_progress;", nullptr, nullptr, nullptr);
+        sqlite3_exec(db_, "DROP TABLE IF EXISTS save_meta;", nullptr, nullptr, nullptr);
+    }
+
     const char *createSql = R"(
         CREATE TABLE IF NOT EXISTS character (
-            id INTEGER PRIMARY KEY CHECK(id = 1),
+            slot_id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             level INTEGER DEFAULT 1,
             hp INTEGER DEFAULT 100,
@@ -35,6 +59,14 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             exp INTEGER DEFAULT 0,
             exp_to_next INTEGER DEFAULT 100,
             gold INTEGER DEFAULT 0,
+            st INTEGER DEFAULT 5,
+            ma INTEGER DEFAULT 5,
+            en INTEGER DEFAULT 5,
+            ag INTEGER DEFAULT 5,
+            lu INTEGER DEFAULT 5,
+            eq_atk INTEGER DEFAULT 0,
+            eq_def INTEGER DEFAULT 0,
+            eq_spd INTEGER DEFAULT 0,
             pos_x REAL DEFAULT 0,
             pos_y REAL DEFAULT 0,
             is_night INTEGER DEFAULT 0,
@@ -42,7 +74,8 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         );
 
         CREATE TABLE IF NOT EXISTS persona (
-            id TEXT PRIMARY KEY,
+            slot_id INTEGER NOT NULL DEFAULT 1,
+            id TEXT NOT NULL,
             name TEXT NOT NULL,
             arcana TEXT NOT NULL,
             level INTEGER DEFAULT 1,
@@ -53,11 +86,13 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             lu INTEGER DEFAULT 5,
             affinities TEXT,
             skills TEXT,
-            owner TEXT
+            owner TEXT,
+            PRIMARY KEY (slot_id, id)
         );
 
         CREATE TABLE IF NOT EXISTS inventory (
-            slot INTEGER PRIMARY KEY AUTOINCREMENT,
+            slot_id INTEGER NOT NULL DEFAULT 1,
+            ord INTEGER,
             item_id TEXT NOT NULL,
             item_type TEXT NOT NULL,
             name TEXT NOT NULL,
@@ -67,16 +102,27 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         );
 
         CREATE TABLE IF NOT EXISTS social_link (
-            id TEXT PRIMARY KEY,
+            slot_id INTEGER NOT NULL DEFAULT 1,
+            id TEXT NOT NULL,
             rank INTEGER DEFAULT 0,
-            points INTEGER DEFAULT 0
+            points INTEGER DEFAULT 0,
+            PRIMARY KEY (slot_id, id)
         );
 
         CREATE TABLE IF NOT EXISTS quest_progress (
-            quest_id TEXT PRIMARY KEY,
+            slot_id INTEGER NOT NULL DEFAULT 1,
+            quest_id TEXT NOT NULL,
             accepted INTEGER DEFAULT 0,
             completed INTEGER DEFAULT 0,
-            rewarded INTEGER DEFAULT 0
+            rewarded INTEGER DEFAULT 0,
+            PRIMARY KEY (slot_id, quest_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS save_meta (
+            slot_id INTEGER PRIMARY KEY,
+            character_name TEXT,
+            level INTEGER DEFAULT 1,
+            updated_at TEXT
         );
     )";
 
@@ -87,6 +133,9 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         sqlite3_free(errMsg);
         return false;
     }
+
+    if (version < 1)
+        sqlite3_exec(db_, "PRAGMA user_version = 1;", nullptr, nullptr, nullptr);
 
     initialized_ = true;
     return true;
