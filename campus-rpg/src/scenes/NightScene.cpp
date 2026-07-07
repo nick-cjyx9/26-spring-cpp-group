@@ -37,9 +37,17 @@ void NightScene::handleInput(engine::IInput &input)
     if (input.isKeyPressed(engine::Key::Down) || input.isKeyPressed(engine::Key::S))
         moveY_ += 1.0f;
 
+    if (input.wasKeyJustPressed(engine::Key::C))
+    {
+        GameManager::instance().enterScene(SceneType::Status);
+        return;
+    }
+
     if (input.wasKeyJustPressed(engine::Key::Escape))
     {
+        // Returning from night to day = next day: refresh NPCs on the map.
         GameManager::instance().setNight(false);
+        GameManager::instance().advanceDay();
         GameManager::instance().enterScene(SceneType::Town);
     }
 }
@@ -113,6 +121,6 @@ void NightScene::render(engine::IRenderer &renderer)
     renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()),
                       {720, 20}, 18, engine::Color::yellow());
 
-    renderer.drawText("Night - touch shadows to fight, Esc: sleep",
+    renderer.drawText("Night - touch shadows to fight   C: status   Esc: sleep",
                       {180, 570}, 16, engine::Color::white());
 }

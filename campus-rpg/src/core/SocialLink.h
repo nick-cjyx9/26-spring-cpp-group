@@ -44,7 +44,11 @@ public:
     // Identity
     const std::string &id() const { return id_; }
     const std::string &name() const { return name_; }
+    void setName(std::string name) { name_ = std::move(name); }
     const std::string &arcana() const { return arcana_; }
+    // Portrait texture id (e.g. "npc_yosuke"). Empty means "derive from id".
+    const std::string &portraitId() const { return portraitId_; }
+    void setPortraitId(std::string portrait) { portraitId_ = std::move(portrait); }
 
     // Progression
     int rank() const { return rank_; }
@@ -70,6 +74,7 @@ private:
     std::string id_;
     std::string name_;
     std::string arcana_;
+    std::string portraitId_;
     int rank_ = 0;
     int points_ = 0;
     // Indexed by rank 0..kMaxRank. Grows lazily via setRankData.

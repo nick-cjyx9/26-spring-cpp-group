@@ -17,7 +17,4 @@ private:
     float moveY_ = 0.0f;
     std::string saveMessage_;
     float saveMessageTimer_ = 0.0f;
-
-    // Accumulated movement distance in pixels; every 4 tiles (128px) = 1 hour.
-    float accumulatedMoveDist_ = 0.0f;
 };
