@@ -72,12 +72,31 @@ void TownScene::handleInput(engine::IInput &input)
     }
     if (input.wasKeyJustPressed(engine::Key::F5))
     {
-        GameManager::instance().openSaveSlots(true);
+        if (GameManager::instance().saveCurrentSlot())
+        {
+            saveMessage_ = "Saved to slot " + std::to_string(GameManager::instance().currentSlotId()) + "!";
+            saveMessageTimer_ = 3.0f;
+        }
+        else
+        {
+            saveMessage_ = "Save failed.";
+            saveMessageTimer_ = 3.0f;
+        }
     }
 }
 
 void TownScene::update(float deltaTime)
 {
+    if (saveMessageTimer_ > 0.0f)
+    {
+        saveMessageTimer_ -= deltaTime;
+        if (saveMessageTimer_ <= 0.0f)
+        {
+            saveMessageTimer_ = 0.0f;
+            saveMessage_.clear();
+        }
+    }
+
     TileMap &map = GameManager::instance().currentMap();
     PlayerEntity *player = findPlayer(map);
     if (!player)
@@ -137,6 +156,13 @@ void TownScene::render(engine::IRenderer &renderer)
     // Interaction hint
     renderer.drawText("E: talk  I: inventory  C: char  N: night  F5: save",
                       {140, 570}, 16, engine::Color::white());
+
+    // Save feedback overlay.
+    if (!saveMessage_.empty())
+    {
+        renderer.drawRect({260, 510, 280, 36}, engine::Color(0, 0, 0, 200));
+        renderer.drawText(saveMessage_, {280, 519}, 18, engine::Color::green());
+    }
 }
 
 void TownScene::tryInteract()

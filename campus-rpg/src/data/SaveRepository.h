@@ -38,6 +38,10 @@ public:
     SaveSlotInfo slotInfo(int slotId);
     // Returns slot metadata for slots 1..maxSlotId (empty slots have exists=false).
     std::vector<SaveSlotInfo> listSlots(int maxSlotId = 3);
+    // Returns metadata for ALL existing saves (dynamic count), ordered by slot_id.
+    std::vector<SaveSlotInfo> listAllSlots();
+    // Returns the next free slot id (max existing + 1, or 1 if none).
+    int nextSlotId();
     // Returns the current persona id stored on the character row (empty if none).
     std::string currentPersonaId(int slotId);
 

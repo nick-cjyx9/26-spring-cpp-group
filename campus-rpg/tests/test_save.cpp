@@ -12,6 +12,7 @@
 #include "SocialLinkManager.h"
 #include "Quest.h"
 #include "QuestManager.h"
+#include "GameManager.h"
 
 #include <cstdio>
 #include <iostream>
@@ -316,6 +317,87 @@ void testCurrentPersonaIdPersisted()
     CHECK_EQ(repo.currentPersonaId(2), std::string(""));
 }
 
+void testListAllSlotsIsDynamic()
+{
+    TempDatabase db("test_save_listall.db");
+    SaveRepository repo;
+
+    // Start empty.
+    CHECK(repo.listAllSlots().empty());
+
+    Character a("Alice", 100, 50, 10, 10, 10, 10, 10);
+    Character b("Bob", 100, 50, 10, 10, 10, 10, 10);
+    Character c("Cara", 100, 50, 10, 10, 10, 10, 10);
+    Inventory inv;
+    SocialLinkManager slm;
+    QuestManager qm;
+    std::vector<std::shared_ptr<Persona>> ps;
+
+    CHECK(repo.saveAll(1, a, inv, ps, slm, qm));
+    CHECK(repo.saveAll(2, b, inv, ps, slm, qm));
+    CHECK(repo.saveAll(3, c, inv, ps, slm, qm));
+
+    auto all = repo.listAllSlots();
+    CHECK_EQ(all.size(), static_cast<std::size_t>(3));
+    CHECK_EQ(all[0].characterName, std::string("Alice"));
+    CHECK_EQ(all[1].characterName, std::string("Bob"));
+    CHECK_EQ(all[2].characterName, std::string("Cara"));
+
+    // Deleting slot 2 leaves a gap; listAllSlots reflects the remaining two.
+    CHECK(repo.deleteSlot(2));
+    all = repo.listAllSlots();
+    CHECK_EQ(all.size(), static_cast<std::size_t>(2));
+    CHECK_EQ(all[0].slotId, 1);
+    CHECK_EQ(all[1].slotId, 3);
+}
+
+void testNextSlotIdIsMaxPlusOne()
+{
+    TempDatabase db("test_save_nextid.db");
+    SaveRepository repo;
+
+    CHECK_EQ(repo.nextSlotId(), 1); // no saves yet
+
+    Character a("Alice", 100, 50, 10, 10, 10, 10, 10);
+    Inventory inv;
+    SocialLinkManager slm;
+    QuestManager qm;
+    std::vector<std::shared_ptr<Persona>> ps;
+    CHECK(repo.saveAll(1, a, inv, ps, slm, qm));
+    CHECK_EQ(repo.nextSlotId(), 2);
+
+    CHECK(repo.saveAll(4, a, inv, ps, slm, qm)); // create a gap (slots 1 and 4)
+    CHECK_EQ(repo.nextSlotId(), 5); // max + 1, gap preserved
+
+    repo.deleteSlot(4);
+    CHECK_EQ(repo.nextSlotId(), 2);
+}
+
+void testGameManagerLoadRestoresPersonaSkills()
+{
+    TempDatabase db("test_save_skills.db");
+
+    // createNewSave seeds default Personas (Izanagi/Pixie WITH skills) and
+    // saves them, then binds the session to the new slot.
+    CHECK(GameManager::instance().createNewSave("Hero"));
+    int slot = GameManager::instance().currentSlotId();
+    CHECK(slot >= 1);
+
+    // The freshly-created game's starter persona must have its skills.
+    Persona *starter = GameManager::instance().character().currentPersona();
+    CHECK(starter != nullptr);
+    CHECK(starter->findSkill("skill_zio") != nullptr);
+
+    // Reload the slot: loadFromSlot re-seeds defaults, snapshots their skills,
+    // loads the save (Personas reconstructed without skills), then re-applies
+    // the snapshotted skills. The equipped persona must regain its skills.
+    CHECK(GameManager::instance().loadFromSlot(slot));
+    Persona *loaded = GameManager::instance().character().currentPersona();
+    CHECK(loaded != nullptr);
+    CHECK(loaded->findSkill("skill_zio") != nullptr);
+    CHECK(loaded->findSkill("skill_cleave") != nullptr);
+}
+
 int main()
 {
     testEmptySlotsReportedAsEmpty();
@@ -327,6 +409,9 @@ int main()
     testDeleteSlotRemovesData();
     testLoadNonexistentSlotFailsCleanly();
     testCurrentPersonaIdPersisted();
+    testListAllSlotsIsDynamic();
+    testNextSlotIdIsMaxPlusOne();
+    testGameManagerLoadRestoresPersonaSkills();
 
     std::cout << "\n==== CampusRPG save/persistence tests ====\n";
     std::cout << "run: " << g_run << "  failed: " << g_failed << "\n";

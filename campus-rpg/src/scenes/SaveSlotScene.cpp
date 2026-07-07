@@ -1,28 +1,53 @@
 #include "SaveSlotScene.h"
 #include "GameManager.h"
-#include "SaveRepository.h"
-
-#include <algorithm>
 
 namespace
 {
-    constexpr int kSlotCount = 3;
+    constexpr int kVisibleRows = 7;
+    constexpr float kRowH = 60.0f;
+    constexpr float kRowGap = 10.0f;
+    constexpr float kListX = 80.0f;
+    constexpr float kListW = 640.0f;
+    constexpr float kListY0 = 110.0f;
+
+    void drawBorder(engine::IRenderer &renderer, const engine::Rect &r, engine::Color color)
+    {
+        renderer.drawRect({r.x, r.y, r.width, 3}, color);
+        renderer.drawRect({r.x, r.y + r.height - 3, r.width, 3}, color);
+        renderer.drawRect({r.x, r.y, 3, r.height}, color);
+        renderer.drawRect({r.x + r.width - 3, r.y, 3, r.height}, color);
+    }
 } // namespace
 
 SaveSlotScene::SaveSlotScene(Mode mode) : mode_(mode)
 {
-    refresh();
+    if (mode_ == Mode::Create)
+    {
+        subState_ = SubState::Naming;
+        nameBuffer_.clear();
+        message_ = "Enter character id, then press Enter.";
+    }
+    else
+    {
+        refresh();
+    }
 }
 
 void SaveSlotScene::refresh()
 {
-    slots_ = GameManager::instance().listSaveSlots(kSlotCount);
-    if (slots_.size() < static_cast<size_t>(kSlotCount))
-        slots_.resize(static_cast<size_t>(kSlotCount));
+    slots_ = GameManager::instance().listAllSaves();
     if (selectedIndex_ < 0)
         selectedIndex_ = 0;
-    if (selectedIndex_ >= kSlotCount)
-        selectedIndex_ = kSlotCount - 1;
+    if (!slots_.empty() && selectedIndex_ >= static_cast<int>(slots_.size()))
+        selectedIndex_ = static_cast<int>(slots_.size()) - 1;
+    // Adjust scroll so the selected row is visible.
+    if (selectedIndex_ < scrollOffset_)
+        scrollOffset_ = selectedIndex_;
+    int lastVisible = scrollOffset_ + kVisibleRows - 1;
+    if (selectedIndex_ > lastVisible)
+        scrollOffset_ = selectedIndex_ - kVisibleRows + 1;
+    if (scrollOffset_ < 0)
+        scrollOffset_ = 0;
 }
 
 void SaveSlotScene::handleInput(engine::IInput &input)
@@ -35,81 +60,57 @@ void SaveSlotScene::handleInput(engine::IInput &input)
 
 void SaveSlotScene::handleBrowsingInput(engine::IInput &input)
 {
+    if (slots_.empty())
+    {
+        // Nothing to browse; only Esc (and typing) matters.
+        std::string typed = input.consumeTypedText();
+        (void)typed;
+        if (input.wasKeyJustPressed(engine::Key::Escape))
+            GameManager::instance().enterScene(SceneType::Title);
+        return;
+    }
+
     if (input.wasKeyJustPressed(engine::Key::Up))
-        selectedIndex_ = (selectedIndex_ - 1 + kSlotCount) % kSlotCount;
+        selectedIndex_ = (selectedIndex_ - 1 + static_cast<int>(slots_.size())) % static_cast<int>(slots_.size());
     if (input.wasKeyJustPressed(engine::Key::Down))
-        selectedIndex_ = (selectedIndex_ + 1) % kSlotCount;
+        selectedIndex_ = (selectedIndex_ + 1) % static_cast<int>(slots_.size());
 
     bool confirm = input.wasKeyJustPressed(engine::Key::Enter) ||
                    input.wasKeyJustPressed(engine::Key::E);
 
-    int slotId = selectedIndex_ + 1;
-    bool filled = static_cast<size_t>(selectedIndex_) < slots_.size() &&
-                  slots_[selectedIndex_].exists;
-
     if (confirm)
     {
-        if (mode_ == Mode::Save)
+        int slotId = slots_[selectedIndex_].slotId;
+        if (GameManager::instance().loadFromSlot(slotId))
         {
-            if (GameManager::instance().saveToSlot(slotId))
-            {
-                message_ = "Saved to slot " + std::to_string(slotId) + "!";
-                refresh();
-            }
-            else
-            {
-                message_ = "Save failed. Please try again.";
-            }
+            GameManager::instance().enterScene(SceneType::Town);
+            return;
         }
-        else // Load mode
-        {
-            if (filled)
-            {
-                if (GameManager::instance().loadFromSlot(slotId))
-                {
-                    GameManager::instance().enterScene(SceneType::Town);
-                    return;
-                }
-                message_ = "Load failed. Save may be corrupted.";
-            }
-            else
-            {
-                // Empty slot -> create a new save: prompt for character id.
-                subState_ = SubState::Naming;
-                nameBuffer_.clear();
-                message_ = "Enter character id, then press Enter.";
-            }
-        }
+        message_ = "Load failed. Save may be corrupted.";
     }
 
-    // Backspace (delivered via the text stream) deletes a filled slot.
+    // Backspace (via the text stream) deletes the selected save.
     std::string typed = input.consumeTypedText();
     for (char ch : typed)
     {
         if (ch == '\b')
         {
-            if (filled)
+            int slotId = slots_[selectedIndex_].slotId;
+            if (GameManager::instance().deleteSaveSlot(slotId))
             {
-                if (GameManager::instance().deleteSaveSlot(slotId))
-                {
-                    message_ = "Slot " + std::to_string(slotId) + " deleted.";
-                    refresh();
-                }
-                else
-                {
-                    message_ = "Delete failed.";
-                }
+                message_ = "Slot " + std::to_string(slotId) + " deleted.";
+                refresh();
+            }
+            else
+            {
+                message_ = "Delete failed.";
             }
         }
     }
 
     if (input.wasKeyJustPressed(engine::Key::Escape))
     {
-        message_.clear();
-        if (mode_ == Mode::Save)
-            GameManager::instance().enterScene(SceneType::Town);
-        else
-            GameManager::instance().enterScene(SceneType::Title);
+        GameManager::instance().enterScene(SceneType::Title);
     }
 }
 
@@ -136,20 +137,20 @@ void SaveSlotScene::handleNamingInput(engine::IInput &input)
             message_ = "Character id cannot be empty.";
             return;
         }
-        int slotId = selectedIndex_ + 1;
-        if (GameManager::instance().createNewSave(slotId, nameBuffer_))
+        int slotId = GameManager::instance().nextSaveSlotId();
+        if (GameManager::instance().createNewSave(nameBuffer_))
         {
+            // createNewSave auto-assigned slotId; switch to town.
             GameManager::instance().enterScene(SceneType::Town);
             return;
         }
-        message_ = "Failed to create save. Please try again.";
+        message_ = "Failed to create save (slot " + std::to_string(slotId) + ").";
     }
 
     if (input.wasKeyJustPressed(engine::Key::Escape))
     {
-        subState_ = SubState::Browsing;
-        nameBuffer_.clear();
-        message_.clear();
+        // Cancel -> back to Title.
+        GameManager::instance().enterScene(SceneType::Title);
     }
 }
 
@@ -168,65 +169,57 @@ void SaveSlotScene::render(engine::IRenderer &renderer)
 void SaveSlotScene::renderBrowsing(engine::IRenderer &renderer)
 {
     renderer.clear();
-
-    // Dark background.
     renderer.drawRect({0, 0, 800, 600}, engine::Color(20, 20, 35));
 
-    const char *title = (mode_ == Mode::Save) ? "Save Game" : "Load Game";
-    renderer.drawText(title, {300, 40}, 36, engine::Color::white());
+    renderer.drawText("Load Game", {320, 40}, 36, engine::Color::white());
 
-    // Slot list: 3 rectangles stacked vertically, each shows name + time.
-    const float slotW = 600.0f;
-    const float slotH = 90.0f;
-    const float slotX = 100.0f;
-    const float slotY0 = 120.0f;
-    const float gap = 20.0f;
-
-    for (int i = 0; i < kSlotCount; ++i)
+    if (slots_.empty())
     {
-        float y = slotY0 + i * (slotH + gap);
-        bool selected = (i == selectedIndex_);
-        bool filled = static_cast<size_t>(i) < slots_.size() && slots_[i].exists;
-
-        engine::Color border = selected ? engine::Color::yellow() : engine::Color(80, 80, 100);
-        engine::Color fillBg = filled ? engine::Color(35, 35, 55, 230)
-                                      : engine::Color(25, 25, 35, 230);
-
-        renderer.drawRect({slotX, y, slotW, slotH}, fillBg);
-        // Border (drawn as 4 thin rects).
-        renderer.drawRect({slotX, y, slotW, 3}, border);
-        renderer.drawRect({slotX, y + slotH - 3, slotW, 3}, border);
-        renderer.drawRect({slotX, y, 3, slotH}, border);
-        renderer.drawRect({slotX + slotW - 3, y, 3, slotH}, border);
-
-        std::string prefix = selected ? "> " : "  ";
-        std::string slotLabel = prefix + "Slot " + std::to_string(i + 1);
-        renderer.drawText(slotLabel, {slotX + 15, y + 12}, 20,
-                          selected ? engine::Color::yellow() : engine::Color::white());
-
-        if (filled)
-        {
-            renderer.drawText(slots_[i].characterName, {slotX + 15, y + 40}, 22, engine::Color::white());
-            renderer.drawText("Lv." + std::to_string(slots_[i].level) + "    " + slots_[i].updatedAt,
-                              {slotX + 15, y + 66}, 16, engine::Color::gray());
-        }
-        else
-        {
-            renderer.drawText("Empty  -  No save data", {slotX + 15, y + 48}, 18, engine::Color::gray());
-        }
+        renderer.drawText("No save data", {330, 280}, 28, engine::Color::gray());
+        renderer.drawText("Esc: back to title", {340, 330}, 16, engine::Color::gray());
+        if (!message_.empty())
+            renderer.drawText(message_, {260, 380}, 18, engine::Color::cyan());
+        return;
     }
 
-    // Feedback message.
-    if (!message_.empty())
-        renderer.drawText(message_, {100, 510}, 18, engine::Color::cyan());
+    int total = static_cast<int>(slots_.size());
+    int visibleEnd = std::min(scrollOffset_ + kVisibleRows, total);
 
-    // Hints.
-    std::string hints;
-    if (mode_ == Mode::Save)
-        hints = "Up/Down: select   Enter: save   Backspace: delete   Esc: back";
-    else
-        hints = "Up/Down: select   Enter: load / create new   Backspace: delete   Esc: back";
-    renderer.drawText(hints, {100, 560}, 16, engine::Color::gray());
+    for (int i = scrollOffset_; i < visibleEnd; ++i)
+    {
+        float y = kListY0 + (i - scrollOffset_) * (kRowH + kRowGap);
+        bool selected = (i == selectedIndex_);
+        const SaveSlotInfo &info = slots_[i];
+
+        engine::Color border = selected ? engine::Color::yellow() : engine::Color(80, 80, 100);
+        engine::Color fillBg = engine::Color(35, 35, 55, 230);
+
+        engine::Rect row{kListX, y, kListW, kRowH};
+        renderer.drawRect(row, fillBg);
+        drawBorder(renderer, row, border);
+
+        std::string prefix = selected ? "> " : "  ";
+        renderer.drawText(prefix + "Slot " + std::to_string(info.slotId),
+                          {kListX + 12, y + 8}, 18,
+                          selected ? engine::Color::yellow() : engine::Color::white());
+        renderer.drawText(info.characterName + "    Lv." + std::to_string(info.level),
+                          {kListX + 12, y + 30}, 20, engine::Color::white());
+        renderer.drawText(info.updatedAt, {kListX + 380, y + 32}, 16, engine::Color::gray());
+    }
+
+    // Scroll indicator.
+    if (total > kVisibleRows)
+    {
+        renderer.drawText("v", {kListX + kListW + 8, kListY0 + (kVisibleRows - 1) * (kRowH + kRowGap) + 20},
+                          18, engine::Color::gray());
+        renderer.drawText("^", {kListX + kListW + 8, kListY0 + 20}, 18, engine::Color::gray());
+    }
+
+    if (!message_.empty())
+        renderer.drawText(message_, {kListX, 540}, 18, engine::Color::cyan());
+
+    renderer.drawText("Up/Down: select   Enter: load   Backspace: delete   Esc: back",
+                      {kListX, 570}, 16, engine::Color::gray());
 }
 
 void SaveSlotScene::renderNaming(engine::IRenderer &renderer)
@@ -235,24 +228,25 @@ void SaveSlotScene::renderNaming(engine::IRenderer &renderer)
     renderer.drawRect({0, 0, 800, 600}, engine::Color(20, 20, 35));
 
     renderer.drawText("Create New Save", {260, 80}, 36, engine::Color::white());
-    renderer.drawText("Slot " + std::to_string(selectedIndex_ + 1) + " is empty. Enter a character id:",
-                      {180, 160}, 22, engine::Color::white());
+
+    int nextSlot = GameManager::instance().nextSaveSlotId();
+    renderer.drawText("New save will be created in slot " + std::to_string(nextSlot),
+                      {220, 150}, 22, engine::Color::white());
+    renderer.drawText("Enter a character id:", {260, 195}, 22, engine::Color::white());
 
     // Input box.
-    renderer.drawRect({200, 210, 400, 60}, engine::Color(35, 35, 55, 230));
-    renderer.drawRect({200, 210, 400, 3}, engine::Color::yellow());
-    renderer.drawRect({200, 267, 400, 3}, engine::Color::yellow());
-    renderer.drawRect({200, 210, 3, 60}, engine::Color::yellow());
-    renderer.drawRect({597, 210, 3, 60}, engine::Color::yellow());
+    engine::Rect box{200, 240, 400, 60};
+    renderer.drawRect(box, engine::Color(35, 35, 55, 230));
+    drawBorder(renderer, box, engine::Color::yellow());
 
     std::string display = nameBuffer_;
     if (display.empty())
         display = "_";
-    renderer.drawText(display, {215, 226}, 26, engine::Color::white());
+    renderer.drawText(display, {215, 256}, 26, engine::Color::white());
 
     if (!message_.empty())
-        renderer.drawText(message_, {180, 300}, 18, engine::Color::cyan());
+        renderer.drawText(message_, {180, 330}, 18, engine::Color::cyan());
 
     renderer.drawText("Enter: confirm   Esc: cancel   Backspace: erase",
-                      {180, 350}, 16, engine::Color::gray());
+                      {180, 380}, 16, engine::Color::gray());
 }

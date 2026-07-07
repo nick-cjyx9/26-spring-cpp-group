@@ -736,6 +736,54 @@ std::vector<SaveSlotInfo> SaveRepository::listSlots(int maxSlotId)
     return result;
 }
 
+std::vector<SaveSlotInfo> SaveRepository::listAllSlots()
+{
+    std::vector<SaveSlotInfo> result;
+    sqlite3 *db = DatabaseManager::instance().database();
+    if (!db)
+        return result;
+
+    const char *sql = "SELECT slot_id, character_name, level, updated_at FROM save_meta ORDER BY slot_id";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return result;
+
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        SaveSlotInfo info;
+        info.slotId = sqlite3_column_int(stmt, 0);
+        info.exists = true;
+        const char *name = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
+        if (name)
+            info.characterName = name;
+        info.level = sqlite3_column_int(stmt, 2);
+        const char *ts = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3));
+        if (ts)
+            info.updatedAt = ts;
+        result.push_back(info);
+    }
+    sqlite3_finalize(stmt);
+    return result;
+}
+
+int SaveRepository::nextSlotId()
+{
+    sqlite3 *db = DatabaseManager::instance().database();
+    if (!db)
+        return 1;
+
+    int next = 1;
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, "SELECT COALESCE(MAX(slot_id), 0) + 1 FROM save_meta",
+                           -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+            next = sqlite3_column_int(stmt, 0);
+        sqlite3_finalize(stmt);
+    }
+    return next;
+}
+
 std::string SaveRepository::currentPersonaId(int slotId)
 {
     std::string id;

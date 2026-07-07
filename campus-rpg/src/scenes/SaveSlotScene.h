@@ -6,17 +6,18 @@
 #include <string>
 #include <vector>
 
-// Save slot management screen. Reached from the Title (load/create) or from
-// the Town (save). Displays each slot's character name + last-updated time,
-// and supports creating a new save (with name entry), loading, saving and
-// deleting.
+// Save slot management screen.
+//  - Create: reached from Title "start game". Immediately prompts for a
+//    character id and creates a new save in the next free slot.
+//  - Load:   reached from Title "load game". Lists ALL existing saves
+//    (dynamic count) and supports loading / deleting each one.
 class SaveSlotScene : public engine::IScene
 {
 public:
     enum class Mode
     {
-        Load, // from Title: browse / load / delete / create-new
-        Save  // from Town: save current game to a slot / delete
+        Create,
+        Load
     };
 
     explicit SaveSlotScene(Mode mode = Mode::Load);
@@ -29,7 +30,7 @@ private:
     enum class SubState
     {
         Browsing,
-        Naming // entering a character id for a new save
+        Naming
     };
 
     void refresh();
@@ -41,8 +42,8 @@ private:
     Mode mode_;
     SubState subState_ = SubState::Browsing;
     int selectedIndex_ = 0;
+    int scrollOffset_ = 0;
     std::string nameBuffer_;
     std::string message_;
-    // Cached slot metadata; refreshed on entry and after mutations.
     std::vector<SaveSlotInfo> slots_;
 };

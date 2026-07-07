@@ -15,6 +15,8 @@
 #include "DialogueScene.h"
 #include "SaveSlotScene.h"
 
+#include <map>
+
 GameManager &GameManager::instance()
 {
     static GameManager manager;
@@ -61,6 +63,11 @@ bool GameManager::saveToSlot(int slotId)
     return ok;
 }
 
+bool GameManager::saveCurrentSlot()
+{
+    return saveToSlot(currentSlotId_);
+}
+
 bool GameManager::loadFromSlot(int slotId)
 {
     SaveRepository repo;
@@ -72,12 +79,38 @@ bool GameManager::loadFromSlot(int slotId)
     // quest/social-link state. The name is replaced by the save's character.
     seedDefaultState("Player");
 
+    // Snapshot skills from the seeded default Personas (by id). The data layer
+    // persists skill ids but cannot reconstruct Skill objects without a
+    // registry, so we re-apply the seeded skills to matching personas after
+    // load. This restores gameplay state for the default personas.
+    std::map<std::string, std::vector<std::shared_ptr<Skill>>> skillSnapshot;
+    for (const auto &p : personas_)
+    {
+        if (!p)
+            continue;
+        std::vector<std::shared_ptr<Skill>> skills(p->skills().begin(), p->skills().end());
+        skillSnapshot[p->id()] = std::move(skills);
+    }
+
     if (!repo.loadAll(slotId, character_, inventory_, personas_,
                       socialLinkManager_, questManager_))
     {
         // Load failed: leave the seeded default state intact so the game is
         // still in a runnable state.
         return false;
+    }
+
+    // Re-apply skills to the reconstructed Personas (loaded ones start empty).
+    for (auto &p : personas_)
+    {
+        if (!p)
+            continue;
+        auto it = skillSnapshot.find(p->id());
+        if (it != skillSnapshot.end())
+        {
+            for (const auto &s : it->second)
+                p->learnSkill(s);
+        }
     }
 
     currentSlotId_ = slotId;
@@ -100,6 +133,11 @@ bool GameManager::createNewSave(int slotId, const std::string &characterId)
     return saveToSlot(slotId);
 }
 
+bool GameManager::createNewSave(const std::string &characterId)
+{
+    return createNewSave(nextSaveSlotId(), characterId);
+}
+
 bool GameManager::deleteSaveSlot(int slotId)
 {
     SaveRepository repo;
@@ -116,6 +154,18 @@ std::vector<SaveSlotInfo> GameManager::listSaveSlots(int maxSlotId)
 {
     SaveRepository repo;
     return repo.listSlots(maxSlotId);
+}
+
+std::vector<SaveSlotInfo> GameManager::listAllSaves()
+{
+    SaveRepository repo;
+    return repo.listAllSlots();
+}
+
+int GameManager::nextSaveSlotId()
+{
+    SaveRepository repo;
+    return repo.nextSlotId();
 }
 
 void GameManager::save()
@@ -163,11 +213,11 @@ void GameManager::enterScene(SceneType type)
     }
 }
 
-void GameManager::openSaveSlots(bool forSave)
+void GameManager::openSaveSlots(bool create)
 {
     currentSceneType_ = SceneType::SaveSlot;
     currentScene_ = std::make_unique<SaveSlotScene>(
-        forSave ? SaveSlotScene::Mode::Save : SaveSlotScene::Mode::Load);
+        create ? SaveSlotScene::Mode::Create : SaveSlotScene::Mode::Load);
 }
 
 std::unique_ptr<Enemy> GameManager::createEnemy(size_t index) const
