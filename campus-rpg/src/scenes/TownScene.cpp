@@ -70,10 +70,37 @@ void TownScene::handleInput(engine::IInput &input)
         map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss"));
         GameManager::instance().enterScene(SceneType::Night);
     }
+    if (input.wasKeyJustPressed(engine::Key::F5))
+    {
+        if (GameManager::instance().saveCurrentSlot())
+        {
+            saveMessage_ = "Saved to slot " + std::to_string(GameManager::instance().currentSlotId()) + "!";
+            saveMessageTimer_ = 3.0f;
+        }
+        else
+        {
+            saveMessage_ = "Save failed.";
+            saveMessageTimer_ = 3.0f;
+        }
+    }
+    if (input.wasKeyJustPressed(engine::Key::L))
+    {
+        GameManager::instance().enterScene(SceneType::SocialLink);
+    }
 }
 
 void TownScene::update(float deltaTime)
 {
+    if (saveMessageTimer_ > 0.0f)
+    {
+        saveMessageTimer_ -= deltaTime;
+        if (saveMessageTimer_ <= 0.0f)
+        {
+            saveMessageTimer_ = 0.0f;
+            saveMessage_.clear();
+        }
+    }
+
     TileMap &map = GameManager::instance().currentMap();
     PlayerEntity *player = findPlayer(map);
     if (!player)
@@ -131,8 +158,15 @@ void TownScene::render(engine::IRenderer &renderer)
                       {720, 20}, 18, engine::Color::yellow());
 
     // Interaction hint
-    renderer.drawText("E: talk  I: inventory  C: char  N: night",
-                      {180, 570}, 16, engine::Color::white());
+    renderer.drawText("E: talk  I: inventory  C: char  N: night  F5: save  L: social",
+                      {140, 570}, 16, engine::Color::white());
+
+    // Save feedback overlay.
+    if (!saveMessage_.empty())
+    {
+        renderer.drawRect({260, 510, 280, 36}, engine::Color(0, 0, 0, 200));
+        renderer.drawText(saveMessage_, {280, 519}, 18, engine::Color::green());
+    }
 }
 
 void TownScene::tryInteract()

@@ -21,5 +21,23 @@ target_link_libraries(CampusRPGTests PRIVATE
     CampusRPGCore
 )
 
+# Save/persistence tests: exercise the SQLite-backed multi-slot SaveRepository.
+# Links CampusRPGAppLib (data + manager + scenes; scenes only depend on engine
+# interfaces, not SFML, so this test runs headless without an SFML link).
+add_executable(CampusRPGSaveTests test_save.cpp)
+
+target_include_directories(CampusRPGSaveTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/data
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/engine/interfaces
+)
+
+target_link_libraries(CampusRPGSaveTests PRIVATE
+    CampusRPGAppLib
+)
+
 include(CTest)
 add_test(NAME CampusRPGTests COMMAND CampusRPGTests)
+add_test(NAME CampusRPGSaveTests COMMAND CampusRPGSaveTests)

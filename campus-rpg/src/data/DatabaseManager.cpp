@@ -23,9 +23,70 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         return false;
     }
 
+    // Schema versioning. Version 1 = multi-slot save schema (slot_id columns).
+    int version = 0;
+    sqlite3_stmt *vstmt = nullptr;
+    if (sqlite3_prepare_v2(db_, "PRAGMA user_version", -1, &vstmt, nullptr) == SQLITE_OK)
+    {
+        if (sqlite3_step(vstmt) == SQLITE_ROW)
+            version = sqlite3_column_int(vstmt, 0);
+        sqlite3_finalize(vstmt);
+    }
+
+    bool hasLegacyCharacter = false;
+    if (version < 1)
+    {
+        // Detect legacy single-slot schema: a `character` table that has an
+        // `id` column but no `slot_id` column. We migrate (not drop) its data
+        // into slot_id=1 of the new schema so existing saves are preserved.
+        hasLegacyCharacter = false;
+        sqlite3_stmt *infoStmt = nullptr;
+        if (sqlite3_prepare_v2(db_, "PRAGMA table_info(character)", -1, &infoStmt, nullptr) == SQLITE_OK)
+        {
+            bool hasId = false;
+            bool hasSlotId = false;
+            while (sqlite3_step(infoStmt) == SQLITE_ROW)
+            {
+                const char *col = reinterpret_cast<const char *>(sqlite3_column_text(infoStmt, 1));
+                if (col)
+                {
+                    std::string n = col;
+                    if (n == "id")
+                        hasId = true;
+                    else if (n == "slot_id")
+                        hasSlotId = true;
+                }
+            }
+            sqlite3_finalize(infoStmt);
+            hasLegacyCharacter = hasId && !hasSlotId;
+        }
+
+        if (hasLegacyCharacter)
+        {
+            // Rename legacy tables out of the way (data preserved), then create
+            // the new schema below, then copy legacy rows into slot_id=1.
+            sqlite3_exec(db_, "ALTER TABLE character RENAME TO character_legacy;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "ALTER TABLE persona RENAME TO persona_legacy;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "ALTER TABLE inventory RENAME TO inventory_legacy;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "ALTER TABLE social_link RENAME TO social_link_legacy;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "ALTER TABLE quest_progress RENAME TO quest_progress_legacy;", nullptr, nullptr, nullptr);
+        }
+        else
+        {
+            // No legacy schema (fresh DB, or already-new). Make sure no stale
+            // partially-created new tables linger before recreating.
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS character;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS persona;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS inventory;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS social_link;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS quest_progress;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS save_meta;", nullptr, nullptr, nullptr);
+        }
+    }
+
     const char *createSql = R"(
         CREATE TABLE IF NOT EXISTS character (
-            id INTEGER PRIMARY KEY CHECK(id = 1),
+            slot_id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             level INTEGER DEFAULT 1,
             hp INTEGER DEFAULT 100,
@@ -35,6 +96,14 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             exp INTEGER DEFAULT 0,
             exp_to_next INTEGER DEFAULT 100,
             gold INTEGER DEFAULT 0,
+            st INTEGER DEFAULT 5,
+            ma INTEGER DEFAULT 5,
+            en INTEGER DEFAULT 5,
+            ag INTEGER DEFAULT 5,
+            lu INTEGER DEFAULT 5,
+            eq_atk INTEGER DEFAULT 0,
+            eq_def INTEGER DEFAULT 0,
+            eq_spd INTEGER DEFAULT 0,
             pos_x REAL DEFAULT 0,
             pos_y REAL DEFAULT 0,
             is_night INTEGER DEFAULT 0,
@@ -42,7 +111,8 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         );
 
         CREATE TABLE IF NOT EXISTS persona (
-            id TEXT PRIMARY KEY,
+            slot_id INTEGER NOT NULL DEFAULT 1,
+            id TEXT NOT NULL,
             name TEXT NOT NULL,
             arcana TEXT NOT NULL,
             level INTEGER DEFAULT 1,
@@ -53,11 +123,13 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             lu INTEGER DEFAULT 5,
             affinities TEXT,
             skills TEXT,
-            owner TEXT
+            owner TEXT,
+            PRIMARY KEY (slot_id, id)
         );
 
         CREATE TABLE IF NOT EXISTS inventory (
-            slot INTEGER PRIMARY KEY AUTOINCREMENT,
+            slot_id INTEGER NOT NULL DEFAULT 1,
+            ord INTEGER,
             item_id TEXT NOT NULL,
             item_type TEXT NOT NULL,
             name TEXT NOT NULL,
@@ -67,16 +139,27 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         );
 
         CREATE TABLE IF NOT EXISTS social_link (
-            id TEXT PRIMARY KEY,
+            slot_id INTEGER NOT NULL DEFAULT 1,
+            id TEXT NOT NULL,
             rank INTEGER DEFAULT 0,
-            points INTEGER DEFAULT 0
+            points INTEGER DEFAULT 0,
+            PRIMARY KEY (slot_id, id)
         );
 
         CREATE TABLE IF NOT EXISTS quest_progress (
-            quest_id TEXT PRIMARY KEY,
+            slot_id INTEGER NOT NULL DEFAULT 1,
+            quest_id TEXT NOT NULL,
             accepted INTEGER DEFAULT 0,
             completed INTEGER DEFAULT 0,
-            rewarded INTEGER DEFAULT 0
+            rewarded INTEGER DEFAULT 0,
+            PRIMARY KEY (slot_id, quest_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS save_meta (
+            slot_id INTEGER PRIMARY KEY,
+            character_name TEXT,
+            level INTEGER DEFAULT 1,
+            updated_at TEXT
         );
     )";
 
@@ -86,6 +169,60 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         std::cerr << "Failed to create tables: " << errMsg << "\n";
         sqlite3_free(errMsg);
         return false;
+    }
+
+    if (version < 1)
+    {
+        // If legacy tables were renamed, copy their data into slot_id=1 of the
+        // new schema (non-destructive migration), then drop the legacy tables.
+        // Only run when the legacy schema was actually present.
+        if (hasLegacyCharacter)
+        {
+            const char *migrateSql = R"(
+                INSERT INTO character (slot_id, name, level, hp, max_hp, sp, max_sp,
+                                       exp, exp_to_next, gold, pos_x, pos_y, is_night,
+                                       current_persona_id)
+                SELECT 1, name, level, hp, max_hp, sp, max_sp, exp, exp_to_next, gold,
+                       pos_x, pos_y, is_night, current_persona_id
+                FROM character_legacy;
+
+                INSERT INTO persona (slot_id, id, name, arcana, level, st, ma, en, ag, lu,
+                                     affinities, skills, owner)
+                SELECT 1, id, name, arcana, level, st, ma, en, ag, lu, affinities, skills, owner
+                FROM persona_legacy;
+
+                INSERT INTO inventory (slot_id, ord, item_id, item_type, name, description,
+                                       value, extra_data)
+                SELECT 1, slot, item_id, item_type, name, description, value, extra_data
+                FROM inventory_legacy;
+
+                INSERT INTO social_link (slot_id, id, rank, points)
+                SELECT 1, id, rank, points
+                FROM social_link_legacy;
+
+                INSERT INTO quest_progress (slot_id, quest_id, accepted, completed, rewarded)
+                SELECT 1, quest_id, accepted, completed, rewarded
+                FROM quest_progress_legacy;
+
+                INSERT INTO save_meta (slot_id, character_name, level, updated_at)
+                SELECT 1, name, level, 'migrated'
+                FROM character WHERE slot_id = 1;
+
+                DROP TABLE IF EXISTS character_legacy;
+                DROP TABLE IF EXISTS persona_legacy;
+                DROP TABLE IF EXISTS inventory_legacy;
+                DROP TABLE IF EXISTS social_link_legacy;
+                DROP TABLE IF EXISTS quest_progress_legacy;
+            )";
+            char *migrateErr = nullptr;
+            if (sqlite3_exec(db_, migrateSql, nullptr, nullptr, &migrateErr) != SQLITE_OK)
+            {
+                std::cerr << "Save migration warning: " << (migrateErr ? migrateErr : "unknown") << "\n";
+                sqlite3_free(migrateErr);
+            }
+        }
+
+        sqlite3_exec(db_, "PRAGMA user_version = 1;", nullptr, nullptr, nullptr);
     }
 
     initialized_ = true;

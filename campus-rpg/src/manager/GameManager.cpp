@@ -13,6 +13,11 @@
 #include "InventoryScene.h"
 #include "CharacterScene.h"
 #include "DialogueScene.h"
+#include "SaveSlotScene.h"
+#include "SocialLinkScene.h"
+#include "HeroSelectScene.h"
+
+#include <map>
 
 GameManager &GameManager::instance()
 {
@@ -20,7 +25,7 @@ GameManager &GameManager::instance()
     return manager;
 }
 
-void GameManager::newGame(const std::string &playerName)
+void GameManager::seedDefaultState(const std::string &playerName)
 {
     character_ = Character(playerName, 100, 50, 10, 10, 10, 10, 10);
     inventory_ = Inventory(20);
@@ -44,27 +49,139 @@ void GameManager::newGame(const std::string &playerName)
         character_.setPersona(starter);
 
     recomputeSocialLinkBonuses();
+}
 
+void GameManager::newGame(const std::string &playerName)
+{
+    seedDefaultState(playerName);
     enterScene(SceneType::Title);
+}
+
+bool GameManager::saveToSlot(int slotId)
+{
+    SaveRepository repo;
+    bool ok = repo.saveAll(slotId, character_, inventory_, personas_,
+                           socialLinkManager_, questManager_);
+    if (ok)
+        currentSlotId_ = slotId;
+    return ok;
+}
+
+bool GameManager::saveCurrentSlot()
+{
+    return saveToSlot(currentSlotId_);
+}
+
+bool GameManager::loadFromSlot(int slotId)
+{
+    SaveRepository repo;
+    if (!repo.slotExists(slotId))
+        return false;
+
+    // Seed defaults so quest / social-link definitions exist for progress to
+    // attach to. The save data then overwrites character/inventory/persona/
+    // quest/social-link state. The name is replaced by the save's character.
+    seedDefaultState("Player");
+
+    // Snapshot skills from the seeded default Personas (by id). The data layer
+    // persists skill ids but cannot reconstruct Skill objects without a
+    // registry, so we re-apply the seeded skills to matching personas after
+    // load. This restores gameplay state for the default personas.
+    std::map<std::string, std::vector<std::shared_ptr<Skill>>> skillSnapshot;
+    for (const auto &p : personas_)
+    {
+        if (!p)
+            continue;
+        std::vector<std::shared_ptr<Skill>> skills(p->skills().begin(), p->skills().end());
+        skillSnapshot[p->id()] = std::move(skills);
+    }
+
+    if (!repo.loadAll(slotId, character_, inventory_, personas_,
+                      socialLinkManager_, questManager_))
+    {
+        // Load failed: leave the seeded default state intact so the game is
+        // still in a runnable state.
+        return false;
+    }
+
+    // Re-apply skills to the reconstructed Personas (loaded ones start empty).
+    for (auto &p : personas_)
+    {
+        if (!p)
+            continue;
+        auto it = skillSnapshot.find(p->id());
+        if (it != skillSnapshot.end())
+        {
+            for (const auto &s : it->second)
+                p->learnSkill(s);
+        }
+    }
+
+    currentSlotId_ = slotId;
+
+    // Restore the currently-equipped persona from the save.
+    std::string currentId = repo.currentPersonaId(slotId);
+    if (!currentId.empty())
+    {
+        auto p = findPersona(currentId);
+        if (p)
+            character_.setPersona(p);
+    }
+
+    recomputeSocialLinkBonuses();
+    return true;
+}
+
+bool GameManager::createNewSave(int slotId, const std::string &characterId)
+{
+    seedDefaultState(characterId);
+    currentSlotId_ = slotId;
+    return saveToSlot(slotId);
+}
+
+bool GameManager::createNewSave(const std::string &characterId)
+{
+    return createNewSave(nextSaveSlotId(), characterId);
+}
+
+bool GameManager::deleteSaveSlot(int slotId)
+{
+    SaveRepository repo;
+    return repo.deleteSlot(slotId);
+}
+
+bool GameManager::hasSaveSlot(int slotId)
+{
+    SaveRepository repo;
+    return repo.slotExists(slotId);
+}
+
+std::vector<SaveSlotInfo> GameManager::listSaveSlots(int maxSlotId)
+{
+    SaveRepository repo;
+    return repo.listSlots(maxSlotId);
+}
+
+std::vector<SaveSlotInfo> GameManager::listAllSaves()
+{
+    SaveRepository repo;
+    return repo.listAllSlots();
+}
+
+int GameManager::nextSaveSlotId()
+{
+    SaveRepository repo;
+    return repo.nextSlotId();
 }
 
 void GameManager::save()
 {
-    SaveRepository repo;
-    repo.saveAll(character_, inventory_, personas_, socialLinkManager_, questManager_);
+    saveToSlot(currentSlotId_);
 }
 
 void GameManager::load()
 {
-    SaveRepository repo;
-    repo.loadAll(character_, inventory_, personas_, socialLinkManager_, questManager_);
-
-    std::string currentId = character_.currentPersona() ? character_.currentPersona()->id() : "";
-    auto p = findPersona(currentId);
-    if (p)
-        character_.setPersona(p);
-
-    recomputeSocialLinkBonuses();
+    loadFromSlot(currentSlotId_);
 }
 
 void GameManager::enterScene(SceneType type)
@@ -96,7 +213,23 @@ void GameManager::enterScene(SceneType type)
     case SceneType::Dialogue:
         currentScene_ = std::make_unique<DialogueScene>();
         break;
+    case SceneType::SaveSlot:
+        currentScene_ = std::make_unique<SaveSlotScene>(SaveSlotScene::Mode::Load);
+        break;
+    case SceneType::SocialLink:
+        currentScene_ = std::make_unique<SocialLinkScene>();
+        break;
+    case SceneType::HeroSelect:
+        currentScene_ = std::make_unique<HeroSelectScene>();
+        break;
     }
+}
+
+void GameManager::openSaveSlots(bool create)
+{
+    currentSceneType_ = SceneType::SaveSlot;
+    currentScene_ = std::make_unique<SaveSlotScene>(
+        create ? SaveSlotScene::Mode::Create : SaveSlotScene::Mode::Load);
 }
 
 std::unique_ptr<Enemy> GameManager::createEnemy(size_t index) const
@@ -175,10 +308,10 @@ void GameManager::initDefaultEnemies()
 
 void GameManager::initDefaultSocialLinks()
 {
+    socialLinkManager_ = SocialLinkManager();
     socialLinkManager_.addLink(SocialLink("sl_yosuke", "Yosuke", "Magician"));
     socialLinkManager_.addLink(SocialLink("sl_chie", "Chie", "Chariot"));
     socialLinkManager_.addLink(SocialLink("sl_yukiko", "Yukiko", "Priestess"));
-
     initSocialLinkRankData();
 }
 
@@ -194,83 +327,117 @@ void GameManager::initSocialLinkRankData()
         }
     };
 
-    // Yosuke �?Magician. Reward at rank 3: +1 Strength (Magician arcana).
-    // Reward at rank 6: +2 Strength. Reward at rank 9: +3 Strength.
+    // Yosuke — Magician. Reward at rank 3: +1 Strength. Rank 6: +2 Strength. Rank 9: +3 Strength.
     if (SocialLink *y = socialLinkManager_.getLink("sl_yosuke"))
     {
         fill(*y, {
-                     "Yosuke: \"Hey partner! Ready to cause some trouble?\"",
-                     "Yosuke: \"You actually showed up. I knew I could count on you.\"",
-                     "Yosuke: \"Lately I feel like I can talk to you about anything.\"",
-                     "Yosuke: \"We've been through a lot, huh? Thanks for having my back.\"",
-                     "Yosuke: \"I'm not just side-kick material anymore, am I?\"",
-                     "Yosuke: \"Let's keep pushing forward. I've got your back, always.\"",
-                     "Yosuke: \"You know, I think we're gonna be friends for life.\"",
-                     "Yosuke: \"I never thought I'd find a friend like you.\"",
-                     "Yosuke: \"Whatever comes next, we face it together.\"",
-                     "Yosuke: \"This is it. True bromance, partner.\"",
-                     "Yosuke: \"We're unstoppable. Let's go!\"",
+                     "Yosuke: \"哼，终于来了吗？本大爷可是等了很久——算了，勉强承认你是特别的存在吧。\"",
+                     "Yosuke: \"哦？居然真的赴约了？有趣……你这家伙，和普通人不太一样。\"",
+                     "Yosuke: \"听好了！在本大爷面前不用藏着掖着，你的黑暗面——我全部接受了！\"",
+                     "Yosuke: \"并肩作战到这种地步，就算是神也拆不散我们的羁绊了！\"",
+                     "Yosuke: \"喂喂，别小看我啊！我可是要成为最强的男人，才不是什么配角！\"",
+                     "Yosuke: \"前方就算是地狱，有你在的话——不，是有我在，就一定能冲破！\"",
+                     "Yosuke: \"哈……真是败给你了。这辈子，就认定你这个挚友了。\"",
+                     "Yosuke: \"我从未想过，会有人让我想要变得更强……为了守护你。\"",
+                     "Yosuke: \"哪怕世界毁灭，只要我们还在，希望就绝不会熄灭！\"",
+                     "Yosuke: \"真正的兄弟，是连灵魂都能互相吞噬的存在——来吧，一起！\"",
+                     "Yosuke: \"这就是……真正的『羁绊』吗。好热……胸口像被火焰燃烧一样！\"",
                  });
-        SocialLinkRankData *r3 = y->rankData(3);
-        if (r3) { r3->reward.hasStatBonus = true; r3->reward.stat = PersonaStat::Strength; r3->reward.statBonus = 1; }
-        SocialLinkRankData *r6 = y->rankData(6);
-        if (r6) { r6->reward.hasStatBonus = true; r6->reward.stat = PersonaStat::Strength; r6->reward.statBonus = 2; }
-        SocialLinkRankData *r9 = y->rankData(9);
-        if (r9) { r9->reward.hasStatBonus = true; r9->reward.stat = PersonaStat::Strength; r9->reward.statBonus = 3; }
+        if (SocialLinkRankData *r3 = y->rankData(3))
+        {
+            r3->reward.hasStatBonus = true;
+            r3->reward.stat = PersonaStat::Strength;
+            r3->reward.statBonus = 1;
+        }
+        if (SocialLinkRankData *r6 = y->rankData(6))
+        {
+            r6->reward.hasStatBonus = true;
+            r6->reward.stat = PersonaStat::Strength;
+            r6->reward.statBonus = 2;
+        }
+        if (SocialLinkRankData *r9 = y->rankData(9))
+        {
+            r9->reward.hasStatBonus = true;
+            r9->reward.stat = PersonaStat::Strength;
+            r9->reward.statBonus = 3;
+        }
     }
 
-    // Chie �?Chariot. Reward at rank 3: +1 Agility. Rank 6: +2 Agility. Rank 9: +3 Agility.
+    // Chie — Chariot. Reward at rank 3: +1 Agility. Rank 6: +2 Agility. Rank 9: +3 Agility.
     if (SocialLink *c = socialLinkManager_.getLink("sl_chie"))
     {
         fill(*c, {
-                     "Chie: \"Wanna grab some meat bouillon? My treat!\"",
-                     "Chie: \"You're pretty reliable, you know that?\"",
-                     "Chie: \"Training together makes me feel stronger already!\"",
-                     "Chie: \"I'll protect what matters. That's my kung-fu promise.\"",
-                     "Chie: \"You've got guts. I like that in a friend.\"",
-                     "Chie: \"Let's smash through whatever's in our way!\"",
-                     "Chie: \"I think I finally understand what true strength is.\"",
-                     "Chie: \"Thanks for believing in me when I didn't.\"",
-                     "Chie: \"We've come so far. I won't waste a step.\"",
-                     "Chie: \"You're my rival and my best friend.\"",
-                     "Chie: \"Let's keep kicking. Forever!\"",
+                     "Chie: \"哼，来得正好！本小姐正想活动筋骨——可别拖后腿啊！\"",
+                     "Chie: \"不错嘛，居然能跟上我的节奏。勉强承认你有两下子好了。\"",
+                     "Chie: \"听着！和我组队的话，就必须有超越极限的觉悟！准备好了吗？\"",
+                     "Chie: \"我会把想要伤害你的家伙全部粉碎——这就是我的『守护』之道！\"",
+                     "Chie: \"哈！看到没有？这就是我和你的组合技，天下无敌！\"",
+                     "Chie: \"挡在我们面前的东西，不管是谁——统统踢飞就好了吧！\"",
+                     "Chie: \"力量不是用来欺凌弱小的……我要用这双手，保护所有重要的人！\"",
+                     "Chie: \"谢谢……谢谢你一直相信我。作为回报，我会变得更强——强到让你依赖！\"",
+                     "Chie: \"走过的路绝不会白费。每一步，都是我们『羁绊』的证明！\"",
+                     "Chie: \"既是宿敌也是挚友吗……哈，真不赖。这辈子就让你当我一辈子的对手吧！\"",
+                     "Chie: \"燃烧吧！直到最后一刻都不许倒下——因为我会把你拉起来！\"",
                  });
-        SocialLinkRankData *r3 = c->rankData(3);
-        if (r3) { r3->reward.hasStatBonus = true; r3->reward.stat = PersonaStat::Agility; r3->reward.statBonus = 1; }
-        SocialLinkRankData *r6 = c->rankData(6);
-        if (r6) { r6->reward.hasStatBonus = true; r6->reward.stat = PersonaStat::Agility; r6->reward.statBonus = 2; }
-        SocialLinkRankData *r9 = c->rankData(9);
-        if (r9) { r9->reward.hasStatBonus = true; r9->reward.stat = PersonaStat::Agility; r9->reward.statBonus = 3; }
+        if (SocialLinkRankData *r3 = c->rankData(3))
+        {
+            r3->reward.hasStatBonus = true;
+            r3->reward.stat = PersonaStat::Agility;
+            r3->reward.statBonus = 1;
+        }
+        if (SocialLinkRankData *r6 = c->rankData(6))
+        {
+            r6->reward.hasStatBonus = true;
+            r6->reward.stat = PersonaStat::Agility;
+            r6->reward.statBonus = 2;
+        }
+        if (SocialLinkRankData *r9 = c->rankData(9))
+        {
+            r9->reward.hasStatBonus = true;
+            r9->reward.stat = PersonaStat::Agility;
+            r9->reward.statBonus = 3;
+        }
     }
 
-    // Yukiko �?Priestess. Reward at rank 3: +1 Magic. Rank 6: +2 Magic. Rank 9: +3 Magic.
+    // Yukiko — Priestess. Reward at rank 3: +1 Magic. Rank 6: +2 Magic. Rank 9: +3 Magic.
     if (SocialLink *y = socialLinkManager_.getLink("sl_yukiko"))
     {
         fill(*y, {
-                     "Yukiko: \"Oh, welcome. Would you like some tea?\"",
-                     "Yukiko: \"Talking with you always calms me down.\"",
-                     "Yukiko: \"I've been thinking about my future lately.\"",
-                     "Yukiko: \"You make me feel like I can choose my own path.\"",
-                     "Yukiko: \"The inn, my family... I see them differently now.\"",
-                     "Yukiko: \"Thank you. Truly. For being here.\"",
-                     "Yukiko: \"I want to be someone you can rely on too.\"",
-                     "Yukiko: \"I'm not afraid anymore. Not with you around.\"",
-                     "Yukiko: \"Whatever tomorrow brings, I'll face it smiling.\"",
-                     "Yukiko: \"You're the most precious friend I have.\"",
-                     "Yukiko: \"Let's walk this path together, always.\"",
+                     "Yukiko: \"啊……欢迎。茶已经准备好了。请、请坐吧……\"",
+                     "Yukiko: \"和你在一起的时候，心里就会变得很平静……这是为什么呢？\"",
+                     "Yukiko: \"最近总是在想……如果我能再勇敢一点，是不是就能更接近你了？\"",
+                     "Yukiko: \"你……你愿意告诉我，真正的『自由』是什么吗？我想知道。\"",
+                     "Yukiko: \"家族、传统、束缚……那些东西，我开始想用自己的方式去理解了。\"",
+                     "Yukiko: \"谢谢你……一直陪在我身边。这份温暖，我会永远珍藏的。\"",
+                     "Yukiko: \"我也想……成为能支撑你的人。不是一直被保护，而是可以并肩前行。\"",
+                     "Yukiko: \"已经不怕了。因为只要你在，就算黑暗也会变得温柔……对吧？\"",
+                     "Yukiko: \"无论未来怎样，我都会微笑着面对。因为……你教给了我勇气。\"",
+                     "Yukiko: \"你是……我最重要的人。比任何事物都要珍贵。\"",
+                     "Yukiko: \"让我们走吧……一起，走向那道光芒的尽头。我会一直、一直在你身边。\"",
                  });
-        SocialLinkRankData *r3 = y->rankData(3);
-        if (r3) { r3->reward.hasStatBonus = true; r3->reward.stat = PersonaStat::Magic; r3->reward.statBonus = 1; }
-        SocialLinkRankData *r6 = y->rankData(6);
-        if (r6) { r6->reward.hasStatBonus = true; r6->reward.stat = PersonaStat::Magic; r6->reward.statBonus = 2; }
-        SocialLinkRankData *r9 = y->rankData(9);
-        if (r9) { r9->reward.hasStatBonus = true; r9->reward.stat = PersonaStat::Magic; r9->reward.statBonus = 3; }
+        if (SocialLinkRankData *r3 = y->rankData(3))
+        {
+            r3->reward.hasStatBonus = true;
+            r3->reward.stat = PersonaStat::Magic;
+            r3->reward.statBonus = 1;
+        }
+        if (SocialLinkRankData *r6 = y->rankData(6))
+        {
+            r6->reward.hasStatBonus = true;
+            r6->reward.stat = PersonaStat::Magic;
+            r6->reward.statBonus = 2;
+        }
+        if (SocialLinkRankData *r9 = y->rankData(9))
+        {
+            r9->reward.hasStatBonus = true;
+            r9->reward.stat = PersonaStat::Magic;
+            r9->reward.statBonus = 3;
+        }
     }
 }
 
 std::string GameManager::talkToNpc(const std::string &socialLinkId)
 {
-    // Daily dialogue interaction: add points, return the link's current dialogue.
     const int kDailyPoints = 10;
     int beforeRank = 0;
     if (const SocialLink *before = socialLinkManager_.getLink(socialLinkId))
@@ -297,11 +464,10 @@ std::string GameManager::talkToNpc(const std::string &socialLinkId)
 void GameManager::recomputeSocialLinkBonuses()
 {
     character_.clearSocialLinkBonuses();
-    // Aggregate arcana stat bonuses across every link at its current rank.
+
     static const PersonaStat stats[] = {
         PersonaStat::Strength, PersonaStat::Magic, PersonaStat::Endurance,
         PersonaStat::Agility, PersonaStat::Luck};
-    // Collect distinct arcanas from the live links.
     std::vector<std::string> arcanas;
     for (const auto *link : socialLinkManager_.allLinks())
     {

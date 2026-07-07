@@ -15,4 +15,6 @@ private:
     float moveSpeed_ = 180.0f;
     float moveX_ = 0.0f;
     float moveY_ = 0.0f;
+    std::string saveMessage_;
+    float saveMessageTimer_ = 0.0f;
 };

@@ -10,30 +10,61 @@ class Persona;
 #include <string>
 #include <vector>
 
+// Metadata for a single save slot, used by the UI to list/select slots.
+struct SaveSlotInfo
+{
+    int slotId = 0;
+    bool exists = false;
+    std::string characterName;
+    int level = 1;
+    std::string updatedAt;
+};
+
 class SaveRepository
 {
 public:
     SaveRepository() = default;
 
-    bool saveCharacter(const Character &character);
-    bool loadCharacter(Character &character);
+    // ---- Multi-slot API (preferred) ----
+    bool saveAll(int slotId, const Character &character, const Inventory &inventory,
+                 const std::vector<std::shared_ptr<Persona>> &personas,
+                 const SocialLinkManager &socialLinks, const QuestManager &quests);
+    bool loadAll(int slotId, Character &character, Inventory &inventory,
+                 std::vector<std::shared_ptr<Persona>> &personas,
+                 SocialLinkManager &socialLinks, QuestManager &quests);
 
-    bool saveInventory(const Inventory &inventory);
-    bool loadInventory(Inventory &inventory);
+    bool deleteSlot(int slotId);
+    bool slotExists(int slotId);
+    SaveSlotInfo slotInfo(int slotId);
+    // Returns slot metadata for slots 1..maxSlotId (empty slots have exists=false).
+    std::vector<SaveSlotInfo> listSlots(int maxSlotId = 3);
+    // Returns metadata for ALL existing saves (dynamic count), ordered by slot_id.
+    std::vector<SaveSlotInfo> listAllSlots();
+    // Returns the next free slot id (max existing + 1, or 1 if none).
+    int nextSlotId();
+    // Returns the current persona id stored on the character row (empty if none).
+    std::string currentPersonaId(int slotId);
 
-    bool savePersonas(const std::vector<std::shared_ptr<Persona>> &personas);
-    bool loadPersonas(std::vector<std::shared_ptr<Persona>> &personas, std::string &currentPersonaId);
-
-    bool saveSocialLinks(const SocialLinkManager &manager);
-    bool loadSocialLinks(SocialLinkManager &manager);
-
-    bool saveQuests(const QuestManager &manager);
-    bool loadQuests(QuestManager &manager);
-
+    // ---- Legacy single-slot API (delegates to slot 1, kept for compatibility) ----
     bool saveAll(const Character &character, const Inventory &inventory,
                  const std::vector<std::shared_ptr<Persona>> &personas,
                  const SocialLinkManager &socialLinks, const QuestManager &quests);
     bool loadAll(Character &character, Inventory &inventory,
                  std::vector<std::shared_ptr<Persona>> &personas,
                  SocialLinkManager &socialLinks, QuestManager &quests);
+
+private:
+    bool saveCharacter_(int slotId, const Character &character);
+    bool loadCharacter_(int slotId, Character &character);
+    bool saveInventory_(int slotId, const Inventory &inventory);
+    bool loadInventory_(int slotId, Inventory &inventory);
+    bool savePersonas_(int slotId, const std::vector<std::shared_ptr<Persona>> &personas);
+    bool loadPersonas_(int slotId, std::vector<std::shared_ptr<Persona>> &personas,
+                       std::string &currentPersonaId);
+    bool saveSocialLinks_(int slotId, const SocialLinkManager &manager);
+    bool loadSocialLinks_(int slotId, SocialLinkManager &manager);
+    bool saveQuests_(int slotId, const QuestManager &manager);
+    bool loadQuests_(int slotId, QuestManager &manager);
+    bool saveMeta_(int slotId, const Character &character);
+    bool deleteMeta_(int slotId);
 };

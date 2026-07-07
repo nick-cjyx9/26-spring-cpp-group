@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+#include "SaveRepository.h"
+
 enum class SceneType
 {
     Title,
@@ -23,7 +25,10 @@ enum class SceneType
     Shop,
     Inventory,
     Character,
-    Dialogue
+    Dialogue,
+    SaveSlot,
+    SocialLink,
+    HeroSelect
 };
 
 // Fired whenever a Social Link ranks up. The UI layer registers a callback
@@ -41,10 +46,41 @@ public:
 
     void newGame(const std::string &playerName);
 
+    // ---- Multi-slot save API (used by TitleScene / TownScene) ----
+    // Save current game state into the given slot (overwrites existing).
+    bool saveToSlot(int slotId);
+    // Quick-save to the slot the current session is bound to.
+    bool saveCurrentSlot();
+    // Load a slot into the running game. Call after newGame() so default
+    // quest/social-link definitions exist for progress to attach to.
+    bool loadFromSlot(int slotId);
+    // Create a brand-new game with the given character id and save it to slot.
+    bool createNewSave(int slotId, const std::string &characterId);
+    // Create a brand-new game in the next free slot (auto-assigned).
+    bool createNewSave(const std::string &characterId);
+    // Delete a save slot entirely.
+    bool deleteSaveSlot(int slotId);
+    // Query whether a slot has save data.
+    bool hasSaveSlot(int slotId);
+    // List up to maxSlotId slots with metadata for the load/save-slot UI.
+    std::vector<SaveSlotInfo> listSaveSlots(int maxSlotId = 3);
+    // List ALL existing saves (dynamic count), ordered by slot id.
+    std::vector<SaveSlotInfo> listAllSaves();
+    // Next free slot id (max existing + 1, or 1 if none).
+    int nextSaveSlotId();
+    // The slot the current game session is bound to (1-based).
+    int currentSlotId() const { return currentSlotId_; }
+    void setCurrentSlotId(int slotId) { currentSlotId_ = slotId; }
+
+    // Legacy single-slot API (delegates to slot 1 / currentSlotId_).
     void save();
     void load();
 
     void enterScene(SceneType type);
+    // Enter the save-slot management screen. create=true opens it in Create
+    // mode (start game: prompt for id, auto-assign a new slot); false opens it
+    // in Load mode (load game: browse/load/delete existing saves).
+    void openSaveSlots(bool create);
     SceneType currentSceneType() const { return currentSceneType_; }
 
     Character &character() { return character_; }
@@ -91,8 +127,16 @@ public:
     void initDefaultPersonas();
     void initDefaultMap();
 
+    // Hero selection (0..3), persisted in the current session.
+    int selectedHeroIndex() const { return selectedHeroIndex_; }
+    void setSelectedHeroIndex(int idx) { selectedHeroIndex_ = idx; }
+
 private:
     GameManager() = default;
+
+    // Reset all game state to defaults and seed definitions. Does NOT switch
+    // scenes, so loadFromSlot() can call it before overwriting with save data.
+    void seedDefaultState(const std::string &playerName);
 
     Character character_;
     Inventory inventory_;
@@ -110,6 +154,8 @@ private:
 
     bool isNight_ = false;
     bool shouldQuit_ = false;
+    int currentSlotId_ = 1;
+    int selectedHeroIndex_ = 0;
 
     RankUpCallback rankUpCallback_;
 };

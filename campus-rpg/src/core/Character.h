@@ -63,6 +63,18 @@ public:
     bool spendGold(int amount);
     void gainExp(int amount);
 
+    // Persistence restore setters (used by SaveRepository::loadCharacter).
+    void setLevel(int v) { level_ = v; }
+    void setHp(int v) { hp_ = v; }
+    void setMaxHp(int v) { maxHp_ = v; }
+    void setSp(int v) { sp_ = v; }
+    void setMaxSp(int v) { maxSp_ = v; }
+    void setExp(int v) { exp_ = v; }
+    void setExpToNextLevel(int v) { expToNextLevel_ = v; }
+    void setGold(int v) { gold_ = v; }
+    void setBaseStats(int strength, int magic, int endurance, int agility, int luck);
+    void setEquipmentBonuses(int attack, int defense, int speed);
+
     void setPersona(std::shared_ptr<Persona> persona);
     void equip(std::shared_ptr<EquipmentItem> equipment);
 

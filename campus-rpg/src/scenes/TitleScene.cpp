@@ -13,11 +13,12 @@ void TitleScene::handleInput(engine::IInput &input)
         switch (selectedIndex_)
         {
         case 0:
-            GameManager::instance().enterScene(SceneType::Town);
+            // start game -> create-new-save flow (prompt for character id).
+            GameManager::instance().openSaveSlots(true);
             break;
         case 1:
-            // Load game placeholder for demo.
-            GameManager::instance().enterScene(SceneType::Town);
+            // load game -> browse existing saves.
+            GameManager::instance().openSaveSlots(false);
             break;
         case 2:
             GameManager::instance().quit();
@@ -49,4 +50,5 @@ void TitleScene::render(engine::IRenderer &renderer)
     }
 
     renderer.drawText("Use Up/Down and Enter", {280, 520}, 16, engine::Color::gray());
+    renderer.drawText("start game: create a new save   load game: browse saves", {210, 545}, 14, engine::Color::gray());
 }
