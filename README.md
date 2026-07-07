@@ -2,6 +2,7 @@
 
 基于 C++20 + SFML + SQLite3 的 2D 校园 RPG 冒险游戏系统，用于 2026 年春季学期《程序设计课程设计》大作业。
 1
+
 ## 项目特色
 
 - **2D 顶视角 RPG**：玩家可在城镇/学校地图自由移动，白天进行 Social Link，夜晚与阴影战斗。
@@ -128,7 +129,7 @@ ctest --test-dir build -C Release --output-on-failure
 
 **环境变量**：设置用户环境变量 `MINGW_BIN` 为你的 MinGW `bin` 目录（例如 `E:/Qt/Tools/mingw1310_64/bin`），然后重启 VS Code。`.vscode/` 配置会读取该变量来定位编译器和调试器。
 
-### CLion / Qt Creator
+### CLion
 
 直接打开 `campus-rpg/CMakeLists.txt` 即可。
 
@@ -177,7 +178,7 @@ git push -u origin feature/xxx
 ## 六、完成的挑战任务
 
 | 挑战 | 内容 |
-|---|---|
+| --- | --- |
 | 挑战一：数据库技术 | SQLite3 持久化 |
 | 挑战三：图形用户界面技术 | SFML 2D 图形界面 |
 | 挑战六：STL 高级应用 | `map`、`vector`、`algorithm` 综合使用 |

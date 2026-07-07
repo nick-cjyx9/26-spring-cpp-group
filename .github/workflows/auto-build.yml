@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest]
 
     steps:
       - name: Checkout
@@ -45,6 +45,7 @@ jobs:
           Copy-Item campus-rpg/build/tests/CampusRPGTests.exe dist/
           Copy-Item campus-rpg/build/_deps/sfml-build/lib/*.dll dist/ -ErrorAction SilentlyContinue
           Copy-Item campus-rpg/build/*.dll dist/ -ErrorAction SilentlyContinue
+          Copy-Item campus-rpg/resources dist/ -Recurse -Force
           Get-ChildItem dist -Recurse | Select-Object -ExpandProperty FullName | Sort-Object
 
       - name: Upload Windows artifacts
