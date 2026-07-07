@@ -53,7 +53,7 @@ void TownScene::handleInput(engine::IInput &input)
     }
     if (input.wasKeyJustPressed(engine::Key::C))
     {
-        GameManager::instance().enterScene(SceneType::Character);
+        GameManager::instance().enterScene(SceneType::Status);
     }
     if (input.wasKeyJustPressed(engine::Key::N))
     {
@@ -82,6 +82,10 @@ void TownScene::handleInput(engine::IInput &input)
             saveMessage_ = "Save failed.";
             saveMessageTimer_ = 3.0f;
         }
+    }
+    if (input.wasKeyJustPressed(engine::Key::Space))
+    {
+        GameManager::instance().enterScene(SceneType::Armory);
     }
 }
 
@@ -154,8 +158,8 @@ void TownScene::render(engine::IRenderer &renderer)
                       {720, 20}, 18, engine::Color::yellow());
 
     // Interaction hint
-    renderer.drawText("E: talk  I: inventory  C: char  N: night  F5: save",
-                      {140, 570}, 16, engine::Color::white());
+    renderer.drawText("E: talk  I: inv  C: status  N: night  F5: save  Space: armory",
+                      {100, 570}, 14, engine::Color::white());
 
     // Save feedback overlay.
     if (!saveMessage_.empty())

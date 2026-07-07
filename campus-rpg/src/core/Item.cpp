@@ -66,19 +66,25 @@ void SpItem::use(Character &character)
 }
 
 EquipmentItem::EquipmentItem(std::string id, std::string name, std::string description, int value,
-                             int attackBonus, int defenseBonus, int speedBonus)
+                             int attackBonus, int defenseBonus, int speedBonus,
+                             int hpBonus, int magicBonus, EquipmentSlot slot,
+                             std::string textureId)
     : Item(std::move(id), std::move(name), std::move(description), value, ItemType::Equipment),
-      attackBonus_(attackBonus), defenseBonus_(defenseBonus), speedBonus_(speedBonus) {}
+      attackBonus_(attackBonus), defenseBonus_(defenseBonus), speedBonus_(speedBonus),
+      hpBonus_(hpBonus), magicBonus_(magicBonus), slot_(slot), textureId_(std::move(textureId)) {}
 
 std::unique_ptr<Item> EquipmentItem::clone() const
 {
-    return std::make_unique<EquipmentItem>(id_, name_, description_, value_, attackBonus_, defenseBonus_, speedBonus_);
+    return std::make_unique<EquipmentItem>(id_, name_, description_, value_,
+                                           attackBonus_, defenseBonus_, speedBonus_,
+                                           hpBonus_, magicBonus_, slot_, textureId_);
 }
 
 void EquipmentItem::use(Character &character)
 {
     character.equip(std::make_shared<EquipmentItem>(id_, name_, description_, value_,
-                                                    attackBonus_, defenseBonus_, speedBonus_));
+                                                    attackBonus_, defenseBonus_, speedBonus_,
+                                                    hpBonus_, magicBonus_, slot_, textureId_));
 }
 
 PersonaItem::PersonaItem(std::string id, std::string name, std::string description, int value,

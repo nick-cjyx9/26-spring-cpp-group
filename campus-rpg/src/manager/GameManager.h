@@ -25,7 +25,9 @@ enum class SceneType
     Inventory,
     Character,
     Dialogue,
-    SaveSlot
+    SaveSlot,
+    Status,
+    Armory
 };
 
 class GameManager
@@ -98,6 +100,21 @@ public:
     void initDefaultSocialLinks();
     void initDefaultPersonas();
     void initDefaultMap();
+    void initDefaultEquipment();
+
+    // ---- Equipment system ----
+    struct EquippedGear
+    {
+        std::shared_ptr<EquipmentItem> weapon;
+        std::shared_ptr<EquipmentItem> armor;
+        std::shared_ptr<EquipmentItem> accessory;
+        std::shared_ptr<EquipmentItem> relic;
+    };
+
+    const EquippedGear &equippedGear() const { return equippedGear_; }
+    void equipItem(std::shared_ptr<EquipmentItem> item);
+    void unequipItem(EquipmentSlot slot);
+    const std::vector<std::shared_ptr<EquipmentItem>> &equipmentDatabase() const { return equipmentDatabase_; }
 
 private:
     GameManager() = default;
@@ -116,6 +133,8 @@ private:
 
     std::vector<std::unique_ptr<Enemy>> enemyTemplates_;
     std::vector<std::shared_ptr<Persona>> personas_;
+    std::vector<std::shared_ptr<EquipmentItem>> equipmentDatabase_;
+    EquippedGear equippedGear_;
 
     std::unique_ptr<engine::IScene> currentScene_;
     SceneType currentSceneType_ = SceneType::Town;
