@@ -139,9 +139,7 @@ void ArmoryScene::handleRightPanelInput(engine::IInput &input)
     {
         if (selectedIndex_ >= 0 && selectedIndex_ < count && items[selectedIndex_])
         {
-            auto item = std::make_shared<EquipmentItem>(*items[selectedIndex_]);
-            GameManager::instance().equipItem(item);
-            message_ = "Equipped: " + item->name();
+            message_ = "Display only: " + items[selectedIndex_]->name();
             messageTimer_ = 2.0f;
         }
     }
@@ -169,7 +167,7 @@ void ArmoryScene::render(engine::IRenderer &renderer)
     renderRightPanel(renderer);
 
     // Hint.
-    renderer.drawText("W/S: select   A/D: switch panel   Enter: equip   Esc: back",
+    renderer.drawText("W/S: select   A/D: switch panel   Display only   Esc: back",
                       {100, 570}, 14, engine::Color::gray());
 
     // Feedback.
