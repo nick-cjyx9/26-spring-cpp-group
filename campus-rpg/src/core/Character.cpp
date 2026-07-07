@@ -116,11 +116,13 @@ void Character::setBaseStats(int strength, int magic, int endurance, int agility
     baseLuck_ = luck;
 }
 
-void Character::setEquipmentBonuses(int attack, int defense, int speed)
+void Character::setEquipmentBonuses(int attack, int defense, int speed, int hp, int magic)
 {
     equipmentAttackBonus_ = attack;
     equipmentDefenseBonus_ = defense;
     equipmentSpeedBonus_ = speed;
+    equipmentHpBonus_ = hp;
+    equipmentMagicBonus_ = magic;
 }
 
 void Character::equip(std::shared_ptr<EquipmentItem> equipment)
@@ -130,4 +132,6 @@ void Character::equip(std::shared_ptr<EquipmentItem> equipment)
     equipmentAttackBonus_ += equipment->attackBonus();
     equipmentDefenseBonus_ += equipment->defenseBonus();
     equipmentSpeedBonus_ += equipment->speedBonus();
+    equipmentHpBonus_ += equipment->hpBonus();
+    equipmentMagicBonus_ += equipment->magicBonus();
 }
