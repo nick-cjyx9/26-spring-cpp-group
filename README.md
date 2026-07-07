@@ -135,6 +135,8 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## 四、项目结构
 
+开始开发前，请先人工阅读一遍 `campus-rpg\docs` 下的东西，至少得读一遍 `campus-rpg\docs\README.md`, 对你的 AI 要做的东西有一个最基本的了解再派活给 AI。
+
 ```text
 26-spring-cpp-group/
 ├── .github/workflows/          # GitHub Actions

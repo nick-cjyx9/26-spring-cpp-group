@@ -2,37 +2,23 @@
 
 - DO NOT generate extra `.md` file unless user explicitly asks for it.
 - ALWAYS use PowerShell for build-related tasks; assume a Windows environment.
-- `gh` cli under powershell environment is provided.
 
 ## Repo Structure
 
 The C++ project lives in `campus-rpg/`, **not** at the repo root. All build commands run from inside `campus-rpg/`. The GitHub Actions workflows live at the **repo root** `.github/workflows/` (`auto-build.yml` + `pr-check.yml`; GHA only reads workflows from the repo root).
 
 ```text
-26-spring-cpp-group/             # repo root
+26-spring-cpp-group/             # repo root — NOT the C++ project root
 ├── .github/workflows/         # GitHub Actions CI (auto-build.yml + pr-check.yml)
-├── campus-rpg/                  # the actual C++ project
+├── .vscode/                   # committed shared VS Code config (see VS Code section)
+├── campus-rpg/                # the actual C++ project — run all build commands from here
 │   ├── CMakeLists.txt
-│   ├── src/
-│   │   ├── core/              # pure C++ domain models
-│   │   ├── data/              # SQLite3 persistence
-│   │   ├── manager/           # GameManager singleton
-│   │   ├── engine/
-│   │   │   ├── interfaces/    # IRenderer / IWindow / IInput
-│   │   │   └── sfml/          # SFML implementations
-│   │   ├── scenes/            # 2D game scenes
-│   │   └── main.cpp
-│   ├── tests/
-│   │   ├── test_core.cpp
-│   │   └── mocks/             # mock engine implementations
-│   ├── resources/             # runtime assets (textures, fonts)
-│   └── CMakeLists.txt
-├── docs/                        # design docs
-├── handouts/
-├── attachments/
-├── AGENTS.md
-├── README.md                    # setup guide
-└── scripts_cheat_sheet.md
+│   ├── docs/                  # design docs (read campus-rpg/docs/README.md first)
+│   ├── src/{core,data,manager,engine/{interfaces,sfml},scenes}/ + main.cpp
+│   ├── tests/{test_core.cpp, mocks/}
+│   └── resources/             # runtime assets (textures, fonts), copied next to exe on build
+├── handouts/  attachments/
+├── AGENTS.md  README.md  scripts_cheat_sheet.md
 ```
 
 ## Architecture
@@ -56,16 +42,19 @@ Core (pure C++ domain models) + Data (SQLite3 persistence)
 
 ### CMake library layout
 
-Sources are compiled into **static libraries** (so the test target links the library instead of re-listing sources):
+Sources are compiled into **static libraries** (so the test target links the library instead of re-listing sources); engine interfaces are header-only:
 
-- `CampusRPGCore` — pure-C++ domain models (`src/core/`). **No SFML/SQLite dependency.** This is what unit tests link.
-- `CampusRPGAppLib` — `src/data/` + `src/manager/` + `src/engine/interfaces/`. Depends on `CampusRPGCore` + SQLite3.
-- `CampusRPG` (executable) — `src/engine/sfml/` + `src/scenes/` + `src/main.cpp`. Depends on `CampusRPGAppLib` + SFML.
-- `CampusRPGTests` (executable) — `tests/test_core.cpp` + `tests/mocks/`. Depends on `CampusRPGCore` + mock implementations. Uses a lightweight test runner, no GUI event loop required.
+- `CampusRPGCore` (static) — `src/core/*.cpp`, pure-C++ domain models. **No SFML/SQLite dependency.** This is what unit tests link.
+- `CampusRPGAppLib` (static) — `src/data/` + `src/manager/` + `src/scenes/*.cpp`. Depends on `CampusRPGCore` + SQLite3. Scenes live here (not in the exe) and must only depend on the engine interfaces, not SFML directly.
+- `CampusRPGEngineInterface` (header-only `INTERFACE` lib) — `src/engine/interfaces/` (`IRenderer`, `IWindow`, `IInput`, `IScene`, `EngineTypes.h`).
+- `CampusRPG` (executable) — `src/main.cpp` + `src/engine/sfml/*`. Depends on `CampusRPGAppLib` + SFML. Only this target links SFML.
+- `CampusRPGTests` (executable) — `tests/test_core.cpp` + `tests/mocks/`. Links `CampusRPGCore` only. Lightweight custom runner (no GUI event loop) — `CHECK`/`CHECK_EQ` macros defined in `test_core.cpp:36-37`.
 
-> When adding a new `src/core/*.cpp` file, add it to the `CORE_SOURCES` list in `campus-rpg/CMakeLists.txt`. Files under `src/data/` or `src/manager/` go into `APP_LIB_SOURCES`. Engine interface files go into `ENGINE_INTERFACE_SOURCES`. SFML implementation and scene files go into the executable target.
->
-> Project design docs live under `campus-rpg/docs/`.
+> - Add a new `src/core/*.cpp` → append to `CORE_SOURCES` in `campus-rpg/CMakeLists.txt`.
+> - Add a file under `src/data/`, `src/manager/`, or `src/scenes/` → append to `APP_LIB_SOURCES`.
+> - Add an SFML impl under `src/engine/sfml/` → append to `ENGINE_SFML_SOURCES` (exe target).
+> - New `src/engine/interfaces/*.h` → no CMake edit needed; the INTERFACE lib auto-picks up headers via include dirs.
+> - Design docs live under `campus-rpg/docs/` — read `docs/README.md` first.
 
 OOP checkpoints (course requirement):
 
@@ -108,10 +97,6 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 With the **Visual Studio** generator (multi-config), executables land under `build\Release\` and `build\tests\Release\` instead — adjust the paths accordingly.
-
-### VS Code (shared config)
-
-The repo ships a shared `.vscode/` (IntelliSense, build/test tasks, gdb launch configs) at the repo root. It is **not** gitignored — it is committed so every member gets the same setup. All machine-specific paths go through the `MINGW_BIN` user environment variable or CMake cache.
 
 ## Key Gotchas
 
@@ -157,5 +142,5 @@ General rule: prefer **small, focused PRs over long-lived feature branches**, an
 4. **No abort-on-failure**: use lightweight `CHECK`/`CHECK_EQ` macros instead of `assert`.
 5. **Make tests fast**: no fixed sleeps, no I/O on the test path.
 6. **Compile classes into a library**: `CampusRPGCore` is a static lib so the test target links it.
-7. **Break dependencies**: the pure-C++ core has no SFML/SQLite coupling, so it can be unit-tested in isolation. Scene tests use Mock 引擎实现.
+7. **Break dependencies**: the pure-C++ core has no SFML/SQLite coupling, so it can be unit-tested in isolation.
 8. **Avoid debug spam**: do not leave `std::cout` in committed autotests.
