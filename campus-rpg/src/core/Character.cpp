@@ -107,6 +107,22 @@ void Character::setPersona(std::shared_ptr<Persona> persona)
     persona_ = std::move(persona);
 }
 
+void Character::setBaseStats(int strength, int magic, int endurance, int agility, int luck)
+{
+    baseStrength_ = strength;
+    baseMagic_ = magic;
+    baseEndurance_ = endurance;
+    baseAgility_ = agility;
+    baseLuck_ = luck;
+}
+
+void Character::setEquipmentBonuses(int attack, int defense, int speed)
+{
+    equipmentAttackBonus_ = attack;
+    equipmentDefenseBonus_ = defense;
+    equipmentSpeedBonus_ = speed;
+}
+
 void Character::equip(std::shared_ptr<EquipmentItem> equipment)
 {
     if (!equipment)

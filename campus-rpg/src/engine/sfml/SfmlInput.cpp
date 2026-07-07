@@ -28,9 +28,16 @@ bool SfmlInput::wasKeyJustPressed(Key key)
     return justPressed_[idx];
 }
 
+std::string SfmlInput::consumeTypedText()
+{
+    std::string text;
+    text.swap(typedBuffer_);
+    return text;
+}
+
 void SfmlInput::onSfmlKeyPressed(sf::Keyboard::Key key)
 {
-    for (size_t i = 1; i <= static_cast<size_t>(Key::Space); ++i)
+    for (size_t i = 1; i < static_cast<size_t>(Key::Count); ++i)
     {
         if (toSfmlKey(static_cast<Key>(i)) == key && !currentStates_[i])
         {
@@ -42,7 +49,7 @@ void SfmlInput::onSfmlKeyPressed(sf::Keyboard::Key key)
 
 void SfmlInput::onSfmlKeyReleased(sf::Keyboard::Key key)
 {
-    for (size_t i = 1; i <= static_cast<size_t>(Key::Space); ++i)
+    for (size_t i = 1; i < static_cast<size_t>(Key::Count); ++i)
     {
         if (toSfmlKey(static_cast<Key>(i)) == key)
         {
@@ -55,6 +62,18 @@ void SfmlInput::endFrame()
 {
     std::copy(currentStates_.begin(), currentStates_.end(), previousStates_.begin());
     justPressed_.fill(false);
+}
+
+void SfmlInput::onSfmlTextEntered(std::uint32_t unicode)
+{
+    if (unicode == 8) // backspace
+    {
+        typedBuffer_ += '\b';
+    }
+    else if (unicode >= 32 && unicode <= 126) // printable ASCII
+    {
+        typedBuffer_ += static_cast<char>(unicode);
+    }
 }
 
 sf::Keyboard::Key SfmlInput::toSfmlKey(Key key)
@@ -91,6 +110,8 @@ sf::Keyboard::Key SfmlInput::toSfmlKey(Key key)
         return sf::Keyboard::N;
     case Key::Space:
         return sf::Keyboard::Space;
+    case Key::F5:
+        return sf::Keyboard::F5;
     default:
         return sf::Keyboard::Unknown;
     }

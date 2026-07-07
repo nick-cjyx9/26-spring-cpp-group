@@ -99,6 +99,7 @@ set(APP_LIB_SOURCES
     src/scenes/InventoryScene.cpp
     src/scenes/CharacterScene.cpp
     src/scenes/DialogueScene.cpp
+    src/scenes/SaveSlotScene.cpp
 )
 
 add_library(CampusRPGAppLib STATIC ${APP_LIB_SOURCES})

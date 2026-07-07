@@ -41,6 +41,8 @@ void SfmlWindow::pollEvents(IInput &input)
                 input_->onSfmlKeyPressed(event.key.code);
             else if (event.type == sf::Event::KeyReleased)
                 input_->onSfmlKeyReleased(event.key.code);
+            else if (event.type == sf::Event::TextEntered)
+                input_->onSfmlTextEntered(event.text.unicode);
         }
     }
 }
