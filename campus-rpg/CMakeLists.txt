@@ -102,6 +102,8 @@ set(APP_LIB_SOURCES
     src/scenes/SaveSlotScene.cpp
     src/scenes/SocialLinkScene.cpp
     src/scenes/HeroSelectScene.cpp
+    src/scenes/StatusScene.cpp
+    src/scenes/ArmoryScene.cpp
 )
 
 add_library(CampusRPGAppLib STATIC ${APP_LIB_SOURCES})

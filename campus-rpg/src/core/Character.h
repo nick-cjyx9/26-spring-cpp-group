@@ -19,6 +19,7 @@ public:
     int level() const { return level_; }
     int hp() const { return hp_; }
     int maxHp() const { return maxHp_; }
+    int totalMaxHp() const { return maxHp_ + equipmentHpBonus_; }
     int sp() const { return sp_; }
     int maxSp() const { return maxSp_; }
     int exp() const { return exp_; }
@@ -29,6 +30,7 @@ public:
     int defense() const;
     int speed() const;
     int magic() const;
+    int totalMagic() const { return magic() + equipmentMagicBonus_; }
 
     int baseStrength() const { return baseStrength_; }
     int baseMagic() const { return baseMagic_; }
@@ -39,6 +41,8 @@ public:
     int equipmentAttackBonus() const { return equipmentAttackBonus_; }
     int equipmentDefenseBonus() const { return equipmentDefenseBonus_; }
     int equipmentSpeedBonus() const { return equipmentSpeedBonus_; }
+    int equipmentHpBonus() const { return equipmentHpBonus_; }
+    int equipmentMagicBonus() const { return equipmentMagicBonus_; }
 
     // Social Link stat bonuses (recomputed by GameManager after talk/load).
     int socialLinkStrengthBonus() const { return slStrengthBonus_; }
@@ -73,7 +77,7 @@ public:
     void setExpToNextLevel(int v) { expToNextLevel_ = v; }
     void setGold(int v) { gold_ = v; }
     void setBaseStats(int strength, int magic, int endurance, int agility, int luck);
-    void setEquipmentBonuses(int attack, int defense, int speed);
+    void setEquipmentBonuses(int attack, int defense, int speed, int hp = 0, int magic = 0);
 
     void setPersona(std::shared_ptr<Persona> persona);
     void equip(std::shared_ptr<EquipmentItem> equipment);
@@ -102,6 +106,8 @@ private:
     int equipmentAttackBonus_ = 0;
     int equipmentDefenseBonus_ = 0;
     int equipmentSpeedBonus_ = 0;
+    int equipmentHpBonus_ = 0;
+    int equipmentMagicBonus_ = 0;
 
     int slStrengthBonus_ = 0;
     int slMagicBonus_ = 0;

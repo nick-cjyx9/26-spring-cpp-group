@@ -29,7 +29,9 @@ enum class SceneType
     Dialogue,
     SaveSlot,
     SocialLink,
-    HeroSelect
+    HeroSelect,
+    Status,
+    Armory
 };
 
 // Fired whenever a Social Link ranks up. The UI layer registers a callback
@@ -127,6 +129,21 @@ public:
     void initSocialLinkRankData();
     void initDefaultPersonas();
     void initDefaultMap();
+    void initDefaultEquipment();
+
+    // ---- Equipment system ----
+    struct EquippedGear
+    {
+        std::shared_ptr<EquipmentItem> weapon;
+        std::shared_ptr<EquipmentItem> armor;
+        std::shared_ptr<EquipmentItem> accessory;
+        std::shared_ptr<EquipmentItem> relic;
+    };
+
+    const EquippedGear &equippedGear() const { return equippedGear_; }
+    void equipItem(std::shared_ptr<EquipmentItem> item);
+    void unequipItem(EquipmentSlot slot);
+    const std::vector<std::shared_ptr<EquipmentItem>> &equipmentDatabase() const { return equipmentDatabase_; }
 
     // Hero selection (0..3), persisted in the current session.
     int selectedHeroIndex() const { return selectedHeroIndex_; }
@@ -165,6 +182,8 @@ private:
 
     std::vector<std::unique_ptr<Enemy>> enemyTemplates_;
     std::vector<std::shared_ptr<Persona>> personas_;
+    std::vector<std::shared_ptr<EquipmentItem>> equipmentDatabase_;
+    EquippedGear equippedGear_;
 
     std::unique_ptr<engine::IScene> currentScene_;
     SceneType currentSceneType_ = SceneType::Town;

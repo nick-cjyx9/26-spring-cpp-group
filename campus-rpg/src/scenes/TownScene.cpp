@@ -55,7 +55,7 @@ void TownScene::handleInput(engine::IInput &input)
     }
     if (input.wasKeyJustPressed(engine::Key::C))
     {
-        GameManager::instance().enterScene(SceneType::Character);
+        GameManager::instance().enterScene(SceneType::Status);
     }
     if (input.wasKeyJustPressed(engine::Key::N))
     {
@@ -88,6 +88,10 @@ void TownScene::handleInput(engine::IInput &input)
     if (input.wasKeyJustPressed(engine::Key::L))
     {
         GameManager::instance().enterScene(SceneType::SocialLink);
+    }
+    if (input.wasKeyJustPressed(engine::Key::Space))
+    {
+        GameManager::instance().enterScene(SceneType::Armory);
     }
 }
 
@@ -180,8 +184,8 @@ void TownScene::render(engine::IRenderer &renderer)
     renderer.drawText(GameManager::instance().timeString(), {635, 22}, 20, engine::Color::cyan());
 
     // Interaction hint
-    renderer.drawText("E: talk  I: inventory  C: char  N: night  F5: save  L: social",
-                      {140, 570}, 16, engine::Color::white());
+    renderer.drawText("E: talk  I: inv  C: char  N: night  F5: save  L: social  Space: armory",
+                      {80, 570}, 14, engine::Color::white());
 
     // Save feedback overlay.
     if (!saveMessage_.empty())
