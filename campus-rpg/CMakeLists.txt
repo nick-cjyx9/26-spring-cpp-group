@@ -100,6 +100,8 @@ set(APP_LIB_SOURCES
     src/scenes/CharacterScene.cpp
     src/scenes/DialogueScene.cpp
     src/scenes/SaveSlotScene.cpp
+    src/scenes/SocialLinkScene.cpp
+    src/scenes/HeroSelectScene.cpp
     src/scenes/StatusScene.cpp
     src/scenes/ArmoryScene.cpp
 )
@@ -140,6 +142,7 @@ if(CAMPUS_RPG_USE_SYSTEM_SFML)
         SFML::graphics
         SFML::window
         SFML::system
+        SFML::audio
     )
 else()
     target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -147,6 +150,7 @@ else()
         sfml-graphics
         sfml-window
         sfml-system
+        sfml-audio
     )
 endif()
 
@@ -160,10 +164,14 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts
         $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources/fonts)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/resources/sounds
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources/sounds)
 
 # Copy SFML DLLs next to the executable on Windows so the app can run without extra PATH setup.
 if(WIN32 AND NOT CAMPUS_RPG_USE_SYSTEM_SFML)
-    foreach(sfml_target sfml-graphics sfml-window sfml-system)
+    foreach(sfml_target sfml-graphics sfml-window sfml-system sfml-audio)
         if(TARGET ${sfml_target})
             add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -171,6 +179,15 @@ if(WIN32 AND NOT CAMPUS_RPG_USE_SYSTEM_SFML)
                     $<TARGET_FILE_DIR:${PROJECT_NAME}>)
         endif()
     endforeach()
+
+    # SFML Audio depends on OpenAL, which is shipped in SFML's extlibs.
+    # Copy the 64-bit DLL next to the executable so sfml-audio can find it.
+    if(EXISTS "${sfml_SOURCE_DIR}/extlibs/bin/x64/openal32.dll")
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${sfml_SOURCE_DIR}/extlibs/bin/x64/openal32.dll"
+                $<TARGET_FILE_DIR:${PROJECT_NAME}>)
+    endif()
 endif()
 
 # ---- Testing ----

@@ -13,24 +13,24 @@ Character::Character(std::string name, int maxHp, int maxSp,
 int Character::attack() const
 {
     int personaBonus = persona_ ? persona_->strength() : 0;
-    return baseStrength_ + personaBonus + equipmentAttackBonus_;
+    return baseStrength_ + personaBonus + equipmentAttackBonus_ + slStrengthBonus_;
 }
 
 int Character::defense() const
 {
     int personaBonus = persona_ ? persona_->endurance() : 0;
-    return baseEndurance_ + personaBonus + equipmentDefenseBonus_;
+    return baseEndurance_ + personaBonus + equipmentDefenseBonus_ + slEnduranceBonus_;
 }
 
 int Character::speed() const
 {
     int personaBonus = persona_ ? persona_->agility() : 0;
-    return baseAgility_ + personaBonus + equipmentSpeedBonus_;
+    return baseAgility_ + personaBonus + equipmentSpeedBonus_ + slAgilityBonus_;
 }
 
 int Character::magic() const
 {
-    return baseMagic_ + (persona_ ? persona_->magic() : 0);
+    return baseMagic_ + (persona_ ? persona_->magic() : 0) + slMagicBonus_;
 }
 
 Affinity Character::affinity(Element e) const
@@ -134,4 +134,35 @@ void Character::equip(std::shared_ptr<EquipmentItem> equipment)
     equipmentSpeedBonus_ += equipment->speedBonus();
     equipmentHpBonus_ += equipment->hpBonus();
     equipmentMagicBonus_ += equipment->magicBonus();
+}
+
+void Character::applySocialLinkBonus(PersonaStat s, int value)
+{
+    switch (s)
+    {
+    case PersonaStat::Strength:
+        slStrengthBonus_ += value;
+        break;
+    case PersonaStat::Magic:
+        slMagicBonus_ += value;
+        break;
+    case PersonaStat::Endurance:
+        slEnduranceBonus_ += value;
+        break;
+    case PersonaStat::Agility:
+        slAgilityBonus_ += value;
+        break;
+    case PersonaStat::Luck:
+        slLuckBonus_ += value;
+        break;
+    }
+}
+
+void Character::clearSocialLinkBonuses()
+{
+    slStrengthBonus_ = 0;
+    slMagicBonus_ = 0;
+    slEnduranceBonus_ = 0;
+    slAgilityBonus_ = 0;
+    slLuckBonus_ = 0;
 }

@@ -3,6 +3,8 @@
 #include "TileMap.h"
 #include "Entity.h"
 
+#include <cmath>
+
 namespace
 {
     engine::Rect interactionArea(const Entity &player)
@@ -83,6 +85,10 @@ void TownScene::handleInput(engine::IInput &input)
             saveMessageTimer_ = 3.0f;
         }
     }
+    if (input.wasKeyJustPressed(engine::Key::L))
+    {
+        GameManager::instance().enterScene(SceneType::SocialLink);
+    }
     if (input.wasKeyJustPressed(engine::Key::Space))
     {
         GameManager::instance().enterScene(SceneType::Armory);
@@ -106,6 +112,8 @@ void TownScene::update(float deltaTime)
     if (!player)
         return;
 
+    engine::Vec2 oldPos = player->position();
+
     engine::Vec2 newPos = player->position();
     newPos.x += moveX_ * moveSpeed_ * deltaTime;
     if (canMoveTo(newPos, map))
@@ -115,6 +123,20 @@ void TownScene::update(float deltaTime)
     newPos.y += moveY_ * moveSpeed_ * deltaTime;
     if (canMoveTo(newPos, map))
         player->setPosition({player->position().x, newPos.y});
+
+    // Track movement distance: every 4 tiles (128px) = 1 in-game hour.
+    engine::Vec2 afterPos = player->position();
+    float dist = std::hypot(afterPos.x - oldPos.x, afterPos.y - oldPos.y);
+    if (dist > 0.1f)
+    {
+        accumulatedMoveDist_ += dist;
+        const float kPixelsPerHour = GameManager::kTilesPerHour * 32.0f; // 4 tiles * 32px
+        while (accumulatedMoveDist_ >= kPixelsPerHour)
+        {
+            accumulatedMoveDist_ -= kPixelsPerHour;
+            GameManager::instance().advanceTime(1);
+        }
+    }
 }
 
 void TownScene::render(engine::IRenderer &renderer)
@@ -151,15 +173,19 @@ void TownScene::render(engine::IRenderer &renderer)
         }
     }
 
-    // HUD
-    renderer.drawRect({620, 10, 170, 70}, engine::Color(0, 0, 0, 180));
-    renderer.drawText("bkpk", {635, 20}, 18, engine::Color::white());
+    // HUD - top left corner: level info
+    renderer.drawRect({10, 10, 160, 50}, engine::Color(0, 0, 0, 180));
     renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()),
-                      {720, 20}, 18, engine::Color::yellow());
+                      {20, 20}, 18, engine::Color::yellow());
+
+    // Time display - top right corner
+    renderer.drawRect({620, 10, 170, 50}, engine::Color(0, 0, 0, 200));
+    renderer.drawRect({622, 12, 166, 46}, engine::Color(30, 30, 50, 200));
+    renderer.drawText(GameManager::instance().timeString(), {635, 22}, 20, engine::Color::cyan());
 
     // Interaction hint
-    renderer.drawText("E: talk  I: inv  C: status  N: night  F5: save  Space: armory",
-                      {100, 570}, 14, engine::Color::white());
+    renderer.drawText("E: talk  I: inv  C: char  N: night  F5: save  L: social  Space: armory",
+                      {80, 570}, 14, engine::Color::white());
 
     // Save feedback overlay.
     if (!saveMessage_.empty())

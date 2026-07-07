@@ -15,6 +15,8 @@ void BattleScene::handleInput(engine::IInput &input)
             else
                 processDefeat();
             GameManager::instance().setNight(false);
+            // Each battle costs 4 in-game hours.
+            GameManager::instance().advanceTime(GameManager::kBattleCostHours);
             GameManager::instance().enterScene(SceneType::Town);
         }
         return;

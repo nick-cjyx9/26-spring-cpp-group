@@ -13,8 +13,8 @@ void TitleScene::handleInput(engine::IInput &input)
         switch (selectedIndex_)
         {
         case 0:
-            // start game -> create-new-save flow (prompt for character id).
-            GameManager::instance().openSaveSlots(true);
+            // start game -> hero selection (choose portrait + enter name).
+            GameManager::instance().enterScene(SceneType::HeroSelect);
             break;
         case 1:
             // load game -> browse existing saves.

@@ -23,6 +23,8 @@ SaveSlotScene::SaveSlotScene(Mode mode) : mode_(mode)
 {
     if (mode_ == Mode::Create)
     {
+        // Legacy naming flow (kept for compatibility; the primary new-game
+        // entry is now HeroSelectScene, reached directly from TitleScene).
         subState_ = SubState::Naming;
         nameBuffer_.clear();
         message_ = "Enter character id, then press Enter.";

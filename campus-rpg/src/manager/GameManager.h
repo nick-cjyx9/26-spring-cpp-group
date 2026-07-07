@@ -9,6 +9,8 @@
 #include "SocialLinkManager.h"
 #include "TileMap.h"
 
+#include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -26,9 +28,19 @@ enum class SceneType
     Character,
     Dialogue,
     SaveSlot,
+    SocialLink,
+    HeroSelect,
     Status,
     Armory
 };
+
+// Fired whenever a Social Link ranks up. The UI layer registers a callback
+// here (via GameManager::setRankUpCallback) to play the 奶龙笑 / 火舞 sound,
+// show a rank-up banner, etc. Kept as std::function so the core/manager
+// layer stays free of SFML/audio dependencies.
+//   arg1: Social Link id (e.g. "sl_yosuke")
+//   arg2: the new rank just reached (1..10)
+using RankUpCallback = std::function<void(const std::string &socialLinkId, int newRank)>;
 
 class GameManager
 {
@@ -94,10 +106,27 @@ public:
     bool shouldQuit() const { return shouldQuit_; }
     void quit() { shouldQuit_ = true; }
 
+    // ---- Social Link integration ----
+    // Called by DialogueScene when the player talks to an NPC.
+    // Adds the daily progression points, fires any pending rank-up callbacks
+    // (so the UI can play the 奶龙 laugh / fire-dance sound), recomputes
+    // stat bonuses on the character, and returns the link's current-rank
+    // dialogue text.
+    std::string talkToNpc(const std::string &socialLinkId);
+
+    // Recompute and apply all Social Link stat bonuses onto the character.
+    // Called internally after talkToNpc / load. UI may also call it on demand.
+    void recomputeSocialLinkBonuses();
+
+    // UI layer registers a callback to be fired on every Social Link rank-up
+    // (used to play the 奶龙 laugh / fire-dance sound and show a banner).
+    void setRankUpCallback(RankUpCallback cb) { rankUpCallback_ = std::move(cb); }
+
     void initDefaultShop();
     void initDefaultQuests();
     void initDefaultEnemies();
     void initDefaultSocialLinks();
+    void initSocialLinkRankData();
     void initDefaultPersonas();
     void initDefaultMap();
     void initDefaultEquipment();
@@ -115,6 +144,26 @@ public:
     void equipItem(std::shared_ptr<EquipmentItem> item);
     void unequipItem(EquipmentSlot slot);
     const std::vector<std::shared_ptr<EquipmentItem>> &equipmentDatabase() const { return equipmentDatabase_; }
+
+    // Hero selection (0..3), persisted in the current session.
+    int selectedHeroIndex() const { return selectedHeroIndex_; }
+    void setSelectedHeroIndex(int idx) { selectedHeroIndex_ = idx; }
+
+    // ---- Time system ----
+    // Day starts at 1, hour starts at 8 (8 AM). Each talk = +4h, each battle = +4h.
+    // Moving 4 tiles = +1h. Talk-count refreshes at 8 AM on a new day.
+    int day() const { return day_; }
+    int hour() const { return hour_; }
+    std::string timeString() const; // e.g. "Day 1  08:00"
+    void advanceTime(int hours);
+    // Whether this NPC can still grant Social Link points today (max 3 talks/day).
+    bool canGainPoints(const std::string &npcId) const;
+    int talkCountToday(const std::string &npcId) const;
+    static constexpr int kMaxTalksPerNpc = 3;
+    static constexpr int kTalkCostHours = 4;
+    static constexpr int kBattleCostHours = 4;
+    static constexpr int kTilesPerHour = 4;
+    static constexpr int kDayStartHour = 8;
 
 private:
     GameManager() = default;
@@ -142,4 +191,13 @@ private:
     bool isNight_ = false;
     bool shouldQuit_ = false;
     int currentSlotId_ = 1;
+    int selectedHeroIndex_ = 0;
+
+    // Time system
+    int day_ = 1;
+    int hour_ = kDayStartHour;
+    int lastRefreshDay_ = 1;
+    std::map<std::string, int> talkCountToday_;
+
+    RankUpCallback rankUpCallback_;
 };
