@@ -92,7 +92,7 @@ public:
 ### 派生类
 
 | 类 | 作用 | 字段 |
-|---|---|---|
+| --- | --- | --- |
 | `FoodItem` | 回复 HP | `healAmount_` |
 | `PotionItem` | 大量回复 HP | `healAmount_` |
 | `SpItem` | 回复 SP | `spAmount_` |
@@ -122,7 +122,7 @@ public:
 ### 派生类
 
 | 类 | 特点 |
-|---|---|
+| --- | --- |
 | `Slime` | 低攻低防，弱火 |
 | `Goblin` | 均衡，耐物理 |
 | `Boss` | 高血量，多技能 |
@@ -172,6 +172,7 @@ private:
 ## Quest / QuestManager
 
 保留现有设计：
+
 - `Quest`：id、name、description、condition、reward。
 - `QuestManager`：accept / complete / reward。
 - 条件支持 `kill:N`，可扩展 `collect:id:N`、`level:N`。

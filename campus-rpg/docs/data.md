@@ -10,6 +10,7 @@
 ## DatabaseManager（数据库连接单例）
 
 ### 职责
+
 - 创建并管理唯一的 SQLite3 数据库连接。
 - 初始化数据表（若不存在则创建）。
 - 提供数据库连接与错误处理接口。
@@ -66,6 +67,7 @@ CREATE TABLE IF NOT EXISTS quest_progress (
 ## SaveRepository（存档仓库）
 
 ### 职责
+
 - 面向 `GameManager` 提供高阶接口：
   - `saveAll(...)` / `loadAll(...)`
   - `saveCharacter` / `loadCharacter`
@@ -76,6 +78,7 @@ CREATE TABLE IF NOT EXISTS quest_progress (
 - 将 domain 对象与 SQL schema 解耦。
 
 ### 关键约定
+
 - 只保存基础属性；装备加成在装备时重新计算。
 - Persona 以行为单位保存，技能和抗性通过 `extra_data` JSON 序列化。
 

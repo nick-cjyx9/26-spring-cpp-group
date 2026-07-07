@@ -35,6 +35,7 @@ void enterScene(SceneType type);
 ```
 
 `GameManager` 持有 `std::unique_ptr<IScene> currentScene_`，根据游戏阶段切换：
+
 - `TitleScene`：标题菜单
 - `TownScene`：早晨
 - `NightScene`：夜晚

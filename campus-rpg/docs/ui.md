@@ -11,7 +11,7 @@
 ## 页面/场景清单
 
 | 场景 | 文件 | 职责 |
-|---|---|---|
+| --- | --- | --- |
 | `TitleScene` | `src/scenes/TitleScene.*` | 标题画面，开始游戏 / 读取游戏 / 退出 |
 | `TownScene` | `src/scenes/TownScene.*` | 早晨城镇/学校地图，角色移动、NPC 对话、进入功能 |
 | `NightScene` | `src/scenes/NightScene.*` | 夜晚同地图，敌人游荡，碰撞触发战斗 |
@@ -26,7 +26,7 @@
 - 每个场景实现 `IScene` 接口：`handleInput`、`update`、`render`。
 - 所有业务操作通过 `GameManager::instance()` 完成。
 - 场景不直接访问 `DatabaseManager` / `SaveRepository`。
-- 2D 资源使用 `resources/textures/` 下的 PNG 精灵 + 几何图形 + 文字；运行时自动复制到构建目录。},{
+- 2D 资源使用 `resources/textures/` 下的 PNG 精灵 + 几何图形 + 文字；运行时自动复制到构建目录。
 
 ## 导航流程
 
@@ -48,7 +48,7 @@ GameLoop
 ## 输入约定
 
 | 按键 | 功能 |
-|---|---|
+| --- | --- |
 | ↑/↓ / Enter | 标题菜单选择 |
 | WASD / 方向键 | 角色移动 |
 | E / Enter | 交互（对话、进门） |

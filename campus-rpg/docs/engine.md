@@ -98,6 +98,7 @@ public:
 ```
 
 具体场景：
+
 - `TitleScene`：标题画面与主菜单。
 - `TownScene`：早晨城镇/学校移动、NPC 对话、进入商店、等到夜晚。
 - `NightScene`：夜晚同地图，敌人游荡，碰撞触发战斗。
