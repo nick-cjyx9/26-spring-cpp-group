@@ -36,6 +36,12 @@ void GameManager::seedDefaultState(const std::string &playerName)
     personas_.clear();
     isNight_ = false;
 
+    // Reset time system
+    day_ = 1;
+    hour_ = kDayStartHour;
+    lastRefreshDay_ = 1;
+    talkCountToday_.clear();
+
     initDefaultPersonas();
     initDefaultShop();
     initDefaultQuests();
@@ -331,17 +337,17 @@ void GameManager::initSocialLinkRankData()
     if (SocialLink *y = socialLinkManager_.getLink("sl_yosuke"))
     {
         fill(*y, {
-                     "Yosuke: \"哼，终于来了吗？本大爷可是等了很久——算了，勉强承认你是特别的存在吧。\"",
-                     "Yosuke: \"哦？居然真的赴约了？有趣……你这家伙，和普通人不太一样。\"",
-                     "Yosuke: \"听好了！在本大爷面前不用藏着掖着，你的黑暗面——我全部接受了！\"",
-                     "Yosuke: \"并肩作战到这种地步，就算是神也拆不散我们的羁绊了！\"",
-                     "Yosuke: \"喂喂，别小看我啊！我可是要成为最强的男人，才不是什么配角！\"",
-                     "Yosuke: \"前方就算是地狱，有你在的话——不，是有我在，就一定能冲破！\"",
-                     "Yosuke: \"哈……真是败给你了。这辈子，就认定你这个挚友了。\"",
-                     "Yosuke: \"我从未想过，会有人让我想要变得更强……为了守护你。\"",
-                     "Yosuke: \"哪怕世界毁灭，只要我们还在，希望就绝不会熄灭！\"",
-                     "Yosuke: \"真正的兄弟，是连灵魂都能互相吞噬的存在——来吧，一起！\"",
-                     "Yosuke: \"这就是……真正的『羁绊』吗。好热……胸口像被火焰燃烧一样！\"",
+                     "Yosuke: \"Heh, you finally came. I was starting to think you'd bail on me.\"",
+                     "Yosuke: \"Oh? You actually showed up. Guess you're not so boring after all.\"",
+                     "Yosuke: \"Listen up, partner. You can drop the act around me. I see right through you.\"",
+                     "Yosuke: \"We've been through a lot, huh? Thanks for having my back out there.\"",
+                     "Yosuke: \"Hey, don't underestimate me! I'm not just some sidekick, you know.\"",
+                     "Yosuke: \"Even if it's hell ahead, with you beside me... no, with ME beside YOU, we'll break through!\"",
+                     "Yosuke: \"Ha... you really got me. Guess I'm stuck with you for life, partner.\"",
+                     "Yosuke: \"I never thought I'd meet someone who makes me want to be stronger... just to protect them.\"",
+                     "Yosuke: \"Even if the world ends, as long as we're standing, hope never dies!\"",
+                     "Yosuke: \"True brothers devour each other's souls. Come on, let's go!\"",
+                     "Yosuke: \"So this is... a true bond. My chest is burning like fire!\"",
                  });
         if (SocialLinkRankData *r3 = y->rankData(3))
         {
@@ -367,17 +373,17 @@ void GameManager::initSocialLinkRankData()
     if (SocialLink *c = socialLinkManager_.getLink("sl_chie"))
     {
         fill(*c, {
-                     "Chie: \"哼，来得正好！本小姐正想活动筋骨——可别拖后腿啊！\"",
-                     "Chie: \"不错嘛，居然能跟上我的节奏。勉强承认你有两下子好了。\"",
-                     "Chie: \"听着！和我组队的话，就必须有超越极限的觉悟！准备好了吗？\"",
-                     "Chie: \"我会把想要伤害你的家伙全部粉碎——这就是我的『守护』之道！\"",
-                     "Chie: \"哈！看到没有？这就是我和你的组合技，天下无敌！\"",
-                     "Chie: \"挡在我们面前的东西，不管是谁——统统踢飞就好了吧！\"",
-                     "Chie: \"力量不是用来欺凌弱小的……我要用这双手，保护所有重要的人！\"",
-                     "Chie: \"谢谢……谢谢你一直相信我。作为回报，我会变得更强——强到让你依赖！\"",
-                     "Chie: \"走过的路绝不会白费。每一步，都是我们『羁绊』的证明！\"",
-                     "Chie: \"既是宿敌也是挚友吗……哈，真不赖。这辈子就让你当我一辈子的对手吧！\"",
-                     "Chie: \"燃烧吧！直到最后一刻都不许倒下——因为我会把你拉起来！\"",
+                     "Chie: \"Heh, right on time! I was just itching for a spar. Don't hold back!\"",
+                     "Chie: \"Not bad, you actually kept up with me. Guess you've got some moves.\"",
+                     "Chie: \"Listen up! If you're teaming up with me, you'd better be ready to push past your limits!\"",
+                     "Chie: \"I'll crush anyone who tries to hurt you. That's my way of protecting what matters!\"",
+                     "Chie: \"Ha! See that? That's our combo move. Unstoppable!\"",
+                     "Chie: \"Whatever stands in our way, no matter who it is, just kick it all down!\"",
+                     "Chie: \"Strength isn't for bullying the weak. I'll use these hands to protect everyone I love!\"",
+                     "Chie: \"Thanks... for believing in me when I didn't. In return, I'll get stronger, so strong you'll rely on me!\"",
+                     "Chie: \"Every step we took wasn't for nothing. Each one is proof of our bond!\"",
+                     "Chie: \"Rival and best friend, huh? Heh, not bad. You're stuck as my opponent for life!\"",
+                     "Chie: \"Burn! Don't you dare fall until the very end, because I'll drag you back up!\"",
                  });
         if (SocialLinkRankData *r3 = c->rankData(3))
         {
@@ -403,17 +409,17 @@ void GameManager::initSocialLinkRankData()
     if (SocialLink *y = socialLinkManager_.getLink("sl_yukiko"))
     {
         fill(*y, {
-                     "Yukiko: \"啊……欢迎。茶已经准备好了。请、请坐吧……\"",
-                     "Yukiko: \"和你在一起的时候，心里就会变得很平静……这是为什么呢？\"",
-                     "Yukiko: \"最近总是在想……如果我能再勇敢一点，是不是就能更接近你了？\"",
-                     "Yukiko: \"你……你愿意告诉我，真正的『自由』是什么吗？我想知道。\"",
-                     "Yukiko: \"家族、传统、束缚……那些东西，我开始想用自己的方式去理解了。\"",
-                     "Yukiko: \"谢谢你……一直陪在我身边。这份温暖，我会永远珍藏的。\"",
-                     "Yukiko: \"我也想……成为能支撑你的人。不是一直被保护，而是可以并肩前行。\"",
-                     "Yukiko: \"已经不怕了。因为只要你在，就算黑暗也会变得温柔……对吧？\"",
-                     "Yukiko: \"无论未来怎样，我都会微笑着面对。因为……你教给了我勇气。\"",
-                     "Yukiko: \"你是……我最重要的人。比任何事物都要珍贵。\"",
-                     "Yukiko: \"让我们走吧……一起，走向那道光芒的尽头。我会一直、一直在你身边。\"",
+                     "Yukiko: \"Oh... welcome. I've prepared some tea. Please, sit down.\"",
+                     "Yukiko: \"Whenever I'm with you, my heart feels so calm. I wonder why?\"",
+                     "Yukiko: \"Lately I keep thinking... if I were braver, could I get closer to you?\"",
+                     "Yukiko: \"Would you... tell me what true freedom really is? I want to know.\"",
+                     "Yukiko: \"Family, tradition, duty... I'm starting to see them in my own way now.\"",
+                     "Yukiko: \"Thank you... for always staying by my side. I'll treasure this warmth forever.\"",
+                     "Yukiko: \"I want to be someone you can lean on too. Not always protected, but standing beside you.\"",
+                     "Yukiko: \"I'm not afraid anymore. Because with you here, even the dark feels gentle... right?\"",
+                     "Yukiko: \"No matter what tomorrow brings, I'll face it with a smile. Because you taught me courage.\"",
+                     "Yukiko: \"You are... the most precious person to me. More than anything in this world.\"",
+                     "Yukiko: \"Let's walk together, toward the light at the end. I'll always, always be by your side.\"",
                  });
         if (SocialLinkRankData *r3 = y->rankData(3))
         {
@@ -439,11 +445,20 @@ void GameManager::initSocialLinkRankData()
 std::string GameManager::talkToNpc(const std::string &socialLinkId)
 {
     const int kDailyPoints = 10;
+
+    // Track talk count for this NPC today; only first 3 talks grant points.
+    int &count = talkCountToday_[socialLinkId];
+    bool canGain = (count < kMaxTalksPerNpc);
+
     int beforeRank = 0;
     if (const SocialLink *before = socialLinkManager_.getLink(socialLinkId))
         beforeRank = before->rank();
 
-    socialLinkManager_.addPoints(socialLinkId, kDailyPoints);
+    if (canGain)
+        socialLinkManager_.addPoints(socialLinkId, kDailyPoints);
+
+    // Increment talk count regardless (so even beyond 3, time still passes).
+    ++count;
 
     // Fire the rank-up callback for every rank gained during this talk so
     // the UI can play the 奶龙 laugh / fire-dance sound and show a banner.
@@ -458,7 +473,48 @@ std::string GameManager::talkToNpc(const std::string &socialLinkId)
     }
 
     recomputeSocialLinkBonuses();
+
+    // Each conversation costs 4 in-game hours.
+    advanceTime(kTalkCostHours);
+
     return socialLinkManager_.dialogueFor(socialLinkId);
+}
+
+std::string GameManager::timeString() const
+{
+    // Format: "Day 1  08:00"
+    std::string h = (hour_ < 10 ? "0" : "") + std::to_string(hour_);
+    return "Day " + std::to_string(day_) + "  " + h + ":00";
+}
+
+void GameManager::advanceTime(int hours)
+{
+    hour_ += hours;
+    while (hour_ >= 24)
+    {
+        hour_ -= 24;
+        day_++;
+    }
+    // Refresh daily talk counts when a new day reaches 8:00 AM.
+    if (day_ > lastRefreshDay_ && hour_ >= kDayStartHour)
+    {
+        talkCountToday_.clear();
+        lastRefreshDay_ = day_;
+    }
+}
+
+bool GameManager::canGainPoints(const std::string &npcId) const
+{
+    auto it = talkCountToday_.find(npcId);
+    if (it == talkCountToday_.end())
+        return true;
+    return it->second < kMaxTalksPerNpc;
+}
+
+int GameManager::talkCountToday(const std::string &npcId) const
+{
+    auto it = talkCountToday_.find(npcId);
+    return it != talkCountToday_.end() ? it->second : 0;
 }
 
 void GameManager::recomputeSocialLinkBonuses()

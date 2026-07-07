@@ -40,7 +40,12 @@ void SfmlRenderer::drawTexture(const std::string &textureId, const Vec2 &pos)
     {
         std::string path = "resources/textures/" + textureId + ".png";
         if (!loadTexture(textureId, path))
-            return;
+        {
+            // Fallback: try .jpg
+            path = "resources/textures/" + textureId + ".jpg";
+            if (!loadTexture(textureId, path))
+                return;
+        }
         it = textures_.find(textureId);
         if (it == textures_.end())
             return;
@@ -57,7 +62,12 @@ void SfmlRenderer::drawTexture(const std::string &textureId, const Rect &dstRect
     {
         std::string path = "resources/textures/" + textureId + ".png";
         if (!loadTexture(textureId, path))
-            return;
+        {
+            // Fallback: try .jpg
+            path = "resources/textures/" + textureId + ".jpg";
+            if (!loadTexture(textureId, path))
+                return;
+        }
         it = textures_.find(textureId);
         if (it == textures_.end())
             return;
@@ -123,10 +133,14 @@ void SfmlRenderer::loadDefaultResources()
     {
         for (const auto &entry : std::filesystem::directory_iterator(texturesDir))
         {
-            if (entry.is_regular_file() && entry.path().extension() == ".png")
+            if (entry.is_regular_file())
             {
-                std::string id = entry.path().stem().string();
-                loadTexture(id, entry.path().string());
+                auto ext = entry.path().extension().string();
+                if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
+                {
+                    std::string id = entry.path().stem().string();
+                    loadTexture(id, entry.path().string());
+                }
             }
         }
     }

@@ -5,6 +5,38 @@
 
 #include <algorithm>
 
+namespace
+{
+    void drawBorder(engine::IRenderer &r, float x, float y, float w, float h,
+                    engine::Color bright, engine::Color dark)
+    {
+        r.drawRect({x, y, w, 2}, bright);
+        r.drawRect({x, y + h - 2, w, 2}, bright);
+        r.drawRect({x, y, 2, h}, bright);
+        r.drawRect({x + w - 2, y, 2, h}, bright);
+        r.drawRect({x + 3, y + 3, w - 6, 1}, dark);
+        r.drawRect({x + 3, y + h - 4, w - 6, 1}, dark);
+        r.drawRect({x + 3, y + 3, 1, h - 6}, dark);
+        r.drawRect({x + w - 4, y + 3, 1, h - 6}, dark);
+    }
+
+    void drawPanel(engine::IRenderer &r, float x, float y, float w, float h,
+                   engine::Color fill, engine::Color bright, engine::Color dark)
+    {
+        r.drawRect({x + 4, y + 4, w, h}, engine::Color(0, 0, 0, 50));
+        r.drawRect({x, y, w, h}, fill);
+        drawBorder(r, x, y, w, h, bright, dark);
+    }
+
+    // Convert social link id "sl_yosuke" -> texture id "npc_yosuke"
+    std::string npcTexId(const std::string &socialLinkId)
+    {
+        if (socialLinkId.size() > 3 && socialLinkId.substr(0, 3) == "sl_")
+            return "npc_" + socialLinkId.substr(3);
+        return "npc_" + socialLinkId;
+    }
+} // namespace
+
 void SocialLinkScene::handleInput(engine::IInput &input)
 {
     if (input.wasKeyJustPressed(engine::Key::Escape))
@@ -42,9 +74,17 @@ void SocialLinkScene::render(engine::IRenderer &renderer)
 
     // Background
     renderer.drawTexture("town_bg", {0, 0, 800, 600});
+    renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 0, 60));
 
-    // Title
-    renderer.drawText("Social Link Panel", {280, 20}, 28, engine::Color::yellow());
+    // Title bar
+    engine::Color panelFill(18, 18, 32, 220);
+    engine::Color panelBright(120, 130, 180, 255);
+    engine::Color panelDark(8, 8, 16, 200);
+    engine::Color accent(180, 160, 50, 255);
+    engine::Color accentDark(60, 50, 20, 200);
+
+    drawPanel(renderer, 30, 15, 740, 50, panelFill, accent, accentDark);
+    renderer.drawText("Social Link Panel", {310, 25}, 26, engine::Color::yellow());
 
     auto links = GameManager::instance().socialLinkManager().allLinks();
     if (links.empty())
@@ -54,36 +94,61 @@ void SocialLinkScene::render(engine::IRenderer &renderer)
         return;
     }
 
-    // Draw list
+    // Draw list items
     for (size_t i = 0; i < links.size(); ++i)
     {
         float y = 80.0f + static_cast<float>(i) * kItemHeight - scrollY_;
         if (y < -kItemHeight || y > 620.0f)
-            continue; // cull off-screen
+            continue;
 
         const SocialLink *link = links[i];
         if (!link)
             continue;
 
-        // Selection highlight
-        if (static_cast<int>(i) == selectedIndex_)
+        bool selected = (static_cast<int>(i) == selectedIndex_);
+
+        // Row background panel
+        engine::Color rowBright = selected ? engine::Color(255, 220, 80, 255) : panelBright;
+        engine::Color rowFill = selected ? engine::Color(50, 40, 70, 225) : panelFill;
+        drawPanel(renderer, 40.0f, y, 720.0f, kItemHeight - 10.0f, rowFill, rowBright, panelDark);
+
+        // ---- NPC portrait (left side) ----
+        float portX = 55.0f, portY = y + 8.0f, portW = 85.0f, portH = 95.0f;
+        // Portrait background
+        renderer.drawRect({portX, portY, portW, portH}, engine::Color(35, 30, 50, 200));
+        // Draw NPC texture, fitted into the portrait frame
+        std::string texId = npcTexId(link->id());
+        renderer.drawTexture(texId, {portX + 3.0f, portY + 3.0f, portW - 6.0f, portH - 6.0f});
+        // Portrait border
+        drawBorder(renderer, portX, portY, portW, portH,
+                   selected ? accent : panelBright, panelDark);
+
+        // ---- Name and arcana ----
+        float textX = portX + portW + 20.0f;
+        renderer.drawText(link->name(), {textX, y + 12.0f}, 22,
+                          selected ? engine::Color::yellow() : engine::Color::white());
+        renderer.drawText("Arcana: " + link->arcana(), {textX, y + 42.0f}, 16, engine::Color::cyan());
+
+        // ---- Hearts ----
+        renderer.drawText("Bond:", {textX, y + 72.0f}, 14, engine::Color::gray());
+        drawHearts(renderer, textX + 50.0f, y + 72.0f, link->rank());
+
+        // ---- Rank number (right side) ----
+        std::string rankStr = "Rank " + std::to_string(link->rank()) + " / 10";
+        renderer.drawText(rankStr, {620.0f, y + 35.0f}, 20,
+                          selected ? engine::Color::yellow() : engine::Color(200, 200, 200, 255));
+
+        // Points to next rank
+        if (!link->isMaxRank())
         {
-            renderer.drawRect({50.0f, y, 700.0f, kItemHeight - 10.0f}, engine::Color(80, 60, 100, 200));
+            renderer.drawText(std::to_string(link->points()) + " / " +
+                                  std::to_string(link->pointsToNextRank()) + " pts",
+                              {620.0f, y + 65.0f}, 14, engine::Color::gray());
         }
-
-        // Avatar placeholder (left side)
-        renderer.drawRect({70.0f, y + 10.0f, 80.0f, 90.0f}, engine::Color(60, 40, 80, 200));
-        renderer.drawText(link->name(), {80.0f, y + 40.0f}, 14, engine::Color::white());
-
-        // Name and arcana
-        renderer.drawText(link->name(), {170.0f, y + 15.0f}, 22, engine::Color::white());
-        renderer.drawText(link->arcana(), {170.0f, y + 45.0f}, 16, engine::Color::cyan());
-
-        // Hearts (ai xin shu liang)
-        drawHearts(renderer, 170.0f, y + 72.0f, link->rank());
-
-        // Rank number
-        renderer.drawText("Rank " + std::to_string(link->rank()), {600.0f, y + 30.0f}, 18, engine::Color::yellow());
+        else
+        {
+            renderer.drawText("MAX", {640.0f, y + 65.0f}, 16, engine::Color(255, 200, 50, 255));
+        }
     }
 
     // Scroll indicator
@@ -92,38 +157,42 @@ void SocialLinkScene::render(engine::IRenderer &renderer)
     {
         float barHeight = 400.0f;
         float thumbHeight = barHeight * 4.0f / static_cast<float>(total);
-        float thumbY = 80.0f + (barHeight - thumbHeight) * (scrollY_ / ((total - 4) * kItemHeight));
-        renderer.drawRect({760.0f, thumbY, 8.0f, thumbHeight}, engine::Color(200, 200, 200, 180));
+        float maxScroll = (total - 4) * kItemHeight;
+        float scrollRatio = maxScroll > 0 ? scrollY_ / maxScroll : 0;
+        float thumbY = 80.0f + (barHeight - thumbHeight) * scrollRatio;
+        renderer.drawRect({765.0f, 80.0f, 6.0f, barHeight}, engine::Color(40, 40, 50, 180));
+        renderer.drawRect({765.0f, thumbY, 6.0f, thumbHeight}, engine::Color(200, 200, 200, 200));
     }
 
     // Instructions
-    renderer.drawText("Up/Down: select  Esc: back", {250, 570}, 16, engine::Color::gray());
+    renderer.drawText("Up/Down: select   Esc: back", {280, 575}, 16, engine::Color::gray());
 }
 
 void SocialLinkScene::drawHearts(engine::IRenderer &renderer, float x, float y, int rank) const
 {
-    // Map rank 0..10 to hearts 0..5 (each heart = 2 ranks)
     int fullHearts = rank / 2;
     bool hasHalf = (rank % 2) != 0;
 
     for (int i = 0; i < 5; ++i)
     {
-        float heartX = x + static_cast<float>(i) * 26.0f;
+        float heartX = x + static_cast<float>(i) * 24.0f;
+        // Heart background slot
+        renderer.drawRect({heartX - 1, y - 1, 20.0f, 20.0f}, engine::Color(20, 20, 30, 200));
+
         if (i < fullHearts)
         {
-            // Full heart - bright red
-            renderer.drawRect({heartX, y, 20.0f, 20.0f}, engine::Color(255, 50, 50, 230));
+            renderer.drawRect({heartX, y, 18.0f, 18.0f}, engine::Color(255, 60, 60, 240));
+            renderer.drawRect({heartX + 3, y + 3, 4, 4}, engine::Color(255, 180, 180, 180));
         }
         else if (i == fullHearts && hasHalf)
         {
-            // Half heart - left half red, right half gray
-            renderer.drawRect({heartX, y, 10.0f, 20.0f}, engine::Color(255, 50, 50, 230));
-            renderer.drawRect({heartX + 10.0f, y, 10.0f, 20.0f}, engine::Color(100, 100, 100, 150));
+            renderer.drawRect({heartX, y, 9.0f, 18.0f}, engine::Color(255, 60, 60, 240));
+            renderer.drawRect({heartX + 9.0f, y, 9.0f, 18.0f}, engine::Color(60, 60, 70, 200));
+            renderer.drawRect({heartX + 2, y + 3, 3, 4}, engine::Color(255, 180, 180, 180));
         }
         else
         {
-            // Empty heart - dark gray
-            renderer.drawRect({heartX, y, 20.0f, 20.0f}, engine::Color(100, 100, 100, 150));
+            renderer.drawRect({heartX, y, 18.0f, 18.0f}, engine::Color(60, 60, 70, 200));
         }
     }
 }

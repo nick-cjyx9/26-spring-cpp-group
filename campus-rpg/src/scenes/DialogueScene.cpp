@@ -3,6 +3,67 @@
 #include "SocialLinkManager.h"
 #include "SocialLink.h"
 
+namespace
+{
+    // Draw a refined double-line border: outer thin bright + inner thin dark.
+    void drawBorder(engine::IRenderer &r, float x, float y, float w, float h,
+                    engine::Color bright, engine::Color dark)
+    {
+        // Outer bright line
+        r.drawRect({x, y, w, 2}, bright);
+        r.drawRect({x, y + h - 2, w, 2}, bright);
+        r.drawRect({x, y, 2, h}, bright);
+        r.drawRect({x + w - 2, y, 2, h}, bright);
+        // Inner dark line (1px inset)
+        r.drawRect({x + 3, y + 3, w - 6, 1}, dark);
+        r.drawRect({x + 3, y + h - 4, w - 6, 1}, dark);
+        r.drawRect({x + 3, y + 3, 1, h - 6}, dark);
+        r.drawRect({x + w - 4, y + 3, 1, h - 6}, dark);
+    }
+
+    // Draw a soft drop shadow below-right of a rect.
+    void drawShadow(engine::IRenderer &r, float x, float y, float w, float h, float offset = 4.0f)
+    {
+        r.drawRect({x + offset, y + offset, w, h}, engine::Color(0, 0, 0, 60));
+    }
+
+    // Draw a panel: shadow + semi-transparent fill + double border.
+    void drawPanel(engine::IRenderer &r, float x, float y, float w, float h,
+                   engine::Color fill, engine::Color bright, engine::Color dark)
+    {
+        drawShadow(r, x, y, w, h);
+        r.drawRect({x, y, w, h}, fill);
+        drawBorder(r, x, y, w, h, bright, dark);
+    }
+
+    // Wrap text so no line exceeds maxChars characters.
+    // Breaks at spaces when possible; inserts '\n' between lines.
+    std::string wrapText(const std::string &text, size_t maxChars)
+    {
+        std::string result;
+        size_t pos = 0;
+        while (pos < text.size())
+        {
+            if (pos + maxChars >= text.size())
+            {
+                result += text.substr(pos);
+                break;
+            }
+            // Find last space within the limit
+            size_t breakPos = text.rfind(' ', pos + maxChars);
+            if (breakPos == std::string::npos || breakPos <= pos)
+            {
+                // No space found, hard break
+                breakPos = pos + maxChars;
+            }
+            result += text.substr(pos, breakPos - pos);
+            result += "\n";
+            pos = (breakPos < text.size() && text[breakPos] == ' ') ? breakPos + 1 : breakPos;
+        }
+        return result;
+    }
+} // namespace
+
 void DialogueScene::handleInput(engine::IInput &input)
 {
     if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E) ||
@@ -37,13 +98,18 @@ void DialogueScene::update(float /*deltaTime*/)
                 npcId_ = static_cast<NpcEntity *>(npc)->socialLinkId();
         }
 
-        // Resolve texture ids once per scene entry.
-        if (!npcId_.empty())
+        if (!npcId_.empty() && npcId_.size() > 3 && npcId_.substr(0, 3) == "sl_")
         {
-            avatarTexId_ = "npc_" + npcId_ + "_avatar";
-            fullTexId_ = "npc_" + npcId_ + "_full";
-            hasTextures_ = true;
+            std::string base = npcId_.substr(3);
+            npcTexId_ = "npc_" + base;
+            hasNpcTex_ = true;
         }
+
+        int heroIdx = GameManager::instance().selectedHeroIndex();
+        heroTexId_ = "hero_" + std::to_string(heroIdx);
+        hasHeroTex_ = true;
+
+        playerName_ = GameManager::instance().character().name();
 
         int beforeRank = 0;
         if (const SocialLink *before = GameManager::instance().socialLinkManager().getLink(npcId_))
@@ -62,7 +128,7 @@ void DialogueScene::update(float /*deltaTime*/)
 
     if (showRankUpBanner_)
     {
-        rankUpTimer_ -= 0.016f; // approximate per-frame delta
+        rankUpTimer_ -= 0.016f;
         if (rankUpTimer_ <= 0.0f)
             showRankUpBanner_ = false;
     }
@@ -73,95 +139,163 @@ void DialogueScene::render(engine::IRenderer &renderer)
     renderer.clear();
 
     SocialLink *link = GameManager::instance().socialLinkManager().getLink(npcId_);
-    std::string name = link ? link->name() : "???";
+    std::string npcName = link ? link->name() : "???";
     int rank = link ? link->rank() : 0;
 
-    // ---- Town background ----
+    // ---- Background: town_bg scaled to fill ----
     renderer.drawTexture("town_bg", {0, 0, 800, 600});
 
-    // ---- Bottom dialogue box ----
-    renderer.drawRect({50, 400, 700, 150}, engine::Color(20, 20, 40, 230));
-    renderer.drawText("Talking with " + name + "  (Rank " + std::to_string(rank) + ")",
-                      {70, 415}, 22, engine::Color::cyan());
-    renderer.drawText(dialogueText_.empty() ? "\"...\"" : dialogueText_, {70, 460}, 20, engine::Color::white());
-    renderer.drawText("Enter/Esc: continue", {70, 520}, 14, engine::Color::gray());
+    // Subtle dark overlay so UI panels pop
+    renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 0, 50));
 
-    // ---- Top-left: small NPC avatar (tou xiang) ----
-    if (hasTextures_)
-    {
-        renderer.drawTexture(avatarTexId_, {20, 20, 80, 80});
-    }
+    // Color palette
+    engine::Color panelFill(18, 18, 32, 215);
+    engine::Color panelBright(120, 130, 180, 255);
+    engine::Color panelDark(8, 8, 16, 200);
+    engine::Color nameFill(40, 35, 60, 235);
+    engine::Color accent(180, 160, 50, 255);
+    engine::Color accentDark(60, 50, 20, 200);
+
+    // ================================================================
+    // RIGHT: NPC portrait panel
+    // ================================================================
+    float npcX = 545.0f, npcY = 55.0f, npcW = 240.0f, npcH = 410.0f;
+    drawPanel(renderer, npcX, npcY, npcW, npcH, panelFill, panelBright, panelDark);
+
+    // NPC portrait image
+    float portraitY = npcY + 12.0f;
+    float portraitH = npcH - 100.0f;
+    if (hasNpcTex_)
+        renderer.drawTexture(npcTexId_, {npcX + 12.0f, portraitY, npcW - 24.0f, portraitH});
     else
     {
-        // Fallback: colored rectangle with name
-        renderer.drawRect({20, 20, 80, 80}, engine::Color(60, 40, 80, 200));
-        renderer.drawText(name, {30, 45}, 14, engine::Color::white());
+        renderer.drawRect({npcX + 12.0f, portraitY, npcW - 24.0f, portraitH},
+                          engine::Color(50, 40, 70, 180));
+        renderer.drawText(npcName, {npcX + 70.0f, portraitY + portraitH / 2.0f}, 18, engine::Color::white());
     }
 
-    // ---- Bottom-right: full NPC sprite (li hui) ----
-    // Draw slightly higher to make room for hearts below
-    if (hasTextures_)
-    {
-        renderer.drawTexture(fullTexId_, {500, 180, 280, 340});
-    }
+    // Inner border around portrait image
+    drawBorder(renderer, npcX + 10.0f, portraitY - 2.0f, npcW - 20.0f, portraitH + 4.0f,
+               engine::Color(80, 80, 110, 200), engine::Color(20, 20, 30, 200));
+
+    // NPC name tag (inside panel, below portrait)
+    float nameTagY = npcY + npcH - 72.0f;
+    drawPanel(renderer, npcX + 16.0f, nameTagY, npcW - 32.0f, 32.0f,
+              nameFill, accent, accentDark);
+    renderer.drawText(npcName, {npcX + 28.0f, nameTagY + 7.0f}, 18, engine::Color::white());
+
+    // Rank hearts row
+    float rankY = npcY + npcH - 28.0f;
+    renderer.drawText("Rank", {npcX + 16.0f, rankY}, 14, engine::Color::gray());
+    drawHearts(renderer, npcX + 60.0f, rankY, rank);
+
+    // ================================================================
+    // LEFT: Protagonist portrait panel
+    // ================================================================
+    float heroX = 15.0f, heroY = 175.0f, heroW = 175.0f, heroH = 290.0f;
+    drawPanel(renderer, heroX, heroY, heroW, heroH, panelFill, panelBright, panelDark);
+
+    // Hero portrait
+    float heroPortY = heroY + 12.0f;
+    float heroPortH = heroH - 80.0f;
+    if (hasHeroTex_)
+        renderer.drawTexture(heroTexId_, {heroX + 12.0f, heroPortY, heroW - 24.0f, heroPortH});
     else
-    {
-        // Fallback: larger colored rectangle
-        renderer.drawRect({500, 180, 280, 340}, engine::Color(40, 40, 60, 180));
-        renderer.drawText(name + "\nFull Art", {550, 330}, 18, engine::Color::white());
-    }
+        renderer.drawRect({heroX + 12.0f, heroPortY, heroW - 24.0f, heroPortH},
+                          engine::Color(50, 50, 70, 180));
 
-    // ---- Hearts under NPC sprite ----
-    drawHearts(renderer, 500.0f, 530.0f, rank);
+    drawBorder(renderer, heroX + 10.0f, heroPortY - 2.0f, heroW - 20.0f, heroPortH + 4.0f,
+               engine::Color(80, 80, 110, 200), engine::Color(20, 20, 30, 200));
 
-    // ---- Bottom-left: protagonist mini-sprite (ren wu li hui) ----
-    {
-        renderer.drawRect({20, 300, 120, 90}, engine::Color(50, 50, 70, 180));
-        renderer.drawText("Protagonist", {30, 325}, 14, engine::Color::white());
-    }
+    // Player name tag
+    float pNameY = heroY + heroH - 55.0f;
+    drawPanel(renderer, heroX + 14.0f, pNameY, heroW - 28.0f, 30.0f,
+              nameFill, accent, accentDark);
+    renderer.drawText(playerName_.empty() ? "Hero" : playerName_,
+                      {heroX + 24.0f, pNameY + 6.0f}, 16, engine::Color::white());
 
-    // ---- Center-top: Rank-Up banner ----
+    // ================================================================
+    // CENTER: Dialogue box
+    // ================================================================
+    float dlgX = 205.0f, dlgY = 365.0f, dlgW = 325.0f, dlgH = 210.0f;
+    drawPanel(renderer, dlgX, dlgY, dlgW, dlgH, panelFill, panelBright, panelDark);
+
+    // NPC name tag on top edge of dialogue box (straddling the border)
+    float tagW = 140.0f;
+    float tagX = dlgX + 16.0f;
+    float tagY = dlgY - 16.0f;
+    drawShadow(renderer, tagX, tagY, tagW, 30.0f, 3.0f);
+    renderer.drawRect({tagX, tagY, tagW, 30.0f}, nameFill);
+    drawBorder(renderer, tagX, tagY, tagW, 30.0f, accent, accentDark);
+    renderer.drawText(npcName, {tagX + 12.0f, tagY + 6.0f}, 17, engine::Color::white());
+
+    // Dialogue text (wrapped to fit the box width)
+    // Box is 325px wide, 32px padding total, font 16px (~8px/char) => ~36 chars/line
+    std::string wrapped = wrapText(dialogueText_.empty() ? "\"...\"" : dialogueText_, 36);
+    renderer.drawText(wrapped, {dlgX + 16.0f, dlgY + 28.0f}, 16, engine::Color::white());
+
+    // Continue hint at bottom of dialogue box
+    int remaining = GameManager::kMaxTalksPerNpc - GameManager::instance().talkCountToday(npcId_);
+    renderer.drawText("Enter / Esc to continue   Today's talks left: " + std::to_string(remaining > 0 ? remaining : 0),
+                      {dlgX + 16.0f, dlgY + dlgH - 22.0f}, 12, engine::Color(120, 120, 140, 255));
+
+    // ================================================================
+    // TOP CENTER: Rank-Up banner (overlay)
+    // ================================================================
     if (showRankUpBanner_)
     {
-        // Semi-transparent dark overlay behind banner
-        renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 0, 120));
+        // Full screen dim
+        renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 0, 130));
 
-        // Banner box
-        renderer.drawRect({200, 50, 400, 80}, engine::Color(200, 50, 50, 220));
-        renderer.drawText("RANK UP!!", {280, 65}, 36, engine::Color(255, 255, 0, 255));
-        renderer.drawText(name + " reached Rank " + std::to_string(rank) + "!",
-                          {240, 110}, 20, engine::Color::white());
+        // Banner panel
+        float bX = 200.0f, bY = 40.0f, bW = 400.0f, bH = 80.0f;
+        engine::Color bannerFill(120, 30, 30, 235);
+        engine::Color bannerBright(255, 220, 80, 255);
+        engine::Color bannerDark(40, 10, 10, 200);
+        drawPanel(renderer, bX, bY, bW, bH, bannerFill, bannerBright, bannerDark);
 
-        // Flash effect: bright border
-        unsigned char alpha = static_cast<unsigned char>(rankUpTimer_ / kRankUpDuration * 255);
-        renderer.drawRect({198, 48, 404, 84}, engine::Color(255, 200, 0, alpha));
+        renderer.drawText("RANK UP !!", {bX + 120.0f, bY + 10.0f}, 30,
+                          engine::Color(255, 255, 0, 255));
+        renderer.drawText(npcName + " reached Rank " + std::to_string(rank) + "!",
+                          {bX + 90.0f, bY + 50.0f}, 18, engine::Color::white());
+
+        // Pulsing glow border
+        unsigned char glow = static_cast<unsigned char>(
+            120 + 100.0f * (rankUpTimer_ / kRankUpDuration));
+        renderer.drawRect({bX - 2, bY - 2, bW + 4, bH + 4},
+                          engine::Color(255, 200, 0, glow));
     }
 }
 
 void DialogueScene::drawHearts(engine::IRenderer &renderer, float x, float y, int rank) const
 {
-    // Map rank 0..10 to hearts 0..5 (each heart = 2 ranks)
     int fullHearts = rank / 2;
     bool hasHalf = (rank % 2) != 0;
 
     for (int i = 0; i < 5; ++i)
     {
-        float heartX = x + static_cast<float>(i) * 26.0f;
+        float heartX = x + static_cast<float>(i) * 22.0f;
+        // Heart background slot (dark)
+        renderer.drawRect({heartX - 1, y - 1, 20.0f, 20.0f}, engine::Color(20, 20, 30, 200));
+
         if (i < fullHearts)
         {
             // Full heart - bright red
-            renderer.drawRect({heartX, y, 20.0f, 20.0f}, engine::Color(255, 50, 50, 230));
+            renderer.drawRect({heartX, y, 18.0f, 18.0f}, engine::Color(255, 60, 60, 240));
+            // Highlight pixel
+            renderer.drawRect({heartX + 3, y + 3, 4, 4}, engine::Color(255, 180, 180, 180));
         }
         else if (i == fullHearts && hasHalf)
         {
-            // Half heart - left half red, right half gray
-            renderer.drawRect({heartX, y, 10.0f, 20.0f}, engine::Color(255, 50, 50, 230));
-            renderer.drawRect({heartX + 10.0f, y, 10.0f, 20.0f}, engine::Color(100, 100, 100, 150));
+            // Half heart - left red, right dark
+            renderer.drawRect({heartX, y, 9.0f, 18.0f}, engine::Color(255, 60, 60, 240));
+            renderer.drawRect({heartX + 9.0f, y, 9.0f, 18.0f}, engine::Color(60, 60, 70, 200));
+            renderer.drawRect({heartX + 2, y + 3, 3, 4}, engine::Color(255, 180, 180, 180));
         }
         else
         {
             // Empty heart - dark gray
-            renderer.drawRect({heartX, y, 20.0f, 20.0f}, engine::Color(100, 100, 100, 150));
+            renderer.drawRect({heartX, y, 18.0f, 18.0f}, engine::Color(60, 60, 70, 200));
         }
     }
 }

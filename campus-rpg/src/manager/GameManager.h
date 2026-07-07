@@ -10,6 +10,7 @@
 #include "TileMap.h"
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -131,6 +132,22 @@ public:
     int selectedHeroIndex() const { return selectedHeroIndex_; }
     void setSelectedHeroIndex(int idx) { selectedHeroIndex_ = idx; }
 
+    // ---- Time system ----
+    // Day starts at 1, hour starts at 8 (8 AM). Each talk = +4h, each battle = +4h.
+    // Moving 4 tiles = +1h. Talk-count refreshes at 8 AM on a new day.
+    int day() const { return day_; }
+    int hour() const { return hour_; }
+    std::string timeString() const; // e.g. "Day 1  08:00"
+    void advanceTime(int hours);
+    // Whether this NPC can still grant Social Link points today (max 3 talks/day).
+    bool canGainPoints(const std::string &npcId) const;
+    int talkCountToday(const std::string &npcId) const;
+    static constexpr int kMaxTalksPerNpc = 3;
+    static constexpr int kTalkCostHours = 4;
+    static constexpr int kBattleCostHours = 4;
+    static constexpr int kTilesPerHour = 4;
+    static constexpr int kDayStartHour = 8;
+
 private:
     GameManager() = default;
 
@@ -156,6 +173,12 @@ private:
     bool shouldQuit_ = false;
     int currentSlotId_ = 1;
     int selectedHeroIndex_ = 0;
+
+    // Time system
+    int day_ = 1;
+    int hour_ = kDayStartHour;
+    int lastRefreshDay_ = 1;
+    std::map<std::string, int> talkCountToday_;
 
     RankUpCallback rankUpCallback_;
 };

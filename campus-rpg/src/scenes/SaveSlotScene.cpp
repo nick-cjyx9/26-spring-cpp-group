@@ -23,8 +23,11 @@ SaveSlotScene::SaveSlotScene(Mode mode) : mode_(mode)
 {
     if (mode_ == Mode::Create)
     {
-        // Directly enter hero selection scene instead of naming here.
-        GameManager::instance().enterScene(SceneType::HeroSelect);
+        // Legacy naming flow (kept for compatibility; the primary new-game
+        // entry is now HeroSelectScene, reached directly from TitleScene).
+        subState_ = SubState::Naming;
+        nameBuffer_.clear();
+        message_ = "Enter character id, then press Enter.";
     }
     else
     {

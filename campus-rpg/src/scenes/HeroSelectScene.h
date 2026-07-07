@@ -6,7 +6,8 @@
 #include <vector>
 
 // Hero selection screen shown when creating a new save.
-// 4 heroes available, switch with Left/Right, type name, Enter to confirm.
+// Carousel layout: big portrait in center, small portraits on left/right,
+// name input at top, left/right switch buttons at bottom.
 class HeroSelectScene : public engine::IScene
 {
 public:

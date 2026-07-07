@@ -16,16 +16,20 @@ private:
     std::string dialogueText_;
     bool firstFrame_ = true;
 
-    // Rank-up banner state (shown when a rank-up occurs during this talk).
+    // Rank-up banner state
     bool showRankUpBanner_ = false;
     float rankUpTimer_ = 0.0f;
-    static constexpr float kRankUpDuration = 2.5f; // seconds the banner stays visible
+    static constexpr float kRankUpDuration = 2.5f;
 
-    // Cached texture IDs so we don't rebuild strings every frame.
-    std::string avatarTexId_; // small portrait top-left
-    std::string fullTexId_;   // full sprite bottom-right
-    bool hasTextures_ = false;
+    // NPC texture
+    std::string npcTexId_;
+    bool hasNpcTex_ = false;
 
-    // Draws 5 heart slots below the NPC sprite.
+    // Hero (protagonist) texture + name
+    std::string heroTexId_;
+    bool hasHeroTex_ = false;
+    std::string playerName_;
+
+    // Draws 5 heart slots representing the bond rank.
     void drawHearts(engine::IRenderer &renderer, float x, float y, int rank) const;
 };
