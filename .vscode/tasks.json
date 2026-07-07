@@ -2,35 +2,26 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "cmake-configure",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "-B", "build",
-        "-S", ".",
-        "-DCMAKE_BUILD_TYPE=Release",
-        "-G", "MinGW Makefiles",
-        "-DCMAKE_C_COMPILER=${env:MINGW_BIN}/gcc.exe",
-        "-DCMAKE_CXX_COMPILER=${env:MINGW_BIN}/g++.exe"
-      ],
-      "options": { "cwd": "${workspaceFolder}/campus-rpg" },
-      "problemMatcher": []
-    },
-    {
       "label": "cmake-build",
       "type": "shell",
       "command": "cmake",
-      "args": ["--build", "build", "--config", "Release", "--parallel"],
+      "args": [
+        "--build",
+        "${command:cmake.buildDirectory}"
+      ],
       "options": { "cwd": "${workspaceFolder}/campus-rpg" },
       "group": { "kind": "build", "isDefault": true },
-      "dependsOn": "cmake-configure",
       "problemMatcher": ["$gcc"]
     },
     {
       "label": "cmake-test",
       "type": "shell",
       "command": "ctest",
-      "args": ["--test-dir", "build", "-C", "Release", "--output-on-failure"],
+      "args": [
+        "--test-dir",
+        "${command:cmake.buildDirectory}",
+        "--output-on-failure"
+      ],
       "options": { "cwd": "${workspaceFolder}/campus-rpg" },
       "dependsOn": "cmake-build",
       "problemMatcher": []
@@ -38,8 +29,8 @@
     {
       "label": "run-app",
       "type": "shell",
-      "command": "${workspaceFolder}/campus-rpg/build/CampusRPG.exe",
-      "options": { "cwd": "${workspaceFolder}/campus-rpg/build" },
+      "command": "${command:cmake.launchTargetPath}",
+      "options": { "cwd": "${command:cmake.launchTargetDirectory}" },
       "dependsOn": "cmake-build",
       "problemMatcher": []
     }

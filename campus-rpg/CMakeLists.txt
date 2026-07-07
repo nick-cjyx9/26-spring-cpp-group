@@ -11,27 +11,48 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# ---- Fetch SFML ----
+# ---- Options ----
+# Allow advanced users to skip FetchContent and link against a local install.
+option(CAMPUS_RPG_USE_SYSTEM_SFML "Use system/installed SFML instead of FetchContent" OFF)
+option(CAMPUS_RPG_USE_SYSTEM_SQLITE3 "Use system/installed SQLite3 instead of FetchContent" OFF)
+option(CAMPUS_RPG_BUILD_TESTS "Build the CampusRPGTests target" ON)
+
+# ---- Dependencies ----
 include(FetchContent)
-FetchContent_Declare(
-    SFML
-    GIT_REPOSITORY https://github.com/SFML/SFML.git
-    GIT_TAG 2.6.1
-)
-FetchContent_MakeAvailable(SFML)
 
-# ---- Fetch SQLite3 ----
-FetchContent_Declare(
-    sqlite3
-    URL https://www.sqlite.org/2024/sqlite-amalgamation-3450200.zip
-)
-FetchContent_MakeAvailable(sqlite3)
+# SFML
+if(CAMPUS_RPG_USE_SYSTEM_SFML)
+    find_package(SFML 2.6 COMPONENTS graphics window system REQUIRED)
+else()
+    FetchContent_Declare(
+        SFML
+        GIT_REPOSITORY https://github.com/SFML/SFML.git
+        GIT_TAG 2.6.1
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(SFML)
+endif()
 
-# SQLite3 amalgamation provides sqlite3.c / sqlite3.h.
-find_package(Threads REQUIRED)
-add_library(SQLite3 STATIC ${sqlite3_SOURCE_DIR}/sqlite3.c)
-target_include_directories(SQLite3 PUBLIC ${sqlite3_SOURCE_DIR})
-target_link_libraries(SQLite3 PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+# SQLite3
+if(CAMPUS_RPG_USE_SYSTEM_SQLITE3)
+    find_package(SQLite3 REQUIRED)
+    # Provide a namespaced target alias if the system package did not create one.
+    if(NOT TARGET SQLite::SQLite3 AND TARGET SQLite3::SQLite3)
+        add_library(SQLite::SQLite3 ALIAS SQLite3::SQLite3)
+    endif()
+else()
+    FetchContent_Declare(
+        sqlite3
+        URL https://www.sqlite.org/2024/sqlite-amalgamation-3450200.zip
+    )
+    FetchContent_MakeAvailable(sqlite3)
+
+    # SQLite3 amalgamation provides sqlite3.c / sqlite3.h.
+    find_package(Threads REQUIRED)
+    add_library(SQLite3 STATIC ${sqlite3_SOURCE_DIR}/sqlite3.c)
+    target_include_directories(SQLite3 PUBLIC ${sqlite3_SOURCE_DIR})
+    target_link_libraries(SQLite3 PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+endif()
 
 # ---- Core static library (pure C++ domain models, no SFML/SQLite) ----
 set(CORE_SOURCES
@@ -59,21 +80,13 @@ target_include_directories(CampusRPGCore PUBLIC
 )
 
 # ---- Engine interface library ----
-set(ENGINE_INTERFACE_SOURCES
-    src/engine/interfaces/EngineTypes.h
-    src/engine/interfaces/IRenderer.h
-    src/engine/interfaces/IWindow.h
-    src/engine/interfaces/IInput.h
-    src/engine/interfaces/IScene.h
-)
-
 add_library(CampusRPGEngineInterface INTERFACE)
 target_include_directories(CampusRPGEngineInterface INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/interfaces
 )
 
-# ---- App library (data + manager + engine interfaces + scenes) ----
+# ---- App library (data + manager + scenes) ----
 set(APP_LIB_SOURCES
     src/data/DatabaseManager.cpp
     src/data/SaveRepository.cpp
@@ -99,7 +112,7 @@ target_include_directories(CampusRPGAppLib PUBLIC
 target_link_libraries(CampusRPGAppLib PUBLIC
     CampusRPGCore
     CampusRPGEngineInterface
-    SQLite3
+    $<IF:$<BOOL:${CAMPUS_RPG_USE_SYSTEM_SQLITE3}>,SQLite::SQLite3,SQLite3>
 )
 
 # ---- Main executable (SFML implementation) ----
@@ -118,14 +131,24 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/sfml
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    CampusRPGAppLib
-    sfml-graphics
-    sfml-window
-    sfml-system
-)
+if(CAMPUS_RPG_USE_SYSTEM_SFML)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        CampusRPGAppLib
+        SFML::graphics
+        SFML::window
+        SFML::system
+    )
+else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        CampusRPGAppLib
+        sfml-graphics
+        sfml-window
+        sfml-system
+    )
+endif()
 
 # Copy lightweight runtime resources next to the executable.
+# Note: copy_directory_if_different requires CMake 3.26+; use copy_directory for 3.20 compatibility.
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/resources/textures
@@ -136,15 +159,19 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources/fonts)
 
 # Copy SFML DLLs next to the executable on Windows so the app can run without extra PATH setup.
-if (WIN32)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:sfml-graphics>
-            $<TARGET_FILE:sfml-window>
-            $<TARGET_FILE:sfml-system>
-            $<TARGET_FILE_DIR:${PROJECT_NAME}>)
+if(WIN32 AND NOT CAMPUS_RPG_USE_SYSTEM_SFML)
+    foreach(sfml_target sfml-graphics sfml-window sfml-system)
+        if(TARGET ${sfml_target})
+            add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:${sfml_target}>
+                    $<TARGET_FILE_DIR:${PROJECT_NAME}>)
+        endif()
+    endforeach()
 endif()
 
 # ---- Testing ----
-enable_testing()
-add_subdirectory(tests)
+if(CAMPUS_RPG_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

@@ -2,13 +2,13 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug CampusRPG (MinGW/gdb)",
+      "name": "Debug CampusRPG (GDB / MinGW)",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/campus-rpg/build/CampusRPG.exe",
+      "program": "${command:cmake.launchTargetPath}",
       "args": [],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/campus-rpg/build",
+      "cwd": "${command:cmake.launchTargetDirectory}",
       "environment": [],
       "externalConsole": true,
       "MIMode": "gdb",
@@ -19,16 +19,17 @@
           "ignoreFailures": true
         }
       ],
-      "preLaunchTask": "cmake-build"
+      "preLaunchTask": "cmake-build",
+      "visualizerFile": "c:\\Users\\Nick\\AppData\\Roaming\\Code\\User\\workspaceStorage\\8fb5bef46c071bb2a8a02e3aa95925c6\\tonka3000.qtvsctools\\qt.natvis.xml"
     },
     {
-      "name": "Debug CampusRPGTests (MinGW/gdb)",
+      "name": "Debug CampusRPGTests (GDB / MinGW)",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/campus-rpg/build/tests/CampusRPGTests.exe",
+      "program": "${command:cmake.buildDirectory}/tests/CampusRPGTests.exe",
       "args": [],
       "stopAtEntry": false,
-      "cwd": "${workspaceFolder}/campus-rpg/build/tests",
+      "cwd": "${command:cmake.buildDirectory}/tests",
       "environment": [],
       "externalConsole": true,
       "MIMode": "gdb",
@@ -39,7 +40,20 @@
           "ignoreFailures": true
         }
       ],
-      "preLaunchTask": "cmake-build"
+      "preLaunchTask": "cmake-build",
+      "visualizerFile": "c:\\Users\\Nick\\AppData\\Roaming\\Code\\User\\workspaceStorage\\8fb5bef46c071bb2a8a02e3aa95925c6\\tonka3000.qtvsctools\\qt.natvis.xml"
+    },
+    {
+      "name": "Debug CampusRPG (VS Debugger / MSVC)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${command:cmake.launchTargetPath}",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${command:cmake.launchTargetDirectory}",
+      "environment": [],
+      "preLaunchTask": "cmake-build",
+      "visualizerFile": "c:\\Users\\Nick\\AppData\\Roaming\\Code\\User\\workspaceStorage\\8fb5bef46c071bb2a8a02e3aa95925c6\\tonka3000.qtvsctools\\qt.natvis.xml"
     }
   ]
 }

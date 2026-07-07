@@ -72,37 +72,48 @@ STL checkpoints (course requirement):
 
 ## Build & Test
 
-Verified working setup: **MinGW Makefiles** generator with **SFML 2.6+** and the g++ shipped under `E:/Qt/Tools/mingw1310_64`.
+The project uses **CMake Presets** so teammates do not need identical compiler paths. Pick the preset that matches your toolchain.
 
 ```powershell
 # All commands run from campus-rpg/
 cd campus-rpg
 
-# Configure (single-config MinGW Makefiles)
-# SFML and SQLite3 are fetched automatically via CMake FetchContent.
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release `
-    -G "MinGW Makefiles" `
-    -DCMAKE_C_COMPILER="E:/Qt/Tools/mingw1310_64/bin/gcc.exe" `
-    -DCMAKE_CXX_COMPILER="E:/Qt/Tools/mingw1310_64/bin/g++.exe"
+# List available presets
+cmake --list-presets
 
-# Build
-cmake --build build --config Release --parallel
+# Configure + build + test (Windows MinGW example)
+cmake --preset windows-mingw-release
+cmake --build --preset windows-mingw-release
+ctest --preset windows-mingw-release
 
-# Run tests (CTest picks up the CampusRPGTests target)
-ctest --test-dir build -C Release --output-on-failure
-.\build\tests\CampusRPGTests.exe      # run the runner directly
-
-# Run app
-.\build\CampusRPG.exe
+# Run the app or tests directly
+.\build\windows-mingw-release\CampusRPG.exe
+.\build\windows-mingw-release\tests\CampusRPGTests.exe
 ```
 
-With the **Visual Studio** generator (multi-config), executables land under `build\Release\` and `build\tests\Release\` instead — adjust the paths accordingly.
+Available presets are defined in `campus-rpg/CMakePresets.json`:
+
+| Preset | Toolchain | Notes |
+| --- | --- | --- |
+| `windows-mingw-release` | MinGW Makefiles / g++ | Default for local development; Qt-bundled or standalone MinGW |
+| `windows-msvc-release` | Visual Studio 17 2022 / cl.exe | Run from Developer PowerShell for VS 2022 |
+| `linux-gcc-release` | Unix Makefiles / g++ | For WSL / Linux VMs |
+| `macos-clang-release` | Unix Makefiles / clang++ | For macOS |
+
+With **multi-config generators** (e.g., Visual Studio) the executable still lands under `build/<preset>/Release/`. With **single-config generators** (e.g., MinGW Makefiles) it lands under `build/<preset>/`.
 
 ## Key Gotchas
 
-- **SFML not found**: SFML is fetched automatically via CMake `FetchContent` if not found locally. Ensure network is available during first configure, or set `SFML_DIR` to a local SFML install.
-- **MinGW g++ not found**: point `CMAKE_C_COMPILER`/`CMAKE_CXX_COMPILER` at the gcc/g++ bundled with Qt, e.g. `E:/Qt/Tools/mingw1310_64/bin/gcc.exe` and `E:/Qt/Tools/mingw1310_64/bin/g++.exe`.
-- **MSVC missing**: run from **Developer PowerShell for VS 2022** or execute `& "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"`.
+- **CMake Presets require CMake 3.20+**. Run `cmake --version` first. If your system CMake is older, update it or configure manually with `-G`/`-D` flags.
+- **SFML not found**: by default SFML is fetched automatically via CMake `FetchContent`. Ensure network is available during first configure. To use a local SFML, pass `-DCAMPUS_RPG_USE_SYSTEM_SFML=ON -DSFML_DIR=<path/to/SFMLConfig.cmake>`.
+- **SQLite3 not found**: similarly fetched automatically. To use a system SQLite3, pass `-DCAMPUS_RPG_USE_SYSTEM_SQLITE3=ON`.
+- **MinGW g++ not found**: either add MinGW `bin` to your system `Path`, or configure with explicit compiler paths:
+  ```powershell
+  cmake --preset windows-mingw-release `
+      -DCMAKE_C_COMPILER=E:/Qt/Tools/mingw1310_64/bin/gcc.exe `
+      -DCMAKE_CXX_COMPILER=E:/Qt/Tools/mingw1310_64/bin/g++.exe
+  ```
+- **MSVC missing**: run from **Developer PowerShell for VS 2022** or execute `& "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"` before configuring.
 - **Test framework**: tests use a lightweight pure-C++ runner (`tests/test_core.cpp`). The core-only test executable links `CampusRPGCore` + mock implementations, so it runs without a GUI event loop in headless/CI environments.
 - **CI**: GitHub Actions (`.github/workflows/{auto-build.yml, pr-check.yml}`) build and test on `windows-latest` and `ubuntu-latest`.
 

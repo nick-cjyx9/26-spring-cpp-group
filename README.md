@@ -28,54 +28,60 @@
 | 单元测试 | 纯 C++ 轻量测试框架（核心层无图形/数据库依赖） |
 | 版本控制/CI | Git + GitHub + GitHub Actions |
 
-## 二、Windows 开发环境配置（PowerShell）
+## 二、快速开始（CMake Presets，推荐）
 
-以下命令全部在 **PowerShell** 中执行。
+项目使用 **CMake Presets** 管理不同平台/工具链的配置，避免在文档或配置文件中硬编码编译器路径。
 
-### 1. 安装基础工具
+```powershell
+# 进入项目目录
+cd campus-rpg
 
-#### 1.1 安装 Git
+# 查看可用 presets
+cmake --list-presets
+
+# 选择一个 preset 进行配置+构建+测试（以 Windows MinGW 为例）
+cmake --preset windows-mingw-release
+cmake --build --preset windows-mingw-release
+ctest --preset windows-mingw-release
+
+# 运行程序
+.\build\windows-mingw-release\CampusRPG.exe
+```
+
+> 多配置生成器（如 Visual Studio）的可执行文件仍可能在 `build/<preset>/Release/` 下，具体以 `cmake --build --preset <name>` 输出为准。
+
+## 三、环境配置
+
+### 3.1 安装基础工具
+
+#### Git
 
 ```powershell
 winget install --id Git.Git -e --source winget
 git --version
 ```
 
-#### 1.2 安装 CMake
+#### CMake 3.20+
 
 ```powershell
 winget install --id Kitware.CMake -e --source winget
 cmake --version
 ```
 
-#### 1.3 安装 MinGW（Qt 自带的 MinGW 即可）
+### 3.2 安装 C++ 编译器（任选其一）
 
-如果使用 Qt 安装目录下的 MinGW：
+本仓库支持 **MinGW**、**MSVC**、**Linux GCC**、**macOS Clang**。你不需要和队友装完全一样的工具链。
+
+#### 选项 A：MinGW（Qt 自带或独立安装）
+
+如果你装了 Qt，通常已经自带 MinGW：
 
 ```powershell
+# 示例路径，请换成你机器上的实际路径
 E:\Qt\Tools\mingw1310_64\bin\g++.exe --version
 ```
 
-或安装独立 MinGW-w64。
-
-### 2. 安装 SFML
-
-#### 方式 A：手动下载
-
-1. 从 [SFML 官网](https://www.sfml-dev.org/download.php) 下载 Windows 64-bit MinGW 版本。
-2. 解压到 `E:\SFML` 或 `C:\SFML`。
-
-#### 方式 B：使用 CMake FetchContent（推荐）
-
-本项目 `CMakeLists.txt` 已配置 `FetchContent` 自动下载 SFML，无需手动安装。
-
-### 3. 安装 SQLite3
-
-SQLite3  amalgamation 单文件版或预编译库均可。本项目使用 `FetchContent` 自动获取 SQLite3。
-
-### 4. 配置环境变量
-
-如果使用独立 MinGW，请将其 `bin` 加入用户 `Path`：
+建议把 MinGW 的 `bin` 目录加入用户 `Path`，方便 VS Code / 终端调用 `gcc`/`g++`/`gdb`：
 
 ```powershell
 $mingwBin = "E:\Qt\Tools\mingw1310_64\bin"
@@ -85,55 +91,139 @@ if ($oldPath -notlike "*$mingwBin*") {
 }
 ```
 
-### 5. 克隆仓库并构建
+#### 选项 B：MSVC（Visual Studio 2022）
+
+安装 **Desktop development with C++** 工作负载。从 **Developer PowerShell for VS 2022** 打开终端，或者手动运行：
 
 ```powershell
-Set-Location E:\dev\my-schoolworks\26-spring-cpp-group
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
+```
 
-git clone https://github.com/nick-cjyx9/26-spring-cpp-group.git
+#### 选项 C：Linux / macOS
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install -y build-essential cmake git
+
+# macOS
+xcode-select --install
+brew install cmake
+```
+
+### 3.3 依赖说明
+
+SFML 和 SQLite3 默认通过 CMake `FetchContent` 自动下载，**无需手动安装**。
+
+如果你希望使用系统已安装的库（高级用户/加速 CI）：
+
+```powershell
+cmake --preset windows-mingw-release -DCAMPUS_RPG_USE_SYSTEM_SFML=ON -DCAMPUS_RPG_USE_SYSTEM_SQLITE3=ON
+```
+
+## 四、命令行构建
+
+所有命令都在 `campus-rpg/` 目录下执行。
+
+```powershell
 cd campus-rpg
 
-# 创建构建目录并配置（MinGW Makefiles）
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release `
-    -G "MinGW Makefiles" `
-    -DCMAKE_CXX_COMPILER="E:/Qt/Tools/mingw1310_64/bin/g++.exe"
+# 1. 选择并应用 preset
+cmake --preset windows-mingw-release
 
-# 编译
-cmake --build build --config Release --parallel
+# 2. 编译
+cmake --build --preset windows-mingw-release
+
+# 3. 运行测试
+ctest --preset windows-mingw-release
+
+# 4. 运行程序
+.\build\windows-mingw-release\CampusRPG.exe
 ```
 
-### 6. 运行程序
+如果你不用 presets，也可以手动指定生成器和编译器：
 
 ```powershell
-.\build\CampusRPG.exe
+# MinGW 手动示例（路径请按实际情况修改）
+cmake -B build -S . -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
 ```
 
-### 7. 运行单元测试
+> 不推荐新手手动指定，因为不同人生成器/路径不同，容易出错。
 
-```powershell
-# 方法 1：通过 ctest
-ctest --test-dir build -C Release --output-on-failure
-
-# 方法 2：直接运行测试可执行文件
-.\build\tests\CampusRPGTests.exe
-```
-
-测试只链接纯 C++ 核心库 `CampusRPGCore` 和 Mock 实现，不依赖 SFML/SQLite，可在命令行直接运行。
-
-## 三、IDE 配置
-
-### VS Code
+## 五、VS Code 配置
 
 仓库已自带共享的 `.vscode/` 配置（IntelliSense、构建/测试任务、调试）。首次打开会提示安装推荐扩展（C/C++、CMake Tools）。
 
-**环境变量**：设置用户环境变量 `MINGW_BIN` 为你的 MinGW `bin` 目录（例如 `E:/Qt/Tools/mingw1310_64/bin`），然后重启 VS Code。`.vscode/` 配置会读取该变量来定位编译器和调试器。
+### 5.1 使用 CMake Presets
 
-### CLion
+1. 打开命令面板（`Ctrl+Shift+P`）。
+2. 选择 **CMake: Select Configure Preset**。
+3. 根据你的工具链选择：
+   - `windows-mingw-release`（Qt/独立 MinGW）
+   - `windows-msvc-release`（Visual Studio 2022）
+   - `linux-gcc-release`
+   - `macos-clang-release`
+4. VS Code 会自动完成配置、构建目录设置和 IntelliSense。
 
-直接打开 `campus-rpg/CMakeLists.txt` 即可。
+### 5.2 常用任务
 
-## 四、项目结构
+| 任务 | 操作 |
+| --- | --- |
+| 构建 | `Ctrl+Shift+B` 或 **CMake: Build** |
+| 运行测试 | **CMake: Run Tests** |
+| 调试 | `F5` → 选择 `Debug CampusRPG (GDB / MinGW)` 或 `Debug CampusRPG (VS Debugger / MSVC)` |
+| 运行程序 | **CMake: Debug -> Run without Debugging** 或任务 `run-app` |
+
+### 5.3 调试器路径
+
+- **MinGW 用户**：建议把 MinGW `bin` 加入系统 `Path`，或设置环境变量 `MINGW_BIN`（如 `E:/Qt/Tools/mingw1310_64/bin`）供 `.vscode/launch.json` 使用。
+- **MSVC 用户**：使用 `Debug CampusRPG (VS Debugger / MSVC)` 配置，无需 `MINGW_BIN`。
+
+### 5.4 CLion / 其他 IDE
+
+直接打开 `campus-rpg/CMakeLists.txt`，CMakePresets.json 会被自动识别。
+
+## 六、常见问题
+
+### 6.1 `cmake --preset` 提示找不到 preset
+
+请确认：
+
+- CMake 版本 ≥ 3.20（`cmake --version`）。
+- 当前目录是 `campus-rpg/`（`CMakePresets.json` 所在目录）。
+- 运行 `cmake --list-presets` 查看可用 preset。
+
+### 6.2 SFML / SQLite3 下载失败
+
+首次配置需要联网下载依赖。如果网络不畅：
+
+1. 科学上网后重试；
+2. 或手动下载 SFML 2.6+ 和 SQLite3，使用系统库选项：
+
+```powershell
+cmake --preset windows-mingw-release -DCAMPUS_RPG_USE_SYSTEM_SFML=ON -DSFML_DIR="E:/SFML/lib/cmake/SFML"
+```
+
+### 6.3 MinGW 找不到 `gcc`/`g++`
+
+- 把 MinGW `bin` 加入系统 `Path`；或
+- 在 CMake 配置时显式指定编译器：
+
+```powershell
+cmake --preset windows-mingw-release -DCMAKE_C_COMPILER=E:/Qt/Tools/mingw1310_64/bin/gcc.exe -DCMAKE_CXX_COMPILER=E:/Qt/Tools/mingw1310_64/bin/g++.exe
+```
+
+### 6.4 MSVC 提示找不到编译器
+
+确保从 **Developer PowerShell for VS 2022** 执行命令，或已运行 `vcvars64.bat`。
+
+### 6.5 运行时提示缺少 DLL
+
+MinGW 构建时，CMake 会自动把 SFML DLL 复制到可执行文件旁边。如果仍缺 DLL，请把 MinGW `bin` 目录加入 `Path` 后重新运行。
+
+## 七、项目结构
 
 开始开发前，请先人工阅读一遍 `campus-rpg\docs` 下的东西，至少得读一遍 `campus-rpg\docs\README.md`, 对你的 AI 要做的东西有一个最基本的了解再派活给 AI。
 
@@ -155,7 +245,8 @@ ctest --test-dir build -C Release --output-on-failure
 │   │   ├── test_core.cpp      # 核心测试
 │   │   └── mocks/             # Mock 引擎实现
 │   ├── resources/             # 图标、资源文件
-│   └── CMakeLists.txt         # CMake 主配置
+│   ├── CMakeLists.txt         # CMake 主配置
+│   └── CMakePresets.json      # 跨平台构建预设
 ├── docs/                       # 设计文档
 ├── handouts/                   # 检查点材料
 ├── AGENTS.md
@@ -163,21 +254,21 @@ ctest --test-dir build -C Release --output-on-failure
 └── scripts_cheat_sheet.md
 ```
 
-## 五、Git 协作规范
+## 八、Git 协作规范
 
 ```powershell
 git checkout -b feature/xxx
 
 # 提交前先在本地构建测试通过
-cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
+cmake --build --preset windows-mingw-release
+ctest --preset windows-mingw-release
 
 git add .
 git commit -m "feat: xxx"
 git push -u origin feature/xxx
 ```
 
-## 六、完成的挑战任务
+## 九、完成的挑战任务
 
 | 挑战 | 内容 |
 | --- | --- |
