@@ -13,5 +13,6 @@ public:
 
 private:
     std::string npcId_;
+    std::string dialogueText_;
     bool firstFrame_ = true;
 };

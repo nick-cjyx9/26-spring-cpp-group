@@ -40,6 +40,15 @@ public:
     int equipmentDefenseBonus() const { return equipmentDefenseBonus_; }
     int equipmentSpeedBonus() const { return equipmentSpeedBonus_; }
 
+    // Social Link stat bonuses (recomputed by GameManager after talk/load).
+    int socialLinkStrengthBonus() const { return slStrengthBonus_; }
+    int socialLinkMagicBonus() const { return slMagicBonus_; }
+    int socialLinkEnduranceBonus() const { return slEnduranceBonus_; }
+    int socialLinkAgilityBonus() const { return slAgilityBonus_; }
+    int socialLinkLuckBonus() const { return slLuckBonus_; }
+    void applySocialLinkBonus(PersonaStat s, int value);
+    void clearSocialLinkBonuses();
+
     Affinity affinity(Element e) const;
     Persona *currentPersona() const { return persona_.get(); }
     std::shared_ptr<Persona> persona() const { return persona_; }
@@ -81,6 +90,12 @@ private:
     int equipmentAttackBonus_ = 0;
     int equipmentDefenseBonus_ = 0;
     int equipmentSpeedBonus_ = 0;
+
+    int slStrengthBonus_ = 0;
+    int slMagicBonus_ = 0;
+    int slEnduranceBonus_ = 0;
+    int slAgilityBonus_ = 0;
+    int slLuckBonus_ = 0;
 
     std::shared_ptr<Persona> persona_;
 };

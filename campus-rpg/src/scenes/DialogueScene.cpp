@@ -37,11 +37,10 @@ void DialogueScene::update(float /*deltaTime*/)
                 npcId_ = static_cast<NpcEntity *>(npc)->socialLinkId();
         }
 
-        SocialLink *link = GameManager::instance().socialLinkManager().getLink(npcId_);
-        if (link)
-        {
-            link->addPoints(10);
-        }
+        // Drive progression + rank-up callback (奶龙 sound hook) through
+        // GameManager instead of poking the link directly.
+        if (!npcId_.empty())
+            dialogueText_ = GameManager::instance().talkToNpc(npcId_);
     }
 }
 
@@ -60,6 +59,6 @@ void DialogueScene::render(engine::IRenderer &renderer)
     renderer.drawRect({50, 400, 700, 150}, engine::Color(20, 20, 40, 230));
     renderer.drawText("Talking with " + name + "  (Rank " + std::to_string(rank) + ")",
                       {70, 415}, 22, engine::Color::cyan());
-    renderer.drawText("\"Thanks for talking with me today!\"", {70, 460}, 20, engine::Color::white());
+    renderer.drawText(dialogueText_.empty() ? "\"...\"" : dialogueText_, {70, 460}, 20, engine::Color::white());
     renderer.drawText("Enter/Esc: continue", {70, 520}, 14, engine::Color::gray());
 }
