@@ -67,6 +67,26 @@ public:
     bool spendGold(int amount);
     void gainExp(int amount);
 
+    // Level-up snapshot (cleared on read).
+    struct LevelUpSnapshot
+    {
+        int oldLevel = 0, newLevel = 0;
+        int oldMaxHp = 0, newMaxHp = 0;
+        int oldMaxSp = 0, newMaxSp = 0;
+        int oldStrength = 0, newStrength = 0;
+        int oldMagic = 0, newMagic = 0;
+        int oldEndurance = 0, newEndurance = 0;
+        int oldAgility = 0, newAgility = 0;
+        int oldLuck = 0, newLuck = 0;
+        int oldAttack = 0, newAttack = 0;
+        int oldDefense = 0, newDefense = 0;
+        int oldSpeed = 0, newSpeed = 0;
+        std::vector<std::string> unlockedSkills;
+    };
+    bool hasLevelUpSnapshot() const { return hasSnapshot_; }
+    const LevelUpSnapshot &levelUpSnapshot() const { return snapshot_; }
+    void clearLevelUpSnapshot() { hasSnapshot_ = false; snapshot_ = LevelUpSnapshot(); }
+
     // Persistence restore setters (used by SaveRepository::loadCharacter).
     void setLevel(int v) { level_ = v; }
     void setHp(int v) { hp_ = v; }
@@ -116,4 +136,7 @@ private:
     int slLuckBonus_ = 0;
 
     std::shared_ptr<Persona> persona_;
+
+    LevelUpSnapshot snapshot_;
+    bool hasSnapshot_ = false;
 };

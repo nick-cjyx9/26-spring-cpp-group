@@ -89,17 +89,60 @@ void Character::gainExp(int amount)
 
 void Character::levelUp()
 {
+    LevelUpSnapshot snap;
+    snap.oldLevel = level_;
+    snap.oldMaxHp = maxHp_;
+    snap.oldMaxSp = maxSp_;
+    snap.oldStrength = baseStrength_;
+    snap.oldMagic = baseMagic_;
+    snap.oldEndurance = baseEndurance_;
+    snap.oldAgility = baseAgility_;
+    snap.oldLuck = baseLuck_;
+    snap.oldAttack = attack();
+    snap.oldDefense = defense();
+    snap.oldSpeed = speed();
+
+    int prevLevel = level_;
     ++level_;
-    maxHp_ += 20;
+
+    // Non-linear growth: higher levels grant bigger bonuses.
+    // HP  grows fastest, followed by SP, then combat stats.
+    maxHp_ += 15 + prevLevel * 2;      // e.g. L1:+17, L5:+25, L10:+35
     hp_ = maxHp_;
-    maxSp_ += 10;
+    maxSp_ += 5 + prevLevel;            // e.g. L1:+6, L5:+10, L10:+15
     sp_ = maxSp_;
-    baseStrength_ += 1;
-    baseMagic_ += 1;
-    baseEndurance_ += 1;
-    baseAgility_ += 1;
+    baseStrength_ += 1 + (prevLevel >= 5 ? 1 : 0);   // extra at L5+
+    baseEndurance_ += 1 + (prevLevel >= 7 ? 1 : 0);  // extra at L7+
+    baseAgility_ += 1 + (prevLevel >= 6 ? 1 : 0);    // extra at L6+
+    baseMagic_ += 1 + (prevLevel >= 8 ? 1 : 0);      // extra at L8+
     baseLuck_ += 1;
     expToNextLevel_ = static_cast<int>(expToNextLevel_ * 1.5);
+
+    snap.newLevel = level_;
+    snap.newMaxHp = maxHp_;
+    snap.newMaxSp = maxSp_;
+    snap.newStrength = baseStrength_;
+    snap.newMagic = baseMagic_;
+    snap.newEndurance = baseEndurance_;
+    snap.newAgility = baseAgility_;
+    snap.newLuck = baseLuck_;
+    snap.newAttack = attack();
+    snap.newDefense = defense();
+    snap.newSpeed = speed();
+
+    // Check for persona skill unlocks
+    if (persona_)
+    {
+        auto unlocked = persona_->checkSkillUnlocks(level_);
+        for (const auto &s : unlocked)
+        {
+            if (s)
+                snap.unlockedSkills.push_back(s->name());
+        }
+    }
+
+    snapshot_ = snap;
+    hasSnapshot_ = true;
 }
 
 void Character::setPersona(std::shared_ptr<Persona> persona)

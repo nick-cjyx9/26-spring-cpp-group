@@ -11,9 +11,18 @@ void BattleScene::handleInput(engine::IInput &input)
         if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::Escape))
         {
             if (GameManager::instance().battleSystem().playerWon())
-                processVictory();
+            {
+                bool leveledUp = processVictory();
+                if (leveledUp)
+                {
+                    GameManager::instance().enterScene(SceneType::LevelUp);
+                    return;
+                }
+            }
             else
+            {
                 processDefeat();
+            }
             GameManager::instance().setNight(false);
             // Returning from night (battle) to day = next day: refresh NPCs.
             GameManager::instance().advanceDay();
@@ -123,16 +132,20 @@ void BattleScene::render(engine::IRenderer &renderer)
     }
 }
 
-void BattleScene::processVictory()
+bool BattleScene::processVictory()
 {
     auto &battle = GameManager::instance().battleSystem();
     Enemy *enemy = battle.enemyAt(0);
     if (!enemy)
-        return;
+        return false;
 
     auto &character = GameManager::instance().character();
+    int prevLevel = character.level();
     character.gainExp(enemy->rewardExp());
     character.addGold(enemy->rewardGold());
+
+    // If a level-up occurred, the snapshot will be populated by Character::levelUp().
+    return character.hasLevelUpSnapshot();
 }
 
 void BattleScene::processDefeat()

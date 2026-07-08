@@ -21,7 +21,7 @@ class Skill
 {
 public:
     Skill(std::string id, std::string name, Element element,
-          int power, int cost, SkillCostType costType, bool healing = false);
+          int power, int cost, SkillCostType costType, bool healing = false, int requiredLevel = 1);
     virtual ~Skill() = default;
 
     virtual std::unique_ptr<Skill> clone() const;
@@ -33,6 +33,7 @@ public:
     int cost() const { return cost_; }
     SkillCostType costType() const { return costType_; }
     bool isHealing() const { return healing_; }
+    int requiredLevel() const { return requiredLevel_; }
 
     // Whether the caster can currently pay the skill's cost.
     bool canUse(const Character &caster) const;
@@ -56,4 +57,5 @@ protected:
     int cost_ = 0;
     SkillCostType costType_ = SkillCostType::SP;
     bool healing_ = false;
+    int requiredLevel_ = 1;
 };

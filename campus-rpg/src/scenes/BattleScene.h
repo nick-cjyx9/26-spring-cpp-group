@@ -10,7 +10,7 @@ public:
     void render(engine::IRenderer &renderer) override;
 
 private:
-    void processVictory();
+    bool processVictory();
     void processDefeat();
 
     int selectedAction_ = 0;

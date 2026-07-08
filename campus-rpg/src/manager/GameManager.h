@@ -31,7 +31,8 @@ enum class SceneType
     SocialLink,
     HeroSelect,
     Status,
-    Armory
+    Armory,
+    LevelUp
 };
 
 // Fired whenever a Social Link ranks up. The UI layer registers a callback
