@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <sqlite3.h>
 
 namespace
 {
@@ -373,6 +374,70 @@ void testNextSlotIdIsMaxPlusOne()
     CHECK_EQ(repo.nextSlotId(), 2);
 }
 
+void testStaleV1SchemaIsRebuilt()
+{
+    // Regression: a DB left over from the old 5-stat combat schema has
+    // user_version=1 and a `character` table with eq_atk/eq_def but no
+    // eq_str. DatabaseManager must detect this mismatch and rebuild the
+    // tables so save/load works under the current 3-stat mechanism.
+    const char *path = "test_save_stale_v1.db";
+    std::remove(path);
+    DatabaseManager::instance().closeDatabase();
+
+    // Hand-craft a stale v1 DB: old character columns, a save_meta row, and
+    // user_version=1 (so the version-only check would skip recreation).
+    sqlite3 *raw = nullptr;
+    CHECK(sqlite3_open(path, &raw) == SQLITE_OK);
+    CHECK(sqlite3_exec(raw,
+        "CREATE TABLE character (slot_id INTEGER PRIMARY KEY, name TEXT, "
+        "level INTEGER, hp INTEGER, max_hp INTEGER, sp INTEGER, max_sp INTEGER, "
+        "exp INTEGER, exp_to_next INTEGER, gold INTEGER, "
+        "st INTEGER, ma INTEGER, en INTEGER, ag INTEGER, lu INTEGER, "
+        "eq_atk INTEGER, eq_def INTEGER, eq_spd INTEGER, "
+        "pos_x REAL, pos_y REAL, is_night INTEGER, current_persona_id TEXT);"
+        "INSERT INTO character (slot_id, name) VALUES (1, 'StaleHero');"
+        "CREATE TABLE save_meta (slot_id INTEGER PRIMARY KEY, character_name TEXT, "
+        "level INTEGER, updated_at TEXT);"
+        "INSERT INTO save_meta (slot_id, character_name, level) VALUES (1, 'StaleHero', 5);"
+        "PRAGMA user_version = 1;",
+        nullptr, nullptr, nullptr) == SQLITE_OK);
+    sqlite3_close(raw);
+
+    // initDatabase must rebuild the schema (drop + recreate).
+    CHECK(DatabaseManager::instance().initDatabase(path));
+
+    // Verify the character table now has the 3-stat eq_str column.
+    sqlite3 *verify = nullptr;
+    CHECK(sqlite3_open(path, &verify) == SQLITE_OK);
+    sqlite3_stmt *stmt = nullptr;
+    bool hasEqStr = false;
+    if (sqlite3_prepare_v2(verify, "PRAGMA table_info(character)", -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        while (sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            const char *col = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
+            if (col && std::string(col) == "eq_str")
+                hasEqStr = true;
+        }
+        sqlite3_finalize(stmt);
+    }
+    CHECK(hasEqStr);
+
+    // The old save_meta row must be gone (tables were rebuilt, not migrated).
+    bool oldSlotGone = true;
+    if (sqlite3_prepare_v2(verify, "SELECT COUNT(*) FROM save_meta WHERE slot_id=1", -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        if (sqlite3_step(stmt) == SQLITE_ROW)
+            oldSlotGone = sqlite3_column_int(stmt, 0) == 0;
+        sqlite3_finalize(stmt);
+    }
+    CHECK(oldSlotGone);
+    sqlite3_close(verify);
+
+    DatabaseManager::instance().closeDatabase();
+    std::remove(path);
+}
+
 void testGameManagerLoadRestoresPersonaSkills()
 {
     TempDatabase db("test_save_skills.db");
@@ -417,6 +482,7 @@ int main()
     testCurrentPersonaIdPersisted();
     testListAllSlotsIsDynamic();
     testNextSlotIdIsMaxPlusOne();
+    testStaleV1SchemaIsRebuilt();
     testGameManagerLoadRestoresPersonaSkills();
 
     std::cout << "\n==== CampusRPG save/persistence tests ====\n";

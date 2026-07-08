@@ -114,6 +114,14 @@ sf::Keyboard::Key SfmlInput::toSfmlKey(Key key)
         return sf::Keyboard::F5;
     case Key::L:
         return sf::Keyboard::L;
+    case Key::Num1:
+        return sf::Keyboard::Num1;
+    case Key::Num2:
+        return sf::Keyboard::Num2;
+    case Key::Num3:
+        return sf::Keyboard::Num3;
+    case Key::Num4:
+        return sf::Keyboard::Num4;
     default:
         return sf::Keyboard::Unknown;
     }

@@ -171,6 +171,11 @@ public:
     const EquippedGear &equippedGear() const { return equippedGear_; }
     void equipItem(std::shared_ptr<EquipmentItem> item);
     void unequipItem(EquipmentSlot slot);
+    // Equip the item at the given inventory index (must be an EquipmentItem
+    // with a valid slot). Takes it out of the inventory and places the
+    // previously-equipped item (if any) back into the inventory. Returns
+    // false on non-equipment item / full bag / out-of-range.
+    bool equipFromInventory(size_t index);
     const std::vector<std::shared_ptr<EquipmentItem>> &equipmentDatabase() const { return equipmentDatabase_; }
 
     // Hero selection (0..3), persisted in the current session.

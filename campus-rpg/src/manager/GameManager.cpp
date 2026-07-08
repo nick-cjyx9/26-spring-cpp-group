@@ -165,6 +165,7 @@ bool GameManager::loadFromSlot(int slotId)
     // dialogue so the embedded names match the loaded identity.
     applyNpcDialogueTemplates();
     recomputeSocialLinkBonuses();
+
     return true;
 }
 
@@ -745,4 +746,56 @@ void GameManager::unequipItem(EquipmentSlot slot)
         character_.equipmentStrengthBonus() - item->strengthBonus(),
         character_.equipmentMagicBonus() - item->magicBonus(),
         character_.equipmentSpeedBonus() - item->speedBonus());
+
+    // Return the unequipped item to the inventory (clone back to a unique ptr;
+    // equipment slots hold shared copies). If the bag is full the item is lost,
+    // which is acceptable for a manual unequip from a full bag edge case.
+    if (!inventory_.isFull())
+        inventory_.addItem(item->clone());
+}
+
+bool GameManager::equipFromInventory(size_t index)
+{
+    Item *raw = inventory_.itemAt(index);
+    if (!raw)
+        return false;
+    auto *eq = dynamic_cast<EquipmentItem *>(raw);
+    if (!eq || eq->slot() == EquipmentSlot::None)
+        return false;
+
+    EquipmentSlot slot = eq->slot();
+
+    // Detach the item from the inventory first so the old equipped item has a
+    // place to land when unequipItem puts it back.
+    auto taken = inventory_.takeItem(index);
+    if (!taken)
+        return false;
+
+    // Convert the detached unique_ptr into the shared_ptr the gear slot holds.
+    auto shared = std::shared_ptr<EquipmentItem>(
+        static_cast<EquipmentItem *>(taken.release()));
+
+    // Unequip whatever was in that slot (returns it to the inventory).
+    unequipItem(slot);
+
+    // Place the new item into the slot and apply its bonuses.
+    switch (slot)
+    {
+    case EquipmentSlot::Weapon:
+        equippedGear_.weapon = shared;
+        break;
+    case EquipmentSlot::Armor:
+        equippedGear_.armor = shared;
+        break;
+    case EquipmentSlot::Accessory:
+        equippedGear_.accessory = shared;
+        break;
+    case EquipmentSlot::Relic:
+        equippedGear_.relic = shared;
+        break;
+    default:
+        return false;
+    }
+    character_.equip(shared);
+    return true;
 }

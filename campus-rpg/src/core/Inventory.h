@@ -13,6 +13,8 @@ public:
     bool addItem(std::unique_ptr<Item> item);
     bool removeItem(size_t index);
     bool useItem(size_t index, Character &character);
+    // Detach and return the item at index (returns nullptr if out of range).
+    std::unique_ptr<Item> takeItem(size_t index);
     void clear();
 
     const std::vector<std::unique_ptr<Item>> &items() const { return items_; }
