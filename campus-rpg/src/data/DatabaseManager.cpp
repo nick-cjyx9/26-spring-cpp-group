@@ -33,7 +33,35 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         sqlite3_finalize(vstmt);
     }
 
+    // Helper: does `table` have a column named `col`?
+    auto hasColumn = [this](const char *table, const char *col) -> bool {
+        std::string pragma = std::string("PRAGMA table_info(") + table + ")";
+        sqlite3_stmt *info = nullptr;
+        if (sqlite3_prepare_v2(db_, pragma.c_str(), -1, &info, nullptr) != SQLITE_OK)
+            return false;
+        bool found = false;
+        while (sqlite3_step(info) == SQLITE_ROW)
+        {
+            const char *cn = reinterpret_cast<const char *>(sqlite3_column_text(info, 1));
+            if (cn && std::string(cn) == col)
+            {
+                found = true;
+                break;
+            }
+        }
+        sqlite3_finalize(info);
+        return found;
+    };
+
     bool hasLegacyCharacter = false;
+    // A v1+ DB whose `character` table still uses the old 5-stat combat
+    // columns (eq_atk/eq_def, no eq_str) is incompatible with the current
+    // 3-stat mechanism. Treat it as a schema mismatch and rebuild the tables
+    // (old saves under the obsolete schema cannot be restored anyway).
+    bool staleV1Schema = (version >= 1) && hasColumn("character", "slot_id") &&
+                         !hasColumn("character", "eq_str");
+    if (staleV1Schema)
+        version = 0; // fall through to the fresh-DB recreate path below
     if (version < 1)
     {
         // Detect legacy single-slot schema: a `character` table that has an
@@ -73,8 +101,8 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
         }
         else
         {
-            // No legacy schema (fresh DB, or already-new). Make sure no stale
-            // partially-created new tables linger before recreating.
+            // No legacy schema (fresh DB, or stale v1 being rebuilt). Make sure
+            // no stale partially-created new tables linger before recreating.
             sqlite3_exec(db_, "DROP TABLE IF EXISTS character;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS persona;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS inventory;", nullptr, nullptr, nullptr);
