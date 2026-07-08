@@ -48,7 +48,8 @@ public:
     const std::vector<std::string> &dropPersonaIds() const { return dropPersonaIds_; }
 
     // Scale stats based on player level.
-    void scaleToLevel(int playerLevel);
+    // extraMultiplier > 1 makes the enemy tougher (e.g. second-map night mobs).
+    void scaleToLevel(int playerLevel, double extraMultiplier = 1.0);
 
 protected:
     std::string id_;
