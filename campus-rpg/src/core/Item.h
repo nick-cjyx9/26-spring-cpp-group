@@ -27,7 +27,7 @@ enum class EquipmentSlot
 class Item
 {
 public:
-    Item(std::string id, std::string name, std::string description, int value, ItemType type);
+    Item(std::string id, std::string name, std::string description, int value, ItemType type, std::string textureId = "");
     virtual ~Item() = default;
 
     virtual std::unique_ptr<Item> clone() const = 0;
@@ -41,18 +41,27 @@ public:
 
     std::string typeString() const;
 
+    int quantity() const { return quantity_; }
+    void setQuantity(int qty) { quantity_ = std::max(1, qty); }
+    void addQuantity(int delta) { quantity_ += delta; }
+
+    const std::string &textureId() const { return textureId_; }
+    void setTextureId(const std::string &id) { textureId_ = id; }
+
 protected:
     std::string id_;
     std::string name_;
     std::string description_;
     int value_ = 0;
     ItemType type_;
+    int quantity_ = 1;
+    std::string textureId_;
 };
 
 class FoodItem : public Item
 {
 public:
-    FoodItem(std::string id, std::string name, std::string description, int value, int healAmount);
+    FoodItem(std::string id, std::string name, std::string description, int value, int healAmount, std::string textureId = "");
 
     std::unique_ptr<Item> clone() const override;
     void use(Character &character) override;
@@ -66,7 +75,7 @@ private:
 class PotionItem : public Item
 {
 public:
-    PotionItem(std::string id, std::string name, std::string description, int value, int healAmount);
+    PotionItem(std::string id, std::string name, std::string description, int value, int healAmount, std::string textureId = "");
 
     std::unique_ptr<Item> clone() const override;
     void use(Character &character) override;
@@ -80,7 +89,7 @@ private:
 class SpItem : public Item
 {
 public:
-    SpItem(std::string id, std::string name, std::string description, int value, int spAmount);
+    SpItem(std::string id, std::string name, std::string description, int value, int spAmount, std::string textureId = "");
 
     std::unique_ptr<Item> clone() const override;
     void use(Character &character) override;
@@ -106,24 +115,22 @@ public:
     int magicBonus() const { return magicBonus_; }
     int speedBonus() const { return speedBonus_; }
     EquipmentSlot slot() const { return slot_; }
-    const std::string &textureId() const { return textureId_; }
 
 private:
     int strengthBonus_ = 0;
     int magicBonus_ = 0;
     int speedBonus_ = 0;
     EquipmentSlot slot_ = EquipmentSlot::None;
-    std::string textureId_;
 };
 
 class PersonaItem : public Item
 {
 public:
     PersonaItem(std::string id, std::string name, std::string description, int value,
-                std::string personaId);
+                std::string personaId, std::string textureId = "");
 
     std::unique_ptr<Item> clone() const override;
-    void use(Character &character) override;
+    void use(Character & /*character*/) override;
 
     const std::string &personaId() const { return personaId_; }
 

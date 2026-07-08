@@ -136,9 +136,30 @@ void ShopScene::render(engine::IRenderer &renderer)
             engine::Color color = (static_cast<int>(i) == selectedIndex_) ? engine::Color::yellow() : engine::Color::white();
             std::string prefix = (static_cast<int>(i) == selectedIndex_) ? "> " : "  ";
             std::string type = items[i]->typeString();
+            float y = 175.0f + static_cast<float>(i) * 42.0f;
+
+            // Draw item icon
+            if (!items[i]->textureId().empty())
+            {
+                std::string texPath;
+                if (items[i]->textureId().find('/') != std::string::npos)
+                {
+                    texPath = items[i]->textureId();
+                }
+                else
+                {
+                    texPath = std::string("equipment/") + items[i]->textureId();
+                }
+                renderer.drawTexture(texPath, {155.0f, y, 32, 32});
+            }
+            else
+            {
+                renderer.drawRect({155.0f, y, 32, 32}, engine::Color(60, 60, 80));
+            }
+
             renderer.drawText(prefix + items[i]->name() + " [" + type + "] - " + std::to_string(items[i]->value()) + "G",
-                              {135.0f, 175.0f + static_cast<float>(i) * 42.0f}, 18, color);
-            renderer.drawText("  " + items[i]->description(), {155.0f, 197.0f + static_cast<float>(i) * 42.0f}, 13, engine::Color::gray());
+                              {195.0f, y + 6}, 18, color);
+            renderer.drawText("  " + items[i]->description(), {195.0f, y + 24}, 13, engine::Color::gray());
         }
         renderer.drawText("Enter: buy   Esc: back", {135, 525}, 14, engine::Color::gray());
     }
@@ -156,8 +177,29 @@ void ShopScene::render(engine::IRenderer &renderer)
                 engine::Color color = (static_cast<int>(i) == sellIndex_) ? engine::Color::yellow() : engine::Color::white();
                 std::string prefix = (static_cast<int>(i) == sellIndex_) ? "> " : "  ";
                 int sellPrice = items[i]->value() / 2;
+                float y = 175.0f + static_cast<float>(i) * 42.0f;
+
+                // Draw item icon
+                if (!items[i]->textureId().empty())
+                {
+                    std::string texPath;
+                    if (items[i]->textureId().find('/') != std::string::npos)
+                    {
+                        texPath = items[i]->textureId();
+                    }
+                    else
+                    {
+                        texPath = std::string("equipment/") + items[i]->textureId();
+                    }
+                    renderer.drawTexture(texPath, {155.0f, y, 32, 32});
+                }
+                else
+                {
+                    renderer.drawRect({155.0f, y, 32, 32}, engine::Color(60, 60, 80));
+                }
+
                 renderer.drawText(prefix + items[i]->name() + " [" + items[i]->typeString() + "] - " + std::to_string(sellPrice) + "G",
-                                  {135.0f, 175.0f + static_cast<float>(i) * 30.0f}, 18, color);
+                                  {195.0f, y + 6}, 18, color);
             }
         }
         renderer.drawText("Enter: sell   Esc: back", {135, 525}, 14, engine::Color::gray());
