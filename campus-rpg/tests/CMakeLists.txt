@@ -38,6 +38,28 @@ target_link_libraries(CampusRPGSaveTests PRIVATE
     CampusRPGAppLib
 )
 
+# Level-up scene tests: exercise LevelUpScene rendering and input with mocks.
+add_executable(CampusRPGLevelUpTests
+    test_levelup.cpp
+    mocks/MockRenderer.cpp
+    mocks/MockInput.cpp
+    mocks/MockWindow.cpp
+)
+
+target_include_directories(CampusRPGLevelUpTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/data
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/engine/interfaces
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks
+)
+
+target_link_libraries(CampusRPGLevelUpTests PRIVATE
+    CampusRPGAppLib
+)
+
 include(CTest)
 add_test(NAME CampusRPGTests COMMAND CampusRPGTests)
 add_test(NAME CampusRPGSaveTests COMMAND CampusRPGSaveTests)
+add_test(NAME CampusRPGLevelUpTests COMMAND CampusRPGLevelUpTests)

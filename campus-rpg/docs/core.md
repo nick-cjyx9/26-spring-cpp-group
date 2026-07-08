@@ -6,7 +6,7 @@
 
 ### 职责
 
-维护玩家属性与当前 Persona。
+维护玩家等级、HP/SP、金币与当前 Persona。战斗三维完全来自当前 Persona，角色自身不直接持有攻击/防御数值。
 
 ### 字段
 
@@ -14,42 +14,53 @@
 std::string name_;
 int level_, hp_, maxHp_, sp_, maxSp_;
 int exp_, expToNextLevel_, gold_;
-int baseSt_, baseMa_, baseEn_, baseAg_, baseLu_;
-int equipmentAttackBonus_, equipmentDefenseBonus_, equipmentSpeedBonus_;
-std::shared_ptr<Persona> persona_;
+std::shared_ptr<Persona> currentPersona_;
+std::vector<std::shared_ptr<Persona>> ownedPersonas_;
 ```
 
 ### 关键行为
 
-- `takeDamage(int damage)`：实际伤害 = `max(1, damage - defense())`。
+- `takeDamage(int damage)`：直接扣减 HP（无独立防御值，以 HP 为生存缓冲）。
 - `heal(int amount)`：治疗至 `maxHp_` 上限。
 - `consumeSp(int amount)` / `recoverSp(int amount)`：SP 管理。
-- `gainExp(int amount)`：累计经验，达到阈值后升级。
-- `levelUp()`：提升 HP/SP 上限、五维、攻防。
-- `attack()` / `defense()` / `speed()` / `magic()`：由角色基础 + 当前 Persona + 装备加成计算。
+- `gainExp(int amount)`：累计经验，达到阈值后升级；经验来源 90% 任务、10% 杀怪。
+- `levelUp()`：提升 HP/SP 上限。
 - `setPersona(std::shared_ptr<Persona>)`：切换当前 Persona。
+- 持有 `ownedPersonas_` 列表，战斗中可切换已拥有的 Persona。
 
 ## Persona（人格面具）
 
 ### 职责
 
-提供角色的战斗属性、抗性、技能。
+提供角色的战斗三维、元素抗性、技能。Persona 等级只能通过 Social Link Rank 提升获得成长。
 
 ### 字段
 
 ```cpp
 std::string id_, name_, arcana_;
 int level_;
-int st_, ma_, en_, ag_, lu_;
+int exp_, expToNextLevel_;
+int strength_, magic_, speed_;
 std::map<Element, Affinity> affinities_;
 std::vector<std::shared_ptr<Skill>> skills_;
 ```
+
+### 属性计算
+
+```text
+finalStat = (baseStat + equipmentBonus) × levelMultiplier
+levelMultiplier = 1 + (level_ - 1) × 0.05
+```
+
+- `baseStat` 已包含 Social Link 升级带来的成长。
+- 升级时基础三维按固定倍率成长（如 `baseStat *= 1.05`）。
 
 ### 关键行为
 
 - `affinity(Element e)`：查询元素抗性。
 - `learnSkill(std::shared_ptr<Skill>)`：学习技能。
 - `findSkill(const std::string& id)`：按 ID 查找技能。
+- `gainExp(int amount)` / `levelUp()`：升级成长。
 
 ## Skill（技能）
 
@@ -68,6 +79,8 @@ bool healing_;
 - `canUse(const Character&)`：判断 SP/HP 是否足够。
 - `applyCost(Character&)`：消耗 SP/HP。
 - `calculateRawDamage(const Character&, const Enemy&)`：计算原始伤害。
+  - 伤害技能：`skillPower × (1 + caster.magic / 10)`。
+  - 恢复技能：按 `power_` 恢复 HP。
 - `use(Character&, Enemy&)`：完整施放流程。
 
 ## Element / Affinity
@@ -96,8 +109,8 @@ public:
 | `FoodItem` | 回复 HP | `healAmount_` |
 | `PotionItem` | 大量回复 HP | `healAmount_` |
 | `SpItem` | 回复 SP | `spAmount_` |
-| `EquipmentItem` | 提升属性 | `attackBonus_`, `defenseBonus_`, `speedBonus_` |
-| `PersonaItem` | 获得 Persona | `personaId_` |
+| `EquipmentItem` | 提升当前 Persona 三维 | `strengthBonus_`, `magicBonus_`, `speedBonus_`, `slot_` |
+| `PersonaItem` | 获得 Persona（商店/掉落表示） | `personaId_` |
 
 ## Inventory（背包）
 
@@ -109,13 +122,15 @@ public:
 
 ### 抽象基类 `Enemy`
 
+敌人同样只有三维：力量 / 魔力 / 速度，无独立防御值。
+
 ```cpp
 class Enemy {
 public:
     virtual ~Enemy() = default;
     virtual std::string battleCry() const = 0;
     virtual std::unique_ptr<Enemy> clone() const = 0;
-    // stats, affinity, skills...
+    // strength_, magic_, speed_, affinity, skills, attackPattern_
 };
 ```
 
@@ -123,19 +138,54 @@ public:
 
 | 类 | 特点 |
 | --- | --- |
-| `Slime` | 低攻低防，弱火 |
-| `Goblin` | 均衡，耐物理 |
-| `Boss` | 高血量，多技能 |
+| `Slime` | 低力量低速度，弱元素 |
+| `Goblin` | 较均衡，耐物理 |
+| `Boss` | 高血量，固定多技能循环 |
+
+### 等级缩放
+
+敌人属性随玩家等级线性缩放：
+
+```text
+enemyStat = baseStat × (1 + (playerLevel - 1) × 0.1)
+```
+
+### 固定出招循环
+
+每个敌人实例维护一个动作序列（`std::vector<std::string>`，元素为技能 ID 或 `"normal"`），每回合按顺序执行下一项并循环。
 
 ## BattleSystem（战斗系统）
 
-简化回合制：
+### 行动顺序
 
-1. 玩家行动：攻击 / 技能 / 道具 / 防御 / 切换 Persona / 逃跑。
-2. 敌人行动：随机选择技能或普攻。
-3. 循环至一方 HP <= 0 或逃跑成功。
+1. 战斗开始时，所有参战单位 roll initiative：
+   ```text
+   initiative = speed × (1 + random(-10%, +10%))
+   ```
+2. 按 initiative 排序生成固定行动队列，整局按队列循环。
+3. 轮到玩家时选择行动；轮到敌人时执行其固定循环中的下一动作。
 
-保留抗性影响伤害，但不做 1 More / 总攻击 / 倒地。
+### 玩家行动
+
+- **物理攻击**：`basePhysicalPower × (1 + strength / 10)`，可被闪避。
+- **技能**：消耗 SP，伤害按 `magic` 放大。
+- **切换 Persona**：消耗本回合。
+- **道具**：免费动作，每回合限一次，不结束回合。
+- **逃跑**：基于速度差判定。
+
+### 闪避
+
+仅物理攻击可被闪避：
+
+```text
+dodgeRate = clamp((defender.speed - attacker.speed) / attacker.speed × 0.5, 0.05, 0.50)
+```
+
+### 战斗结束
+
+- 一方全灭或逃跑成功时结束。
+- 胜利后角色获得经验 / 金币，敌人可能直接掉落 Persona。
+- 战斗结束后 SP 回满。
 
 ## Shop（商店）
 
@@ -160,6 +210,12 @@ private:
 ```
 
 `SocialLinkManager` 用 `std::map<std::string, SocialLink>` 管理所有 NPC 羁绊。
+
+### Rank 奖励
+
+- Rank 提升时，**当前 Persona 升 1 级**。
+- 特定 Rank 可能让**当前 Persona 学会新技能**。
+- Persona 等级暂时无上限。
 
 ## TileMap / Entity
 

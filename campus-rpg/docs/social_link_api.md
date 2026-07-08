@@ -12,7 +12,8 @@ DialogueScene ──talkToNpc(id)──▶ GameManager
                                   │     └─ SocialLink::addPoints → 自动 rankUp
                                   │           └─ pendingRankUps_ 记录
                                   ├─ rankUpCallback_(id, newRank)   ← UI 注册：播奶龙音效 / 弹特效
-                                  ├─ recomputeSocialLinkBonuses()   → Character::applySocialLinkBonus
+                                  ├─ currentPersona->gainExp(...)   → Persona 升 1 级
+                                  ├─ currentPersona->learnSkill(...)（若该 rank 配置了新技能）
                                   └─ return dialogueFor(id)         → 当前 rank 对话文本
 ```
 
@@ -64,13 +65,14 @@ public:
 
 ```cpp
 struct SocialLinkReward {
-    bool hasStatBonus = false;           // true = 给当前 Persona 加属性
-    PersonaStat stat = PersonaStat::Strength;
-    int statBonus = 0;
+    // 到达此 rank 时，当前 Persona 升多少级。
+    // 默认 1，0 表示不升级。
+    int personaLevels = 1;
 
-    std::shared_ptr<Skill> passiveSkill; // 非空 = 解锁被动技能（预留，战斗系统暂不消费）
+    // 非空 = 当前 Persona 学会该技能。
+    std::shared_ptr<Skill> newSkill;
 
-    bool hasReward() const;
+    bool hasReward() const { return personaLevels > 0 || newSkill != nullptr; }
 };
 
 struct SocialLinkRankData {
@@ -78,8 +80,6 @@ struct SocialLinkRankData {
     SocialLinkReward reward;             // 到达此 rank 时解锁的奖励
 };
 ```
-
-`PersonaStat` 取值：`Strength / Magic / Endurance / Agility / Luck`（定义在 `Persona.h`，`personaStatName()` 返回对应字符串）。
 
 ### 2.3 `SocialLinkManager`（`src/core/SocialLinkManager.h`）
 
@@ -103,42 +103,27 @@ public:
     // —— 对话 API ——
     std::string dialogueFor(const std::string &id) const;
 
-    // —— 奖励聚合 API ——
-    // 同 arcana 的所有 link 在当前 rank 的 statBonus 之和。
-    // statName ∈ {"Strength","Magic","Endurance","Agility","Luck"}
-    int arcanaStatBonus(const std::string &arcana, const std::string &statName) const;
-    // 所有 link 在当前 rank 解锁的被动技能（去重由调用方负责）
-    std::vector<std::shared_ptr<Skill>> collectPassiveSkills() const;
+    // —— 奖励查询 API ——
+    // 取某个 link 在当前 rank 解锁的技能（如果有）。
+    std::shared_ptr<Skill> currentSkillReward(const std::string &id) const;
 };
 ```
 
-**聚合规则**：`arcanaStatBonus` 遍历该 arcana 下每个 link，若其 `currentReward()->hasStatBonus && personaStatName(stat)==statName`，则累加 `statBonus`。这对应 P4「同 arcana 的 Persona 合成经验加成」的简化映射——本项目用「同 arcana 社群等级 → 角色对应属性加成」落地。
+## 3. Character / Persona 集成（coordination owner: nick-cjyx9）
 
-## 3. Character 集成（coordination owner: nick-cjyx9）
+Social Link 的奖励不再直接加在 `Character` 上，而是转化为 **当前 Persona 的等级成长**。
 
-`Character` 新增 5 个 Social Link bonus 字段 + getter / 应用 / 清空方法，并整合进 `attack/defense/speed/magic` 计算：
+- `Character` 移除 Social Link 属性加成字段。
+- `Persona` 新增等级 / 经验字段：`level_`、`exp_`、`expToNextLevel_`。
+- Rank 提升时，GameManager 调用 `currentPersona->gainExp(expToNextLevel_)` 使其直接升 1 级。
+- Persona 升级后基础三维按固定倍率成长（如 `baseStat *= 1.05`）。
 
-```cpp
-int socialLinkStrengthBonus() const;   // 已整合进 attack()
-int socialLinkMagicBonus() const;      // 已整合进 magic()
-int socialLinkEnduranceBonus() const;  // 已整合进 defense()
-int socialLinkAgilityBonus() const;    // 已整合进 speed()
-int socialLinkLuckBonus() const;       // 预留（战斗主属性暂不读 luck）
-
-void applySocialLinkBonus(PersonaStat s, int value);  // 累加
-void clearSocialLinkBonuses();                        // 清零（recompute 前调用）
-```
-
-**整合公式**：
+最终属性计算（供 BattleSystem 使用）：
 
 ```text
-attack()  = baseStrength + persona.strength   + equipmentAttackBonus  + slStrengthBonus
-defense() = baseEndurance + persona.endurance + equipmentDefenseBonus + slEnduranceBonus
-speed()   = baseAgility  + persona.agility    + equipmentSpeedBonus   + slAgilityBonus
-magic()   = baseMagic    + persona.magic                              + slMagicBonus
+finalStat = (baseStat + equipmentBonus) × levelMultiplier
+levelMultiplier = 1 + (Persona.level - 1) × 0.05
 ```
-
-向后兼容：所有 sl bonus 初值 0，旧测试 `testEquipmentItemBoostsAttack`（期望 `attack == base+5`）不受影响。
 
 ## 4. GameManager 集成（`src/manager/GameManager.*`）
 
@@ -150,25 +135,31 @@ std::string GameManager::talkToNpc(const std::string &socialLinkId);
 
 `DialogueScene::update()` 在 `firstFrame_` 时调用此方法替代直接 `link->addPoints(10)`。该方法内部：
 
-1. 记录调用前 rank；
+1. 记录调用前 rank 与当前 Persona 等级；
 2. `socialLinkManager_.addPoints(id, 10)`（每次对话固定 +10 点）；
-3. 若 rank 提升，对每一级升 rank 调一次 `rankUpCallback_(id, newRank)`；
-4. `recomputeSocialLinkBonuses()` 刷新角色属性；
-5. 返回 `dialogueFor(id)` —— 即该 NPC 当前 rank 的对话文本。
+3. 若 rank 提升：
+   - 对每一级升 rank，调用 `currentPersona->gainExp(...)` 使当前 Persona 升 1 级；
+   - 若该 rank 配置了 `newSkill`，让当前 Persona 学会该技能；
+   - 对每一级升 rank 调一次 `rankUpCallback_(id, newRank)`；
+4. 返回 `dialogueFor(id)` —— 即该 NPC 当前 rank 的对话文本。
 
-### 4.2 奖励重算
+### 4.2 奖励应用
 
 ```cpp
 void GameManager::recomputeSocialLinkBonuses();
 ```
 
-清空角色 sl bonus → 遍历 manager 中所有 arcana → 对 5 个 stat 调 `arcanaStatBonus` 累加到角色。在以下时机自动调用：
+旧逻辑已废弃，保留空函数或重命名为 `applySocialLinkRewards()` 以兼容旧调用点。新逻辑在 `talkToNpc` 内部直接处理：
 
-- `newGame()` 末尾（初始化默认 NPC 后）；
-- `load()` 末尾（读档后恢复 bonus）；
-- 每次 `talkToNpc` 后。
+- 记录调用前 Persona 等级；
+- 对每一级升 rank，调用 `currentPersona->gainExp(currentPersona->expToNextLevel())` 使其升 1 级；
+- 若当前 rank 的 `SocialLinkReward::newSkill` 非空，调用 `currentPersona->learnSkill(...)`；
+- 触发 `rankUpCallback_(id, newRank)` 供 UI 播特效。
 
-外部模块若直接改了 `SocialLinkManager` 状态（如调试 / 后续剧情脚本），应手动调用此方法刷新。
+调用时机：
+
+- 每次 `talkToNpc` 后自动应用；
+- `newGame()` / `load()` 后无需重算（Persona 等级已从存档恢复）。
 
 ### 4.3 Rank-Up 事件回调（奶龙音效接入点）
 
@@ -181,19 +172,19 @@ void GameManager::setRankUpCallback(RankUpCallback cb);
 
 默认 NPC 设计（3 个，满足 issue「至少 3 个 NPC」要求）：
 
-| id | name | arcana | 加成方向 | 奖励 rank |
-| --- | --- | --- | --- | --- |
-| `sl_yosuke` | Yosuke | Magician | Strength | 3:+1, 6:+2, 9:+3 |
-| `sl_chie` | Chie | Chariot | Agility | 3:+1, 6:+2, 9:+3 |
-| `sl_yukiko` | Yukiko | Priestess | Magic | 3:+1, 6:+2, 9:+3 |
+| id | name | arcana | 奖励设计 |
+| --- | --- | --- | --- |
+| `sl_yosuke` | Yosuke | Magician | 每升 1 rank，当前 Persona 升 1 级；rank 3 / 6 / 9 额外学会新技能 |
+| `sl_chie` | Chie | Chariot | 同上 |
+| `sl_yukiko` | Yukiko | Priestess | 同上 |
 
 每条 link 的 rank 0..10 均填有独立对话文本（见 `GameManager::initSocialLinkRankData`）。
 
 ## 5. 数据持久化（已存在，未改动）
 
-`SaveRepository` 的 `social_link` 表（`id / rank / points`）已实现 save/load，**机制层不要求新增字段**：奖励由 rank 派生，对话/奖励定义在 `initSocialLinkRankData` 中硬编码，存档只存进度。
+`SaveRepository` 的 `social_link` 表（`id / rank / points`）已实现 save/load。奖励由 rank 派生（Persona 升级 + 新技能），对话/奖励定义在 `initSocialLinkRankData` 中硬编码，存档只存进度。
 
-读档路径 `loadSocialLinks` 会按存档 rank 调 `rankUp()` 把进度推回去，再 `addPoints(points)` 恢复剩余点数 —— 与新 `addPoints` 语义兼容（自动升 rank、返回值忽略）。
+读档路径 `loadSocialLinks` 会按存档 rank 调 `rankUp()` 把进度推回去，再 `addPoints(points)` 恢复剩余点数。读档后需恢复当前 Persona 的等级与已学技能（由 `GameManager::loadFromSlot` 负责从默认 Persona 快照中回贴技能）。
 
 ## 6. UI 对接预留（待 UI 图后实现）
 
@@ -268,8 +259,8 @@ for (const SocialLink *link : GameManager::instance().socialLinkManager().allLin
 | `testSocialLinkRankDataDialogueAndReward` | per-rank 对话切换、reward 读取 |
 | `testSocialLinkManagerAddPointsNotifiesRankUp` | pending 事件记录 / 消费 / 清空、不存在 link 不触发 |
 | `testSocialLinkManagerDialogueForCurrentRank` | 对话随 rank 切换、missing link 返回空 |
-| `testSocialLinkManagerArcanaBonusAggregation` | 同 arcana 累加、异 arcana 隔离、错 stat 不计 |
-| `testCharacterAppliesSocialLinkBonus` | Character 整合 bonus 到 attack()、clear 后还原 |
+| `testSocialLinkManagerSkillReward` | rank 奖励中的新技能正确授予当前 Persona |
+| `testPersonaLevelsFromSocialLink` | Social Link 升级使当前 Persona 升级、基础三维成长 |
 
 ## 8. 与其他模块的边界 / 协调点
 
@@ -277,8 +268,9 @@ for (const SocialLink *link : GameManager::instance().socialLinkManager().allLin
 | --- | --- | --- | --- |
 | `src/core/SocialLink.*` | 扩展 reward/rankData/pending | nick-cjyx9（core） | ✅ 已改 |
 | `src/core/SocialLinkManager.*` | 扩展 progression/dialogue/聚合 API | nick-cjyx9 | ✅ 已改 |
-| `src/core/Character.*` | sl bonus 字段 + 整合到 attack/def/spd/magic | **nick-cjyx9（coordination）** | ✅ 已改，PR 需 self-review |
-| `src/manager/GameManager.*` | talkToNpc / recompute / 回调 / 默认对话数据 | **nick-cjyx9（coordination）** | ✅ 已改，PR 需 self-review |
+| `src/core/Character.*` | 移除 sl bonus 字段；持有 ownedPersonas_ | **nick-cjyx9（coordination）** | ⏳ 待实现 |
+| `src/core/Persona.*` | 新增 level/exp/三维成长 / 技能学习 | nick-cjyx9（core） | ⏳ 待实现 |
+| `src/manager/GameManager.*` | talkToNpc 改奖励为 Persona 升级 + 学技能 | **nick-cjyx9（coordination）** | ⏳ 待实现 |
 | `src/scenes/DialogueScene.*` | 改用 talkToNpc（最小改动） | 场景 owner | ✅ 已改（仅一行调用替换 + 一个成员） |
 | `src/data/SaveRepository.*` | **未改动** | W0606 | 无需 PR |
 | `CMakeLists.txt` | 链接 `sfml-audio` | UI 实现 | ⏳ UI 层再做 |
@@ -288,6 +280,6 @@ for (const SocialLink *link : GameManager::instance().socialLinkManager().allLin
 
 ## 9. 已知遗留 / 后续
 
-- **被动技能**：`SocialLinkReward::passiveSkill` 字段已预留，`SocialLinkManager::collectPassiveSkills()` 已实现，但 `BattleSystem` 暂不消费 —— 等战斗系统扩展被动技能槽时再接。
+- **新技能来源**：`SocialLinkReward::newSkill` 字段已预留，当前 rank 奖励直接让当前 Persona 学会该技能；后续若希望「学习某通用被动技能」，可扩展为技能池。
 - **多对话选项 / 分支**：当前每 rank 一条固定对话（符合 `docs/README.md §3.2 简化设计`）；后续若加选项，可把 `SocialLinkRankData::dialogue` 升级为 `struct { std::vector<std::string> options; std::vector<int> pointValues; }`。
-- **多 arcana 奖励交叉**：当前每个 NPC 单 arcana 单 stat 加成；若后续做「某 NPC 跨 arcana 加成」，扩展 `arcanaStatBonus` 即可，无需改数据结构。
+- **Persona 等级上限**：当前设计为无上限；若后续需要封顶，可在 `Persona::levelUp()` 中加入等级上限判断。

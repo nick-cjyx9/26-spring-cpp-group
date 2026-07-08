@@ -83,4 +83,33 @@ void Persona::levelUp()
     stats_[PersonaStat::Endurance] += 1;
     stats_[PersonaStat::Agility] += 1;
     stats_[PersonaStat::Luck] += 1;
+
+    // Unlock any skills that meet the level requirement.
+    checkSkillUnlocks(level_);
+}
+
+void Persona::addPotentialSkill(int level, std::shared_ptr<Skill> skill)
+{
+    if (!skill)
+        return;
+    potentialSkills_.emplace_back(level, std::move(skill));
+}
+
+std::vector<std::shared_ptr<Skill>> Persona::checkSkillUnlocks(int currentLevel)
+{
+    std::vector<std::shared_ptr<Skill>> newlyUnlocked;
+    for (auto it = potentialSkills_.begin(); it != potentialSkills_.end();)
+    {
+        if (it->first <= currentLevel)
+        {
+            newlyUnlocked.push_back(it->second);
+            learnSkill(std::move(it->second));
+            it = potentialSkills_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    return newlyUnlocked;
 }
