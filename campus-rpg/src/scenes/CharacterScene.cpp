@@ -33,8 +33,9 @@ void CharacterScene::render(engine::IRenderer &renderer)
     renderer.drawText("EXP: " + std::to_string(character.exp()) + "/" + std::to_string(character.expToNextLevel()), {170, 240}, 20, engine::Color::white());
     renderer.drawText("Gold: " + std::to_string(character.gold()), {170, 270}, 20, engine::Color::yellow());
 
-    renderer.drawText("ATK: " + std::to_string(character.attack()) + "  DEF: " + std::to_string(character.defense()) +
-                          "  SPD: " + std::to_string(character.speed()) + "  MAG: " + std::to_string(character.magic()),
+    renderer.drawText("ATK: " + std::to_string(character.attack()) +
+                          "  MAG: " + std::to_string(character.magic()) +
+                          "  SPD: " + std::to_string(character.speed()),
                       {170, 320}, 18, engine::Color::white());
 
     Persona *p = character.currentPersona();

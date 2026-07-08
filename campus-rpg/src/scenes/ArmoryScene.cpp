@@ -58,11 +58,9 @@ namespace
     {
         if (!item) return;
         std::string stats;
-        if (item->attackBonus()  > 0) stats += "ATK+" + std::to_string(item->attackBonus()) + " ";
-        if (item->defenseBonus() > 0) stats += "DEF+" + std::to_string(item->defenseBonus()) + " ";
+        if (item->strengthBonus() > 0) stats += "STR+" + std::to_string(item->strengthBonus()) + " ";
+        if (item->magicBonus()    > 0) stats += "MAG+" + std::to_string(item->magicBonus()) + " ";
         if (item->speedBonus()    > 0) stats += "SPD+" + std::to_string(item->speedBonus()) + " ";
-        if (item->hpBonus()       > 0) stats += "HP+" + std::to_string(item->hpBonus()) + " ";
-        if (item->magicBonus()    > 0) stats += "MAG+" + std::to_string(item->magicBonus());
         if (!stats.empty())
             r.drawText(stats, {x, y}, size, color);
     }

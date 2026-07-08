@@ -13,9 +13,7 @@ enum class PersonaStat
 {
     Strength,
     Magic,
-    Endurance,
-    Agility,
-    Luck
+    Speed
 };
 
 inline std::string personaStatName(PersonaStat s)
@@ -26,38 +24,34 @@ inline std::string personaStatName(PersonaStat s)
         return "Strength";
     case PersonaStat::Magic:
         return "Magic";
-    case PersonaStat::Endurance:
-        return "Endurance";
-    case PersonaStat::Agility:
-        return "Agility";
-    case PersonaStat::Luck:
-        return "Luck";
+    case PersonaStat::Speed:
+        return "Speed";
     default:
         return "Unknown";
     }
 }
 
-// A Persona is a summonable identity that provides stats, resistances and skills.
+// A Persona is a summonable identity that provides three combat stats,
+// elemental resistances and usable skills.
 class Persona
 {
 public:
     Persona() = default;
     Persona(std::string id, std::string name, std::string arcana, int level,
-            int strength, int magic, int endurance, int agility, int luck);
+            int strength, int magic, int speed);
 
     const std::string &id() const { return id_; }
     const std::string &name() const { return name_; }
     const std::string &arcana() const { return arcana_; }
     int level() const { return level_; }
 
-    // Stat access
+    // Base stat access. These are the Persona's own stats before equipment
+    // and level multiplier are applied externally.
     int stat(PersonaStat s) const;
     void setStat(PersonaStat s, int value);
     int strength() const { return stat(PersonaStat::Strength); }
     int magic() const { return stat(PersonaStat::Magic); }
-    int endurance() const { return stat(PersonaStat::Endurance); }
-    int agility() const { return stat(PersonaStat::Agility); }
-    int luck() const { return stat(PersonaStat::Luck); }
+    int speed() const { return stat(PersonaStat::Speed); }
 
     // Affinity
     Affinity affinity(Element e) const;
@@ -72,7 +66,13 @@ public:
     void addPotentialSkill(int level, std::shared_ptr<Skill> skill);
     std::vector<std::shared_ptr<Skill>> checkSkillUnlocks(int currentLevel);
 
+    // Leveling
     void gainExp(int amount);
+    int exp() const { return exp_; }
+    int expToNextLevel() const { return expToNextLevel_; }
+
+    // Apply a fixed-ratio growth to all stats. Called on level up.
+    void growBaseStats(double multiplier = 1.05);
 
 private:
     void levelUp();

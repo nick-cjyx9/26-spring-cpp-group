@@ -18,10 +18,12 @@ namespace
     }
 } // namespace
 
-Enemy::Enemy(std::string id, std::string name, int hp, int attack, int defense, int speed,
+Enemy::Enemy(std::string id, std::string name, int hp,
+             int strength, int magic, int speed,
              int rewardExp, int rewardGold)
     : id_(std::move(id)), name_(std::move(name)), hp_(hp), maxHp_(hp),
-      attack_(attack), defense_(defense), speed_(speed),
+      strength_(strength), magic_(magic), speed_(speed),
+      baseStrength_(strength), baseMagic_(magic), baseSpeed_(speed),
       rewardExp_(rewardExp), rewardGold_(rewardGold)
 {
     initDefaultAffinities(affinities_);
@@ -29,7 +31,7 @@ Enemy::Enemy(std::string id, std::string name, int hp, int attack, int defense, 
 
 void Enemy::takeDamage(int damage)
 {
-    int actual = std::max(1, damage - defense_);
+    int actual = std::max(1, damage);
     hp_ -= actual;
     if (hp_ < 0)
         hp_ = 0;
@@ -54,36 +56,63 @@ void Enemy::addSkill(std::shared_ptr<Skill> skill)
         skills_.push_back(std::move(skill));
 }
 
-std::shared_ptr<Skill> Enemy::chooseSkill() const
+void Enemy::setAttackPattern(std::vector<std::string> pattern)
 {
-    if (skills_.empty())
+    attackPattern_ = std::move(pattern);
+}
+
+std::shared_ptr<Skill> Enemy::chooseSkill(size_t turnIndex) const
+{
+    if (attackPattern_.empty())
         return nullptr;
-    static thread_local std::mt19937 rng{std::random_device{}()};
-    std::uniform_int_distribution<size_t> dist(0, skills_.size() - 1);
-    return skills_[dist(rng)];
+
+    const std::string &action = attackPattern_[turnIndex % attackPattern_.size()];
+    if (action == "normal")
+        return nullptr;
+
+    for (const auto &skill : skills_)
+    {
+        if (skill && skill->id() == action)
+            return skill;
+    }
+    return nullptr;
 }
 
-void Enemy::addDropItemId(const std::string &itemId)
+void Enemy::addDropPersonaId(const std::string &personaId)
 {
-    dropItemIds_.push_back(itemId);
+    dropPersonaIds_.push_back(personaId);
 }
 
-Slime::Slime() : Enemy("enemy_slime", "Slime", 30, 8, 2, 3, 15, 5)
+void Enemy::scaleToLevel(int playerLevel)
+{
+    double multiplier = 1.0 + (playerLevel - 1) * 0.1;
+    strength_ = static_cast<int>(baseStrength_ * multiplier);
+    magic_ = static_cast<int>(baseMagic_ * multiplier);
+    speed_ = static_cast<int>(baseSpeed_ * multiplier);
+    maxHp_ = static_cast<int>(maxHp_ * multiplier);
+    hp_ = maxHp_;
+}
+
+Slime::Slime() : Enemy("enemy_slime", "Slime", 30, 6, 4, 3, 15, 5)
 {
     setAffinity(Element::Fire, Affinity::Weak);
     setAffinity(Element::Ice, Affinity::Weak);
     addSkill(std::make_shared<Skill>("skill_slash", "Slash", Element::Physical, 8, 0, SkillCostType::HP));
+    setAttackPattern({"skill_slash", "normal", "skill_slash"});
 }
 
-Goblin::Goblin() : Enemy("enemy_goblin", "Goblin", 50, 12, 4, 5, 30, 10)
+Goblin::Goblin() : Enemy("enemy_goblin", "Goblin", 50, 10, 5, 5, 30, 10)
 {
     setAffinity(Element::Fire, Affinity::Resist);
     addSkill(std::make_shared<Skill>("skill_cleave", "Cleave", Element::Physical, 12, 0, SkillCostType::HP));
+    setAttackPattern({"normal", "skill_cleave", "skill_cleave"});
 }
 
-Boss::Boss() : Enemy("enemy_boss", "Campus Guardian", 120, 20, 8, 6, 100, 50)
+Boss::Boss() : Enemy("enemy_boss", "Campus Guardian", 120, 16, 10, 6, 100, 50)
 {
     setAffinity(Element::Physical, Affinity::Resist);
     setAffinity(Element::Fire, Affinity::Null);
     addSkill(std::make_shared<Skill>("skill_mighty_swing", "Mighty Swing", Element::Physical, 25, 0, SkillCostType::HP));
+    addSkill(std::make_shared<Skill>("skill_maragi", "Maragi", Element::Fire, 20, 8, SkillCostType::SP));
+    setAttackPattern({"skill_mighty_swing", "normal", "skill_maragi", "normal"});
 }

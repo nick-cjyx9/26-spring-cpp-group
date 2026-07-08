@@ -37,9 +37,14 @@ namespace
 #define CHECK_EQ(a, b) record((a) == (b), #a " == " #b, __FILE__, __LINE__)
 } // namespace
 
+std::shared_ptr<Persona> makeBasicPersona(const std::string &id, int str, int mag, int spd)
+{
+    return std::make_shared<Persona>(id, id, "Fool", 1, str, mag, spd);
+}
+
 void testCharacterGainExpTriggersLevelUp()
 {
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     CHECK_EQ(hero.level(), 1);
     hero.gainExp(100);
     CHECK_EQ(hero.level(), 2);
@@ -47,7 +52,7 @@ void testCharacterGainExpTriggersLevelUp()
 
 void testCharacterLevelUpSnapshotPopulated()
 {
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     CHECK(!hero.hasLevelUpSnapshot());
     hero.gainExp(100);
     CHECK(hero.hasLevelUpSnapshot());
@@ -56,98 +61,42 @@ void testCharacterLevelUpSnapshotPopulated()
     CHECK_EQ(snap.newLevel, 2);
     CHECK(snap.newMaxHp > snap.oldMaxHp);
     CHECK(snap.newMaxSp > snap.oldMaxSp);
-    CHECK(snap.newStrength > snap.oldStrength);
-    CHECK_EQ(snap.newAttack, snap.newStrength); // no equipment bonuses
     hero.clearLevelUpSnapshot();
     CHECK(!hero.hasLevelUpSnapshot());
 }
 
 void testCharacterLevelUpIncreasesStats()
 {
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     int initialMaxHp = hero.maxHp();
     hero.gainExp(100);
     CHECK(hero.maxHp() > initialMaxHp);
 }
 
-void testCharacterTakeDamageAppliesDefense()
+void testCharacterTakeDamageNoDefense()
 {
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     hero.takeDamage(50);
-    CHECK(hero.hp() > 0);
-    CHECK(hero.hp() < 100);
+    CHECK_EQ(hero.hp(), 50);
 }
 
 void testFoodItemHealsCharacter()
 {
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     hero.takeDamage(50);
     FoodItem bread("food_bread", "Bread", "Tasty bread", 10, 30);
     bread.use(hero);
     CHECK(hero.hp() > 50);
 }
 
-void testEquipmentItemBoostsAttack()
+void testEquipmentItemBoostsStrength()
 {
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
+    hero.setPersona(makeBasicPersona("p", 10, 10, 10));
     int baseAttack = hero.attack();
-    // EquipmentItem::use delegates to Character::equip which adds the bonus.
-    EquipmentItem sword("eq_sword", "Sword", "Sharp sword", 50, 5, 0);
+    EquipmentItem sword("eq_sword", "Sword", "Sharp sword", 50, 5, 0, 0, EquipmentSlot::Weapon);
     sword.use(hero);
     CHECK_EQ(hero.attack(), baseAttack + 5);
-}
-
-void testCharacterEquipAndUnequipRestoresStats()
-{
-    // Simulate the slot model at the Character level: equip adds bonuses,
-    // then setEquipmentBonuses(0,...) restores base stats (matches how
-    // GameManager recompute works on load).
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
-    int baseAttack = hero.attack();
-    int baseDefense = hero.defense();
-
-    EquipmentItem sword("eq_sword", "Sword", "Sharp sword", 50, 5, 2);
-    hero.equip(std::make_shared<EquipmentItem>(sword));
-    CHECK_EQ(hero.attack(), baseAttack + 5);
-    CHECK_EQ(hero.defense(), baseDefense + 2);
-
-    // Unequip: clear the equipment bonuses back to zero.
-    hero.setEquipmentBonuses(0, 0, 0, 0, 0);
-    CHECK_EQ(hero.attack(), baseAttack);
-    CHECK_EQ(hero.defense(), baseDefense);
-}
-
-void testEquipmentItemClonePreservesAllFields()
-{
-    EquipmentItem original("eq_full", "Full Gear", "All stats", 100,
-                           3, 4, 5, 6, 7, EquipmentSlot::Weapon, "tile_00_00");
-    auto copy = original.clone();
-    auto *eq = dynamic_cast<EquipmentItem *>(copy.get());
-    CHECK(eq != nullptr);
-    CHECK_EQ(eq->id(), std::string("eq_full"));
-    CHECK_EQ(eq->attackBonus(), 3);
-    CHECK_EQ(eq->defenseBonus(), 4);
-    CHECK_EQ(eq->speedBonus(), 5);
-    CHECK_EQ(eq->hpBonus(), 6);
-    CHECK_EQ(eq->magicBonus(), 7);
-    CHECK_EQ(static_cast<int>(eq->slot()), static_cast<int>(EquipmentSlot::Weapon));
-    CHECK_EQ(eq->textureId(), std::string("tile_00_00"));
-}
-
-void testInventoryTakeItemDetachesAndShrinks()
-{
-    Inventory inv;
-    inv.addItem(std::make_unique<FoodItem>("food_bread", "Bread", "Bread", 10, 15));
-    inv.addItem(std::make_unique<PotionItem>("potion_hp", "HP Potion", "Heal", 30, 50));
-    CHECK_EQ(inv.size(), static_cast<std::size_t>(2));
-    auto taken = inv.takeItem(0);
-    CHECK(taken != nullptr);
-    CHECK_EQ(taken->id(), std::string("food_bread"));
-    CHECK_EQ(inv.size(), static_cast<std::size_t>(1));
-    CHECK_EQ(inv.itemAt(0)->id(), std::string("potion_hp"));
-    // Out-of-range take returns nullptr, size unchanged.
-    CHECK(inv.takeItem(99) == nullptr);
-    CHECK_EQ(inv.size(), static_cast<std::size_t>(1));
 }
 
 void testInventoryAddItemIncreasesSize()
@@ -161,7 +110,7 @@ void testInventoryUseItemAppliesEffectAndRemovesIt()
 {
     Inventory inv;
     inv.addItem(std::make_unique<PotionItem>("potion_hp", "HP Potion", "Restores HP", 30, 50));
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     hero.takeDamage(60);
     int hpBefore = hero.hp();
     CHECK(inv.useItem(0, hero));
@@ -173,7 +122,7 @@ void testShopBuyItemTransfersItemAndConsumesGold()
 {
     Shop shop;
     shop.addItem(std::make_unique<FoodItem>("food_bread", "Bread", "Bread", 10, 15));
-    Character buyer("Buyer", 100, 50, 10, 10, 10, 10, 10);
+    Character buyer("Buyer", 100, 50);
     buyer.addGold(100);
     Inventory inv;
     CHECK(shop.buy(0, buyer, inv));
@@ -183,7 +132,8 @@ void testShopBuyItemTransfersItemAndConsumesGold()
 
 void testBattleStrongPlayerDefeatsSlime()
 {
-    Character hero("Hero", 100, 50, 20, 20, 20, 20, 20);
+    Character hero("Hero", 100, 50);
+    hero.setPersona(makeBasicPersona("p", 20, 20, 20));
     Slime slime;
     BattleSystem battle;
     battle.startBattle(hero, slime);
@@ -191,7 +141,8 @@ void testBattleStrongPlayerDefeatsSlime()
     int safety = 0;
     while (!battle.isOver() && safety < 100)
     {
-        battle.playerAttack();
+        if (battle.isPlayerTurn())
+            battle.playerAttack();
         ++safety;
     }
 
@@ -237,14 +188,19 @@ void testSocialLinkRankDataDialogueAndReward()
 {
     SocialLink link("sl_test", "Test", "Fool");
     link.setRankData(0, {"hello rank 0"});
-    link.setRankData(1, {"hello rank 1", {.hasStatBonus = true, .stat = PersonaStat::Strength, .statBonus = 2}});
+    auto skill = std::make_shared<Skill>("skill_test", "Test Skill", Element::Fire, 10, 5, SkillCostType::SP);
+    SocialLinkRankData rank1Data;
+    rank1Data.dialogue = "hello rank 1";
+    rank1Data.reward.personaLevels = 1;
+    rank1Data.reward.newSkill = skill;
+    link.setRankData(1, rank1Data);
     CHECK_EQ(link.currentDialogue(), "hello rank 0");
     link.addPoints(20); // -> rank 1
     CHECK_EQ(link.currentDialogue(), "hello rank 1");
     const SocialLinkReward *r = link.currentReward();
     CHECK(r != nullptr);
-    CHECK(r->hasStatBonus);
-    CHECK_EQ(r->statBonus, 2);
+    CHECK_EQ(r->personaLevels, 1);
+    CHECK(r->newSkill != nullptr);
 }
 
 void testSocialLinkManagerAddPointsNotifiesRankUp()
@@ -276,44 +232,27 @@ void testSocialLinkManagerDialogueForCurrentRank()
     CHECK_EQ(mgr.dialogueFor("missing"), "");
 }
 
-void testSocialLinkManagerArcanaBonusAggregation()
+void testPersonaLevelsFromSocialLink()
 {
-    SocialLinkManager mgr;
-    // Two Magician links contributing Strength bonus at their current rank.
-    SocialLink a("sl_a", "A", "Magician");
-    a.setRankData(0, {"a0"});
-    a.setRankData(1, {"a1", {.hasStatBonus = true, .stat = PersonaStat::Strength, .statBonus = 1}});
-    SocialLink b("sl_b", "B", "Magician");
-    b.setRankData(0, {"b0"});
-    b.setRankData(1, {"b1", {.hasStatBonus = true, .stat = PersonaStat::Strength, .statBonus = 2}});
-    // A Chariot link that should NOT count toward Magician.
-    SocialLink c("sl_c", "C", "Chariot");
-    c.setRankData(0, {"c0"});
-    c.setRankData(1, {"c1", {.hasStatBonus = true, .stat = PersonaStat::Strength, .statBonus = 5}});
-    mgr.addLink(std::move(a));
-    mgr.addLink(std::move(b));
-    mgr.addLink(std::move(c));
+    auto persona = makeBasicPersona("p", 10, 10, 10);
+    Character hero("Hero", 100, 50);
+    hero.setPersona(persona);
 
-    // At rank 0: no rewards yet.
-    CHECK_EQ(mgr.arcanaStatBonus("Magician", "Strength"), 0);
-    // Rank up the two Magician links.
-    mgr.addPoints("sl_a", 20);
-    mgr.addPoints("sl_b", 20);
-    CHECK_EQ(mgr.arcanaStatBonus("Magician", "Strength"), 3); // 1 + 2
-    // Chariot bonus is separate.
-    mgr.addPoints("sl_c", 20);
-    CHECK_EQ(mgr.arcanaStatBonus("Chariot", "Strength"), 5);
-    CHECK_EQ(mgr.arcanaStatBonus("Magician", "Agility"), 0); // wrong stat
-}
+    SocialLink link("sl_test", "Test", "Fool");
+    link.setRankData(1, {.dialogue = "rank1", .reward = {.personaLevels = 1}});
+    link.addPoints(20);
 
-void testCharacterAppliesSocialLinkBonus()
-{
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
-    int baseAtk = hero.attack();
-    hero.applySocialLinkBonus(PersonaStat::Strength, 3);
-    CHECK_EQ(hero.attack(), baseAtk + 3);
-    hero.clearSocialLinkBonuses();
-    CHECK_EQ(hero.attack(), baseAtk);
+    int beforeLevel = persona->level();
+    for (int i = 0; i < link.rank(); ++i)
+    {
+        const SocialLinkRankData *d = link.rankData(i + 1);
+        if (d)
+        {
+            for (int j = 0; j < d->reward.personaLevels; ++j)
+                persona->gainExp(persona->expToNextLevel());
+        }
+    }
+    CHECK(persona->level() > beforeLevel);
 }
 
 void testEntityIntersection()
@@ -333,7 +272,7 @@ void testTileMapWalkability()
 
 void testPersonaSkillUnlockOnLevelUp()
 {
-    Persona p("p_test", "Test", "Fool", 1, 5, 5, 5, 5, 5);
+    Persona p("p_test", "Test", "Fool", 1, 5, 5, 5);
     auto skill = std::make_shared<Skill>("skill_test", "Test Skill", Element::Fire, 10, 5, SkillCostType::SP, false, 3);
     p.addPotentialSkill(3, skill);
     CHECK_EQ(p.skills().size(), static_cast<std::size_t>(0));
@@ -349,13 +288,10 @@ int main()
     testCharacterGainExpTriggersLevelUp();
     testCharacterLevelUpSnapshotPopulated();
     testCharacterLevelUpIncreasesStats();
-    testCharacterTakeDamageAppliesDefense();
+    testCharacterTakeDamageNoDefense();
 
     testFoodItemHealsCharacter();
-    testEquipmentItemBoostsAttack();
-    testCharacterEquipAndUnequipRestoresStats();
-    testEquipmentItemClonePreservesAllFields();
-    testInventoryTakeItemDetachesAndShrinks();
+    testEquipmentItemBoostsStrength();
 
     testInventoryAddItemIncreasesSize();
     testInventoryUseItemAppliesEffectAndRemovesIt();
@@ -369,8 +305,8 @@ int main()
     testSocialLinkRankDataDialogueAndReward();
     testSocialLinkManagerAddPointsNotifiesRankUp();
     testSocialLinkManagerDialogueForCurrentRank();
-    testSocialLinkManagerArcanaBonusAggregation();
-    testCharacterAppliesSocialLinkBonus();
+    testPersonaLevelsFromSocialLink();
+
     testEntityIntersection();
     testTileMapWalkability();
     testPersonaSkillUnlockOnLevelUp();

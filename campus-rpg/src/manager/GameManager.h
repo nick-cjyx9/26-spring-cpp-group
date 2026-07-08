@@ -101,6 +101,10 @@ public:
     std::unique_ptr<Enemy> createEnemyFromTemplate(const std::string &id) const;
     std::shared_ptr<Persona> findPersona(const std::string &id) const;
 
+    // Persona ownership helpers.
+    void addPersonaToPlayer(std::shared_ptr<Persona> persona);
+    void setPlayerPersona(std::shared_ptr<Persona> persona);
+
     bool isNight() const { return isNight_; }
     void setNight(bool night) { isNight_ = night; }
 
@@ -110,14 +114,14 @@ public:
     // ---- Social Link integration ----
     // Called by DialogueScene when the player talks to an NPC.
     // Adds the daily progression points (up to kMaxTalksPerNpc talks/day),
-    // fires any pending rank-up callbacks, recomputes stat bonuses on the
-    // character, and returns the link's current-rank dialogue text. Once the
-    // daily talk cap is reached, returns a "no more today" message and grants
-    // nothing.
+    // fires any pending rank-up callbacks, levels up the current Persona for
+    // each rank gained, teaches any rank-reward skill, and returns the link's
+    // current-rank dialogue text. Once the daily talk cap is reached, returns a
+    // "no more today" message and grants nothing.
     std::string talkToNpc(const std::string &socialLinkId);
 
-    // Recompute and apply all Social Link stat bonuses onto the character.
-    // Called internally after talkToNpc / load. UI may also call it on demand.
+    // Deprecated: Social Link rewards are now applied as Persona levels inside
+    // talkToNpc(). Kept for backward compatibility with existing call sites.
     void recomputeSocialLinkBonuses();
 
     // UI layer registers a callback to be fired on every Social Link rank-up

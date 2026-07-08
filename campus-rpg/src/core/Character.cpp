@@ -3,34 +3,47 @@
 
 #include <algorithm>
 
-Character::Character(std::string name, int maxHp, int maxSp,
-                     int strength, int magic, int endurance, int agility, int luck)
+Character::Character(std::string name, int maxHp, int maxSp)
     : name_(std::move(name)), maxHp_(maxHp), hp_(maxHp),
-      maxSp_(maxSp), sp_(maxSp),
-      baseStrength_(strength), baseMagic_(magic), baseEndurance_(endurance),
-      baseAgility_(agility), baseLuck_(luck) {}
+      maxSp_(maxSp), sp_(maxSp) {}
+
+int Character::computePersonaStat(PersonaStat s) const
+{
+    if (!persona_)
+        return 0;
+
+    int base = persona_->stat(s);
+    int equipment = 0;
+    switch (s)
+    {
+    case PersonaStat::Strength:
+        equipment = equipmentStrengthBonus_;
+        break;
+    case PersonaStat::Magic:
+        equipment = equipmentMagicBonus_;
+        break;
+    case PersonaStat::Speed:
+        equipment = equipmentSpeedBonus_;
+        break;
+    }
+
+    double levelMultiplier = 1.0 + (persona_->level() - 1) * 0.05;
+    return static_cast<int>((base + equipment) * levelMultiplier);
+}
 
 int Character::attack() const
 {
-    int personaBonus = persona_ ? persona_->strength() : 0;
-    return baseStrength_ + personaBonus + equipmentAttackBonus_ + slStrengthBonus_;
-}
-
-int Character::defense() const
-{
-    int personaBonus = persona_ ? persona_->endurance() : 0;
-    return baseEndurance_ + personaBonus + equipmentDefenseBonus_ + slEnduranceBonus_;
-}
-
-int Character::speed() const
-{
-    int personaBonus = persona_ ? persona_->agility() : 0;
-    return baseAgility_ + personaBonus + equipmentSpeedBonus_ + slAgilityBonus_;
+    return computePersonaStat(PersonaStat::Strength);
 }
 
 int Character::magic() const
 {
-    return baseMagic_ + (persona_ ? persona_->magic() : 0) + slMagicBonus_;
+    return computePersonaStat(PersonaStat::Magic);
+}
+
+int Character::speed() const
+{
+    return computePersonaStat(PersonaStat::Speed);
 }
 
 Affinity Character::affinity(Element e) const
@@ -42,7 +55,8 @@ Affinity Character::affinity(Element e) const
 
 void Character::takeDamage(int damage)
 {
-    int actual = std::max(1, damage - defense());
+    // No defense stat; HP is the only buffer.
+    int actual = std::max(1, damage);
     hp_ -= actual;
     if (hp_ < 0)
         hp_ = 0;
@@ -93,54 +107,20 @@ void Character::levelUp()
     snap.oldLevel = level_;
     snap.oldMaxHp = maxHp_;
     snap.oldMaxSp = maxSp_;
-    snap.oldStrength = baseStrength_;
-    snap.oldMagic = baseMagic_;
-    snap.oldEndurance = baseEndurance_;
-    snap.oldAgility = baseAgility_;
-    snap.oldLuck = baseLuck_;
-    snap.oldAttack = attack();
-    snap.oldDefense = defense();
-    snap.oldSpeed = speed();
 
     int prevLevel = level_;
     ++level_;
 
     // Non-linear growth: higher levels grant bigger bonuses.
-    // HP  grows fastest, followed by SP, then combat stats.
-    maxHp_ += 15 + prevLevel * 2;      // e.g. L1:+17, L5:+25, L10:+35
+    maxHp_ += 15 + prevLevel * 2;
     hp_ = maxHp_;
-    maxSp_ += 5 + prevLevel;            // e.g. L1:+6, L5:+10, L10:+15
+    maxSp_ += 5 + prevLevel;
     sp_ = maxSp_;
-    baseStrength_ += 1 + (prevLevel >= 5 ? 1 : 0);   // extra at L5+
-    baseEndurance_ += 1 + (prevLevel >= 7 ? 1 : 0);  // extra at L7+
-    baseAgility_ += 1 + (prevLevel >= 6 ? 1 : 0);    // extra at L6+
-    baseMagic_ += 1 + (prevLevel >= 8 ? 1 : 0);      // extra at L8+
-    baseLuck_ += 1;
     expToNextLevel_ = static_cast<int>(expToNextLevel_ * 1.5);
 
     snap.newLevel = level_;
     snap.newMaxHp = maxHp_;
     snap.newMaxSp = maxSp_;
-    snap.newStrength = baseStrength_;
-    snap.newMagic = baseMagic_;
-    snap.newEndurance = baseEndurance_;
-    snap.newAgility = baseAgility_;
-    snap.newLuck = baseLuck_;
-    snap.newAttack = attack();
-    snap.newDefense = defense();
-    snap.newSpeed = speed();
-
-    // Check for persona skill unlocks
-    if (persona_)
-    {
-        auto unlocked = persona_->checkSkillUnlocks(level_);
-        for (const auto &s : unlocked)
-        {
-            if (s)
-                snap.unlockedSkills.push_back(s->name());
-        }
-    }
-
     snapshot_ = snap;
     hasSnapshot_ = true;
 }
@@ -150,62 +130,35 @@ void Character::setPersona(std::shared_ptr<Persona> persona)
     persona_ = std::move(persona);
 }
 
-void Character::setBaseStats(int strength, int magic, int endurance, int agility, int luck)
+void Character::addPersona(std::shared_ptr<Persona> persona)
 {
-    baseStrength_ = strength;
-    baseMagic_ = magic;
-    baseEndurance_ = endurance;
-    baseAgility_ = agility;
-    baseLuck_ = luck;
+    if (!persona || ownsPersona(persona->id()))
+        return;
+    ownedPersonas_.push_back(std::move(persona));
 }
 
-void Character::setEquipmentBonuses(int attack, int defense, int speed, int hp, int magic)
+bool Character::ownsPersona(const std::string &id) const
 {
-    equipmentAttackBonus_ = attack;
-    equipmentDefenseBonus_ = defense;
-    equipmentSpeedBonus_ = speed;
-    equipmentHpBonus_ = hp;
+    for (const auto &p : ownedPersonas_)
+    {
+        if (p && p->id() == id)
+            return true;
+    }
+    return false;
+}
+
+void Character::setEquipmentBonuses(int strength, int magic, int speed)
+{
+    equipmentStrengthBonus_ = strength;
     equipmentMagicBonus_ = magic;
+    equipmentSpeedBonus_ = speed;
 }
 
 void Character::equip(std::shared_ptr<EquipmentItem> equipment)
 {
     if (!equipment)
         return;
-    equipmentAttackBonus_ += equipment->attackBonus();
-    equipmentDefenseBonus_ += equipment->defenseBonus();
-    equipmentSpeedBonus_ += equipment->speedBonus();
-    equipmentHpBonus_ += equipment->hpBonus();
+    equipmentStrengthBonus_ += equipment->strengthBonus();
     equipmentMagicBonus_ += equipment->magicBonus();
-}
-
-void Character::applySocialLinkBonus(PersonaStat s, int value)
-{
-    switch (s)
-    {
-    case PersonaStat::Strength:
-        slStrengthBonus_ += value;
-        break;
-    case PersonaStat::Magic:
-        slMagicBonus_ += value;
-        break;
-    case PersonaStat::Endurance:
-        slEnduranceBonus_ += value;
-        break;
-    case PersonaStat::Agility:
-        slAgilityBonus_ += value;
-        break;
-    case PersonaStat::Luck:
-        slLuckBonus_ += value;
-        break;
-    }
-}
-
-void Character::clearSocialLinkBonuses()
-{
-    slStrengthBonus_ = 0;
-    slMagicBonus_ = 0;
-    slEnduranceBonus_ = 0;
-    slAgilityBonus_ = 0;
-    slLuckBonus_ = 0;
+    equipmentSpeedBonus_ += equipment->speedBonus();
 }

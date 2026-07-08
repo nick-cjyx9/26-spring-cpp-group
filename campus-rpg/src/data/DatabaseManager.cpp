@@ -96,22 +96,13 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             exp INTEGER DEFAULT 0,
             exp_to_next INTEGER DEFAULT 100,
             gold INTEGER DEFAULT 0,
-            st INTEGER DEFAULT 5,
-            ma INTEGER DEFAULT 5,
-            en INTEGER DEFAULT 5,
-            ag INTEGER DEFAULT 5,
-            lu INTEGER DEFAULT 5,
-            eq_atk INTEGER DEFAULT 0,
-            eq_def INTEGER DEFAULT 0,
+            eq_str INTEGER DEFAULT 0,
+            eq_mag INTEGER DEFAULT 0,
             eq_spd INTEGER DEFAULT 0,
             pos_x REAL DEFAULT 0,
             pos_y REAL DEFAULT 0,
             is_night INTEGER DEFAULT 0,
-            current_persona_id TEXT,
-            weapon_id TEXT,
-            armor_id TEXT,
-            accessory_id TEXT,
-            relic_id TEXT
+            current_persona_id TEXT
         );
 
         CREATE TABLE IF NOT EXISTS persona (
@@ -120,11 +111,9 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             name TEXT NOT NULL,
             arcana TEXT NOT NULL,
             level INTEGER DEFAULT 1,
-            st INTEGER DEFAULT 5,
-            ma INTEGER DEFAULT 5,
-            en INTEGER DEFAULT 5,
-            ag INTEGER DEFAULT 5,
-            lu INTEGER DEFAULT 5,
+            strength INTEGER DEFAULT 5,
+            magic INTEGER DEFAULT 5,
+            speed INTEGER DEFAULT 5,
             affinities TEXT,
             skills TEXT,
             owner TEXT,
@@ -204,14 +193,6 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
     };
     addColumnIfMissing("social_link", "name", "TEXT");
     addColumnIfMissing("social_link", "portrait", "TEXT");
-
-    // Schema v3: equipment slot persistence. The character row stores the id
-    // of the item currently equipped in each gear slot (empty = none). Legacy
-    // saves get NULL columns which loadEquipmentSlots treats as empty slots.
-    addColumnIfMissing("character", "weapon_id", "TEXT");
-    addColumnIfMissing("character", "armor_id", "TEXT");
-    addColumnIfMissing("character", "accessory_id", "TEXT");
-    addColumnIfMissing("character", "relic_id", "TEXT");
 
     if (version < 1)
     {

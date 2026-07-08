@@ -12,16 +12,13 @@ class Skill;
 // All fields are optional; an empty reward just means "dialogue only".
 struct SocialLinkReward
 {
-    // Persona stat bonus applied while this link is at >= this rank.
-    // Use PersonaStat::Strength ... Luck, or leave unset for no stat bonus.
-    bool hasStatBonus = false;
-    PersonaStat stat = PersonaStat::Strength;
-    int statBonus = 0;
+    // Number of levels granted to the current Persona upon reaching this rank.
+    int personaLevels = 0;
 
-    // Passive skill granted to the character (one-time unlock at this rank).
-    std::shared_ptr<Skill> passiveSkill;
+    // Skill taught to the current Persona (one-time unlock at this rank).
+    std::shared_ptr<Skill> newSkill;
 
-    bool hasReward() const { return hasStatBonus || passiveSkill != nullptr; }
+    bool hasReward() const { return personaLevels > 0 || newSkill != nullptr; }
 };
 
 // Per-rank data: dialogue shown at this rank + reward unlocked upon reaching it.

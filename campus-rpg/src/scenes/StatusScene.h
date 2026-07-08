@@ -32,7 +32,7 @@ private:
     void renderBackpack(engine::IRenderer &renderer);
 
     Section section_ = Section::Stats;
-    int gearSlotIndex_ = 0;      // 0=Weapon, 1=Armor, 2=Accessory, 3=Relic
+    int gearSlotIndex_ = 0; // 0=Weapon, 1=Armor, 2=Accessory, 3=Relic
     int backpackIndex_ = 0;
     std::string message_;
     float messageTimer_ = 0.0f;

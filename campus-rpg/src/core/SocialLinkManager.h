@@ -53,15 +53,9 @@ public:
     // Returns the dialogue text for the link's current rank, or "" if not found.
     std::string dialogueFor(const std::string &id) const;
 
-    // ---- Reward aggregation API ----
-    // Sums the stat bonus across every link whose arcana matches `arcana`,
-    // where each link contributes its current-rank reward's statBonus
-    // (only if that reward targets the requested stat).
-    // `statName` is one of "Strength"/"Magic"/"Endurance"/"Agility"/"Luck".
-    int arcanaStatBonus(const std::string &arcana, const std::string &statName) const;
-
-    // Collects all passive skills granted by every link at its current rank.
-    std::vector<std::shared_ptr<Skill>> collectPassiveSkills() const;
+    // ---- Reward query API ----
+    // Returns the skill reward (if any) for the link's current rank.
+    std::shared_ptr<Skill> currentSkillReward(const std::string &id) const;
 
 private:
     std::map<std::string, SocialLink> links_;

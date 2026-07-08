@@ -75,31 +75,13 @@ std::string SocialLinkManager::dialogueFor(const std::string &id) const
     return link->currentDialogue();
 }
 
-int SocialLinkManager::arcanaStatBonus(const std::string &arcana, const std::string &statName) const
+std::shared_ptr<Skill> SocialLinkManager::currentSkillReward(const std::string &id) const
 {
-    int total = 0;
-    for (const auto &[id, link] : links_)
-    {
-        if (link.arcana() != arcana)
-            continue;
-        const SocialLinkReward *reward = link.currentReward();
-        if (!reward || !reward->hasStatBonus)
-            continue;
-        if (personaStatName(reward->stat) != statName)
-            continue;
-        total += reward->statBonus;
-    }
-    return total;
-}
-
-std::vector<std::shared_ptr<Skill>> SocialLinkManager::collectPassiveSkills() const
-{
-    std::vector<std::shared_ptr<Skill>> result;
-    for (const auto &[id, link] : links_)
-    {
-        const SocialLinkReward *reward = link.currentReward();
-        if (reward && reward->passiveSkill)
-            result.push_back(reward->passiveSkill);
-    }
-    return result;
+    const SocialLink *link = getLink(id);
+    if (!link)
+        return nullptr;
+    const SocialLinkReward *reward = link->currentReward();
+    if (!reward)
+        return nullptr;
+    return reward->newSkill;
 }

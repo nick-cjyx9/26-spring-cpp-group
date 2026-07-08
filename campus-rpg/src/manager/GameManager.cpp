@@ -32,7 +32,7 @@ GameManager &GameManager::instance()
 
 void GameManager::seedDefaultState(const std::string &playerName)
 {
-    character_ = Character(playerName, 100, 50, 10, 10, 10, 10, 10);
+    character_ = Character(playerName, 100, 50);
     inventory_ = Inventory(20);
     shop_ = Shop();
     questManager_ = QuestManager();
@@ -56,8 +56,20 @@ void GameManager::seedDefaultState(const std::string &playerName)
     initDefaultMap();          // place player + today's NPCs
     initDefaultEquipment();
 
-    // Equip starter Persona.
-    auto starter = findPersona("persona_izanagi");
+    // All default personas are owned by the player.
+    character_.clearOwnedPersonas();
+    for (const auto &p : personas_)
+    {
+        if (p)
+            character_.addPersona(p);
+    }
+
+    // Pick a random balanced starter Persona.
+    std::vector<std::string> starters = {
+        "persona_izanagi", "persona_pixie", "persona_orpheus"};
+    std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<size_t> dist(0, starters.size() - 1);
+    auto starter = findPersona(starters[dist(rng)]);
     if (starter)
         character_.setPersona(starter);
 
@@ -75,18 +87,6 @@ bool GameManager::saveToSlot(int slotId)
     SaveRepository repo;
     bool ok = repo.saveAll(slotId, character_, inventory_, personas_,
                            socialLinkManager_, questManager_);
-    if (ok)
-    {
-        // Persist the four gear slots (empty string for empty slots).
-        auto idOf = [](const std::shared_ptr<EquipmentItem> &g) -> std::string {
-            return g ? g->id() : std::string();
-        };
-        ok = repo.saveEquipmentSlots(slotId,
-                                     idOf(equippedGear_.weapon),
-                                     idOf(equippedGear_.armor),
-                                     idOf(equippedGear_.accessory),
-                                     idOf(equippedGear_.relic));
-    }
     if (ok)
         currentSlotId_ = slotId;
     return ok;
@@ -153,44 +153,19 @@ bool GameManager::loadFromSlot(int slotId)
             character_.setPersona(p);
     }
 
+    // Sync owned personas after load.
+    character_.clearOwnedPersonas();
+    for (const auto &p : personas_)
+    {
+        if (p)
+            character_.addPersona(p);
+    }
+
     // Names/portraits were just overwritten from the save; rebuild the generic
     // dialogue so the embedded names match the loaded identity.
     applyNpcDialogueTemplates();
     recomputeSocialLinkBonuses();
 
-    // Restore equipment slots. The data layer only stores item ids; we look
-    // each one up in the (already-seeded) equipment database, clone it into
-    // the matching slot, and recompute the character's equipment bonuses from
-    // scratch so they stay consistent with the equipped items.
-    std::string wId, aId, acId, rId;
-    if (repo.loadEquipmentSlots(slotId, wId, aId, acId, rId))
-    {
-        auto findBySlot = [this](const std::string &id, EquipmentSlot want) -> std::shared_ptr<EquipmentItem> {
-            if (id.empty())
-                return nullptr;
-            for (const auto &e : equipmentDatabase_)
-                if (e && e->id() == id && e->slot() == want)
-                    return std::shared_ptr<EquipmentItem>(
-                        static_cast<EquipmentItem *>(e->clone().release()));
-            return nullptr;
-        };
-        equippedGear_.weapon = findBySlot(wId, EquipmentSlot::Weapon);
-        equippedGear_.armor = findBySlot(aId, EquipmentSlot::Armor);
-        equippedGear_.accessory = findBySlot(acId, EquipmentSlot::Accessory);
-        equippedGear_.relic = findBySlot(rId, EquipmentSlot::Relic);
-
-        // Recompute equipment bonuses from the restored gear (single source of
-        // truth), discarding the eq_atk/eq_def/eq_spd values loaded earlier.
-        character_.setEquipmentBonuses(0, 0, 0, 0, 0);
-        auto applyIfSet = [this](const std::shared_ptr<EquipmentItem> &g) {
-            if (g)
-                character_.equip(g);
-        };
-        applyIfSet(equippedGear_.weapon);
-        applyIfSet(equippedGear_.armor);
-        applyIfSet(equippedGear_.accessory);
-        applyIfSet(equippedGear_.relic);
-    }
     return true;
 }
 
@@ -330,23 +305,55 @@ std::shared_ptr<Persona> GameManager::findPersona(const std::string &id) const
     return nullptr;
 }
 
+void GameManager::addPersonaToPlayer(std::shared_ptr<Persona> persona)
+{
+    if (!persona)
+        return;
+    if (!findPersona(persona->id()))
+        personas_.push_back(persona);
+    character_.addPersona(persona);
+}
+
+void GameManager::setPlayerPersona(std::shared_ptr<Persona> persona)
+{
+    if (!persona)
+        return;
+    addPersonaToPlayer(persona);
+    character_.setPersona(persona);
+}
+
 void GameManager::initDefaultPersonas()
 {
     auto izanagi = std::make_shared<Persona>("persona_izanagi", "Izanagi", "Fool", 2,
-                                             6, 5, 4, 5, 4);
+                                             6, 5, 5);
     izanagi->setAffinity(Element::Electric, Affinity::Resist);
     izanagi->setAffinity(Element::Wind, Affinity::Weak);
     izanagi->learnSkill(std::make_shared<Skill>("skill_zio", "Zio", Element::Electric, 6, 4, SkillCostType::SP));
     izanagi->learnSkill(std::make_shared<Skill>("skill_cleave", "Cleave", Element::Physical, 8, 0, SkillCostType::HP));
+    // Potential skills unlocked via Social Link rank-ups.
+    izanagi->addPotentialSkill(3, std::make_shared<Skill>("skill_zionga", "Zionga", Element::Electric, 12, 8, SkillCostType::SP));
+    izanagi->addPotentialSkill(6, std::make_shared<Skill>("skill_mazionga", "Mazionga", Element::Electric, 20, 14, SkillCostType::SP));
     personas_.push_back(izanagi);
 
     auto pixie = std::make_shared<Persona>("persona_pixie", "Pixie", "Magician", 2,
-                                           3, 6, 3, 6, 5);
+                                           4, 6, 5);
     pixie->setAffinity(Element::Wind, Affinity::Resist);
     pixie->setAffinity(Element::Electric, Affinity::Weak);
     pixie->learnSkill(std::make_shared<Skill>("skill_garu", "Garu", Element::Wind, 6, 4, SkillCostType::SP));
     pixie->learnSkill(std::make_shared<Skill>("skill_dia", "Dia", Element::Almighty, 15, 6, SkillCostType::SP, true));
+    pixie->addPotentialSkill(3, std::make_shared<Skill>("skill_garula", "Garula", Element::Wind, 12, 8, SkillCostType::SP));
+    pixie->addPotentialSkill(6, std::make_shared<Skill>("skill_diarama", "Diarama", Element::Almighty, 35, 12, SkillCostType::SP, true));
     personas_.push_back(pixie);
+
+    auto orpheus = std::make_shared<Persona>("persona_orpheus", "Orpheus", "Fool", 2,
+                                             5, 5, 5);
+    orpheus->setAffinity(Element::Fire, Affinity::Resist);
+    orpheus->setAffinity(Element::Ice, Affinity::Weak);
+    orpheus->learnSkill(std::make_shared<Skill>("skill_agi", "Agi", Element::Fire, 6, 4, SkillCostType::SP));
+    orpheus->learnSkill(std::make_shared<Skill>("skill_dia", "Dia", Element::Almighty, 15, 6, SkillCostType::SP, true));
+    orpheus->addPotentialSkill(3, std::make_shared<Skill>("skill_agilao", "Agilao", Element::Fire, 12, 8, SkillCostType::SP));
+    orpheus->addPotentialSkill(6, std::make_shared<Skill>("skill_diarama", "Diarama", Element::Almighty, 35, 12, SkillCostType::SP, true));
+    personas_.push_back(orpheus);
 }
 
 void GameManager::initDefaultShop()
@@ -355,9 +362,11 @@ void GameManager::initDefaultShop()
     shop_.addItem(std::make_unique<PotionItem>("potion_hp", "HP Potion", "Restores a lot of HP.", 30, 50));
     shop_.addItem(std::make_unique<SpItem>("item_coffee", "Coffee", "Restores a little SP.", 20, 15));
     shop_.addItem(std::make_unique<EquipmentItem>("eq_wooden_sword", "Wooden Sword",
-                                                  "A training sword.", 80, 5, 0, 0));
+                                                  "A training sword.", 80, 5, 0, 0,
+                                                  EquipmentSlot::Weapon, "tile_00_00"));
     shop_.addItem(std::make_unique<EquipmentItem>("eq_leather_armor", "Leather Armor",
-                                                  "Basic protection.", 60, 0, 4, 0));
+                                                  "Basic protection.", 60, 0, 4, 0,
+                                                  EquipmentSlot::Armor, "tile_15_24"));
     shop_.addItem(std::make_unique<PersonaItem>("item_pixie_contract", "Pixie Contract",
                                                 "Summons Pixie.", 150, "persona_pixie"));
 }
@@ -438,14 +447,6 @@ void GameManager::applyNpcDialogueTemplates()
         "You're my truest friend. I hope you know that.",
         "So this is what a real bond feels like. Let's keep going, together."};
 
-    auto statFor = [](const std::string &arcana) -> PersonaStat {
-        if (arcana == "Magician") return PersonaStat::Strength;
-        if (arcana == "Chariot") return PersonaStat::Agility;
-        if (arcana == "Priestess") return PersonaStat::Magic;
-        if (arcana == "Fool") return PersonaStat::Luck;
-        return PersonaStat::Endurance;
-    };
-
     for (SocialLink *link : socialLinkManager_.allLinks())
     {
         if (!link)
@@ -454,20 +455,10 @@ void GameManager::applyNpcDialogueTemplates()
         {
             SocialLinkRankData data;
             data.dialogue = link->name() + ": \"" + kLines[r] + "\"";
+            // Every rank-up grants the current Persona one level.
+            data.reward.personaLevels = 1;
             link->setRankData(r, std::move(data));
         }
-        PersonaStat stat = statFor(link->arcana());
-        auto setReward = [&](int rank, int bonus) {
-            if (SocialLinkRankData *d = link->rankData(rank))
-            {
-                d->reward.hasStatBonus = true;
-                d->reward.stat = stat;
-                d->reward.statBonus = bonus;
-            }
-        };
-        setReward(3, 1);
-        setReward(6, 2);
-        setReward(9, 3);
     }
 }
 
@@ -547,45 +538,43 @@ std::string GameManager::talkToNpc(const std::string &socialLinkId)
     socialLinkManager_.addPoints(socialLinkId, kDailyPoints);
     ++count;
 
-    // Fire the rank-up callback for every rank gained during this talk so
-    // the UI can play the 奶龙 laugh / fire-dance sound and show a banner.
-    if (rankUpCallback_)
+    const SocialLink *after = socialLinkManager_.getLink(socialLinkId);
+    int afterRank = after ? after->rank() : beforeRank;
+
+    // Apply Social Link rewards: each rank gained gives current Persona levels
+    // and may teach a new skill.
+    Persona *persona = character_.currentPersona();
+    if (persona && afterRank > beforeRank)
     {
-        const SocialLink *after = socialLinkManager_.getLink(socialLinkId);
-        if (after && after->rank() > beforeRank)
+        for (int r = beforeRank + 1; r <= afterRank; ++r)
         {
-            for (int r = beforeRank + 1; r <= after->rank(); ++r)
-                rankUpCallback_(socialLinkId, r);
+            const SocialLinkRankData *data = after->rankData(r);
+            if (!data)
+                continue;
+
+            for (int i = 0; i < data->reward.personaLevels; ++i)
+                persona->gainExp(persona->expToNextLevel());
+
+            if (data->reward.newSkill)
+                persona->learnSkill(data->reward.newSkill);
         }
     }
 
-    recomputeSocialLinkBonuses();
+    // Fire the rank-up callback for every rank gained during this talk so
+    // the UI can play the 奶龙 laugh / fire-dance sound and show a banner.
+    if (rankUpCallback_ && afterRank > beforeRank)
+    {
+        for (int r = beforeRank + 1; r <= afterRank; ++r)
+            rankUpCallback_(socialLinkId, r);
+    }
 
     return socialLinkManager_.dialogueFor(socialLinkId);
 }
 
 void GameManager::recomputeSocialLinkBonuses()
 {
-    character_.clearSocialLinkBonuses();
-
-    static const PersonaStat stats[] = {
-        PersonaStat::Strength, PersonaStat::Magic, PersonaStat::Endurance,
-        PersonaStat::Agility, PersonaStat::Luck};
-    std::vector<std::string> arcanas;
-    for (const auto *link : socialLinkManager_.allLinks())
-    {
-        if (link && std::find(arcanas.begin(), arcanas.end(), link->arcana()) == arcanas.end())
-            arcanas.push_back(link->arcana());
-    }
-    for (const std::string &arcana : arcanas)
-    {
-        for (PersonaStat s : stats)
-        {
-            int bonus = socialLinkManager_.arcanaStatBonus(arcana, personaStatName(s));
-            if (bonus != 0)
-                character_.applySocialLinkBonus(s, bonus);
-        }
-    }
+    // Deprecated: Social Link rewards are now applied immediately in talkToNpc().
+    // Kept as a no-op for backward compatibility with existing call sites.
 }
 
 void GameManager::initDefaultMap()
@@ -627,70 +616,70 @@ void GameManager::initDefaultEquipment()
     equipmentDatabase_.clear();
 
     // Weapon: primarily boost ATK
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_wooden", "Wooden Sword", "A simple wooden sword.", 50, 2, 0, 0, 0, 0, EquipmentSlot::Weapon, "tile_00_00"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_iron", "Iron Sword", "A sturdy iron blade.", 100, 5, 0, 0, 0, 0, EquipmentSlot::Weapon, "tile_00_01"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_steel", "Steel Sword", "A sharp steel sword.", 150, 8, 0, 0, 0, 0, EquipmentSlot::Weapon, "tile_00_02"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_flame", "Flame Sword", "Burns with eternal fire.", 250, 12, 0, 0, 0, 3, EquipmentSlot::Weapon, "tile_00_03"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_frost", "Frost Sword", "Freezes enemies on contact.", 250, 10, 2, 0, 0, 2, EquipmentSlot::Weapon, "tile_00_04"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_thunder", "Thunder Sword", "Crackles with lightning.", 250, 11, 0, 2, 0, 2, EquipmentSlot::Weapon, "tile_00_05"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_shadow", "Shadow Blade", "A blade of pure darkness.", 400, 15, 0, 3, 0, 5, EquipmentSlot::Weapon, "tile_00_06"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_holy", "Holy Sword", "Blessed by the gods.", 400, 14, 0, 0, 5, 3, EquipmentSlot::Weapon, "tile_00_07"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_dragon", "Dragon Fang", "A tooth of an ancient dragon.", 600, 18, 0, 0, 0, 0, EquipmentSlot::Weapon, "tile_00_08"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_breaker", "World Breaker", "Shatters reality itself.", 800, 20, 0, 0, 0, 5, EquipmentSlot::Weapon, "tile_00_09"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_yitian", "Yitian Sword", "A legendary blade.", 1000, 22, 0, 2, 0, 0, EquipmentSlot::Weapon, "tile_00_10"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_tulong", "Dragon Slayer", "Forged to slay dragons.", 1200, 25, 0, 0, 0, 0, EquipmentSlot::Weapon, "tile_00_11"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_judge", "Judgment", "Divine justice in blade form.", 1500, 28, 0, 0, 0, 8, EquipmentSlot::Weapon, "tile_00_12"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_wrath", "Wrath", "Filled with anger.", 1800, 30, 0, 0, 0, 0, EquipmentSlot::Weapon, "tile_00_13"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_free", "Freedom", "Unbound by fate.", 2000, 32, 0, 5, 0, 5, EquipmentSlot::Weapon, "tile_00_14"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_dust", "Dustless", "Leaves no trace.", 2500, 35, 0, 5, 0, 5, EquipmentSlot::Weapon, "tile_00_15"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_wooden", "Wooden Sword", "A simple wooden sword.", 50, 2, 0, 0, EquipmentSlot::Weapon, "tile_00_00"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_iron", "Iron Sword", "A sturdy iron blade.", 100, 5, 0, 0, EquipmentSlot::Weapon, "tile_00_01"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_steel", "Steel Sword", "A sharp steel sword.", 150, 8, 0, 0, EquipmentSlot::Weapon, "tile_00_02"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_flame", "Flame Sword", "Burns with eternal fire.", 250, 12, 0, 0, EquipmentSlot::Weapon, "tile_00_03"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_frost", "Frost Sword", "Freezes enemies on contact.", 250, 10, 2, 0, EquipmentSlot::Weapon, "tile_00_04"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_thunder", "Thunder Sword", "Crackles with lightning.", 250, 11, 0, 2, EquipmentSlot::Weapon, "tile_00_05"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_shadow", "Shadow Blade", "A blade of pure darkness.", 400, 15, 0, 3, EquipmentSlot::Weapon, "tile_00_06"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_holy", "Holy Sword", "Blessed by the gods.", 400, 14, 0, 0, EquipmentSlot::Weapon, "tile_00_07"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_dragon", "Dragon Fang", "A tooth of an ancient dragon.", 600, 18, 0, 0, EquipmentSlot::Weapon, "tile_00_08"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_breaker", "World Breaker", "Shatters reality itself.", 800, 20, 0, 0, EquipmentSlot::Weapon, "tile_00_09"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_yitian", "Yitian Sword", "A legendary blade.", 1000, 22, 0, 2, EquipmentSlot::Weapon, "tile_00_10"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_tulong", "Dragon Slayer", "Forged to slay dragons.", 1200, 25, 0, 0, EquipmentSlot::Weapon, "tile_00_11"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_judge", "Judgment", "Divine justice in blade form.", 1500, 28, 0, 0, EquipmentSlot::Weapon, "tile_00_12"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_wrath", "Wrath", "Filled with anger.", 1800, 30, 0, 0, EquipmentSlot::Weapon, "tile_00_13"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_free", "Freedom", "Unbound by fate.", 2000, 32, 0, 5, EquipmentSlot::Weapon, "tile_00_14"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("wp_dust", "Dustless", "Leaves no trace.", 2500, 35, 0, 5, EquipmentSlot::Weapon, "tile_00_15"));
 
     // Armor: primarily boost DEF and HP
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_cloth", "Cloth Robe", "A simple cloth robe.", 50, 0, 2, 0, 5, 0, EquipmentSlot::Armor, "tile_15_24"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_leather", "Leather Armor", "Tough leather protection.", 100, 0, 3, 0, 10, 0, EquipmentSlot::Armor, "tile_15_25"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_chain", "Chain Mail", "Interlocking metal rings.", 150, 0, 5, 0, 15, 0, EquipmentSlot::Armor, "tile_15_26"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_plate", "Plate Armor", "Heavy metal plates.", 200, 0, 7, 0, 20, 0, EquipmentSlot::Armor, "tile_16_00"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_paladin", "Paladin Armor", "Armor of the righteous.", 300, 0, 10, 0, 30, 0, EquipmentSlot::Armor, "tile_16_01"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_shadow", "Shadow Cloak", "Hides the wearer in darkness.", 300, 0, 8, 2, 20, 0, EquipmentSlot::Armor, "tile_16_02"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_dragon", "Dragon Scale", "Scales of an ancient dragon.", 400, 0, 12, 0, 40, 0, EquipmentSlot::Armor, "tile_16_03"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_frost", "Frost Armor", "Frozen but warm inside.", 400, 0, 11, 0, 25, 3, EquipmentSlot::Armor, "tile_16_04"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_flame", "Flame Armor", "Burns enemies that touch it.", 400, 2, 13, 0, 30, 0, EquipmentSlot::Armor, "tile_16_05"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_thunder", "Thunder Armor", "Crackles with energy.", 400, 0, 14, 3, 35, 0, EquipmentSlot::Armor, "tile_16_06"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_holy", "Holy Armor", "Blessed by the divine.", 500, 0, 15, 0, 35, 0, EquipmentSlot::Armor, "tile_16_07"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_phantom", "Phantom Cloak", "Barely visible.", 300, 0, 9, 0, 20, 0, EquipmentSlot::Armor, "tile_16_08"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_demon", "Demon Armor", "Forged in the abyss.", 500, 3, 16, 0, 35, 0, EquipmentSlot::Armor, "tile_16_11"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_angel", "Angel Robe", "Woven from light.", 500, 0, 17, 0, 40, 0, EquipmentSlot::Armor, "tile_16_12"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_war", "War God Armor", "Worn by the war god.", 800, 0, 20, 0, 50, 0, EquipmentSlot::Armor, "tile_16_13"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_cloth", "Cloth Robe", "A simple cloth robe.", 50, 0, 2, 0, EquipmentSlot::Armor, "tile_15_24"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_leather", "Leather Armor", "Tough leather protection.", 100, 0, 3, 0, EquipmentSlot::Armor, "tile_15_25"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_chain", "Chain Mail", "Interlocking metal rings.", 150, 0, 5, 0, EquipmentSlot::Armor, "tile_15_26"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_plate", "Plate Armor", "Heavy metal plates.", 200, 0, 7, 0, EquipmentSlot::Armor, "tile_16_00"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_paladin", "Paladin Armor", "Armor of the righteous.", 300, 0, 10, 0, EquipmentSlot::Armor, "tile_16_01"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_shadow", "Shadow Cloak", "Hides the wearer in darkness.", 300, 0, 8, 2, EquipmentSlot::Armor, "tile_16_02"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_dragon", "Dragon Scale", "Scales of an ancient dragon.", 400, 0, 12, 0, EquipmentSlot::Armor, "tile_16_03"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_frost", "Frost Armor", "Frozen but warm inside.", 400, 0, 11, 0, EquipmentSlot::Armor, "tile_16_04"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_flame", "Flame Armor", "Burns enemies that touch it.", 400, 2, 13, 0, EquipmentSlot::Armor, "tile_16_05"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_thunder", "Thunder Armor", "Crackles with energy.", 400, 0, 14, 3, EquipmentSlot::Armor, "tile_16_06"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_holy", "Holy Armor", "Blessed by the divine.", 500, 0, 15, 0, EquipmentSlot::Armor, "tile_16_07"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_phantom", "Phantom Cloak", "Barely visible.", 300, 0, 9, 0, EquipmentSlot::Armor, "tile_16_08"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_demon", "Demon Armor", "Forged in the abyss.", 500, 3, 16, 0, EquipmentSlot::Armor, "tile_16_11"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_angel", "Angel Robe", "Woven from light.", 500, 0, 17, 0, EquipmentSlot::Armor, "tile_16_12"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ar_war", "War God Armor", "Worn by the war god.", 800, 0, 20, 0, EquipmentSlot::Armor, "tile_16_13"));
 
     // Accessory: balanced stats
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_copper", "Copper Ring", "A simple copper ring.", 50, 1, 1, 1, 2, 1, EquipmentSlot::Accessory, "tile_08_05"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_silver", "Silver Ring", "Shines with silver light.", 100, 2, 2, 2, 5, 2, EquipmentSlot::Accessory, "tile_08_06"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_gold", "Gold Ring", "A symbol of wealth.", 150, 3, 3, 3, 8, 3, EquipmentSlot::Accessory, "tile_08_11"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_diamond", "Diamond Ring", "Sparkles brilliantly.", 200, 4, 4, 4, 10, 4, EquipmentSlot::Accessory, "tile_08_12"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_power", "Power Ring", "Channels raw strength.", 300, 5, 2, 0, 5, 2, EquipmentSlot::Accessory, "tile_08_13"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_agility", "Swift Ring", "Makes you faster.", 300, 2, 2, 5, 5, 0, EquipmentSlot::Accessory, "tile_08_14"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_wisdom", "Wisdom Ring", "Expands your mind.", 300, 2, 2, 0, 5, 5, EquipmentSlot::Accessory, "tile_08_15"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_life", "Life Ring", "Pulses with vitality.", 300, 0, 2, 0, 15, 2, EquipmentSlot::Accessory, "tile_08_16"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_magic", "Magic Ring", "Holds arcane power.", 300, 2, 0, 0, 5, 5, EquipmentSlot::Accessory, "tile_08_17"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_guard", "Guardian Ring", "Protects the wearer.", 300, 0, 5, 2, 10, 0, EquipmentSlot::Accessory, "tile_08_18"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_lucky", "Lucky Ring", "Brings good fortune.", 200, 3, 3, 3, 3, 3, EquipmentSlot::Accessory, "tile_08_19"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_brave", "Brave Ring", "Fearless in battle.", 300, 4, 3, 2, 5, 2, EquipmentSlot::Accessory, "tile_08_21"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_hope", "Hope Ring", "Never give up.", 300, 2, 2, 2, 8, 2, EquipmentSlot::Accessory, "tile_10_02"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_despair", "Despair Ring", "Crushes hope.", 300, 5, 0, 0, 0, 5, EquipmentSlot::Accessory, "tile_10_04"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_chaos", "Chaos Ring", "Unpredictable power.", 400, 3, 3, 3, 3, 3, EquipmentSlot::Accessory, "tile_10_16"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_order", "Order Ring", "Brings balance.", 400, 3, 3, 3, 3, 3, EquipmentSlot::Accessory, "tile_10_17"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_fate", "Fate Ring", "Controls destiny.", 500, 5, 5, 5, 10, 5, EquipmentSlot::Accessory, "tile_10_18"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_copper", "Copper Ring", "A simple copper ring.", 50, 1, 1, 1, EquipmentSlot::Accessory, "tile_08_05"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_silver", "Silver Ring", "Shines with silver light.", 100, 2, 2, 2, EquipmentSlot::Accessory, "tile_08_06"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_gold", "Gold Ring", "A symbol of wealth.", 150, 3, 3, 3, EquipmentSlot::Accessory, "tile_08_11"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_diamond", "Diamond Ring", "Sparkles brilliantly.", 200, 4, 4, 4, EquipmentSlot::Accessory, "tile_08_12"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_power", "Power Ring", "Channels raw strength.", 300, 5, 2, 0, EquipmentSlot::Accessory, "tile_08_13"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_agility", "Swift Ring", "Makes you faster.", 300, 2, 2, 5, EquipmentSlot::Accessory, "tile_08_14"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_wisdom", "Wisdom Ring", "Expands your mind.", 300, 2, 2, 0, EquipmentSlot::Accessory, "tile_08_15"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_life", "Life Ring", "Pulses with vitality.", 300, 0, 2, 0, EquipmentSlot::Accessory, "tile_08_16"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_magic", "Magic Ring", "Holds arcane power.", 300, 2, 0, 0, EquipmentSlot::Accessory, "tile_08_17"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_guard", "Guardian Ring", "Protects the wearer.", 300, 0, 5, 2, EquipmentSlot::Accessory, "tile_08_18"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_lucky", "Lucky Ring", "Brings good fortune.", 200, 3, 3, 3, EquipmentSlot::Accessory, "tile_08_19"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_brave", "Brave Ring", "Fearless in battle.", 300, 4, 3, 2, EquipmentSlot::Accessory, "tile_08_21"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_hope", "Hope Ring", "Never give up.", 300, 2, 2, 2, EquipmentSlot::Accessory, "tile_10_02"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_despair", "Despair Ring", "Crushes hope.", 300, 5, 0, 0, EquipmentSlot::Accessory, "tile_10_04"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_chaos", "Chaos Ring", "Unpredictable power.", 400, 3, 3, 3, EquipmentSlot::Accessory, "tile_10_16"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_order", "Order Ring", "Brings balance.", 400, 3, 3, 3, EquipmentSlot::Accessory, "tile_10_17"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("ac_fate", "Fate Ring", "Controls destiny.", 500, 5, 5, 5, EquipmentSlot::Accessory, "tile_10_18"));
 
     // Relic: balanced stats (stronger)
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_ancient", "Ancient Scroll", "Knowledge of the past.", 300, 3, 3, 2, 5, 3, EquipmentSlot::Relic, "tile_03_26"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_crystal", "Mystic Crystal", "Holds unknown power.", 400, 4, 4, 3, 8, 4, EquipmentSlot::Relic, "tile_04_00"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_soul", "Soul Stone", "Contains a trapped soul.", 500, 5, 5, 4, 10, 5, EquipmentSlot::Relic, "tile_04_01"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_life", "Life Source", "Origin of all life.", 600, 3, 5, 3, 15, 3, EquipmentSlot::Relic, "tile_04_02"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_wisdom", "Wisdom Light", "Illuminates the truth.", 600, 4, 3, 3, 5, 8, EquipmentSlot::Relic, "tile_04_03"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_power", "Power Core", "Raw strength condensed.", 600, 8, 3, 3, 5, 3, EquipmentSlot::Relic, "tile_04_20"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_speed", "Speed Wind", "Faster than the wind.", 600, 3, 3, 8, 5, 3, EquipmentSlot::Relic, "tile_04_25"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_defense", "Defense Shield", "Impenetrable barrier.", 600, 3, 8, 3, 10, 3, EquipmentSlot::Relic, "tile_05_00"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_attack", "Attack Blade", "Cuts through anything.", 600, 8, 3, 3, 5, 3, EquipmentSlot::Relic, "tile_05_04"));
-    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_magic", "Magic Staff", "Channels all magic.", 800, 5, 5, 5, 10, 10, EquipmentSlot::Relic, "tile_05_05"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_ancient", "Ancient Scroll", "Knowledge of the past.", 300, 3, 3, 2, EquipmentSlot::Relic, "tile_03_26"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_crystal", "Mystic Crystal", "Holds unknown power.", 400, 4, 4, 3, EquipmentSlot::Relic, "tile_04_00"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_soul", "Soul Stone", "Contains a trapped soul.", 500, 5, 5, 4, EquipmentSlot::Relic, "tile_04_01"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_life", "Life Source", "Origin of all life.", 600, 3, 5, 3, EquipmentSlot::Relic, "tile_04_02"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_wisdom", "Wisdom Light", "Illuminates the truth.", 600, 4, 3, 3, EquipmentSlot::Relic, "tile_04_03"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_power", "Power Core", "Raw strength condensed.", 600, 8, 3, 3, EquipmentSlot::Relic, "tile_04_20"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_speed", "Speed Wind", "Faster than the wind.", 600, 3, 3, 8, EquipmentSlot::Relic, "tile_04_25"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_defense", "Defense Shield", "Impenetrable barrier.", 600, 3, 8, 3, EquipmentSlot::Relic, "tile_05_00"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_attack", "Attack Blade", "Cuts through anything.", 600, 8, 3, 3, EquipmentSlot::Relic, "tile_05_04"));
+    equipmentDatabase_.push_back(std::make_shared<EquipmentItem>("rl_magic", "Magic Staff", "Channels all magic.", 800, 5, 5, 5, EquipmentSlot::Relic, "tile_05_05"));
 }
 
 void GameManager::equipItem(std::shared_ptr<EquipmentItem> item)
@@ -754,11 +743,9 @@ void GameManager::unequipItem(EquipmentSlot slot)
 
     // Remove equipment bonuses.
     character_.setEquipmentBonuses(
-        character_.equipmentAttackBonus() - item->attackBonus(),
-        character_.equipmentDefenseBonus() - item->defenseBonus(),
-        character_.equipmentSpeedBonus() - item->speedBonus(),
-        character_.equipmentHpBonus() - item->hpBonus(),
-        character_.equipmentMagicBonus() - item->magicBonus());
+        character_.equipmentStrengthBonus() - item->strengthBonus(),
+        character_.equipmentMagicBonus() - item->magicBonus(),
+        character_.equipmentSpeedBonus() - item->speedBonus());
 
     // Return the unequipped item to the inventory (clone back to a unique ptr;
     // equipment slots hold shared copies). If the bag is full the item is lost,

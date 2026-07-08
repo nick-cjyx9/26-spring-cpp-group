@@ -1,14 +1,12 @@
 #include "Persona.h"
 
 Persona::Persona(std::string id, std::string name, std::string arcana, int level,
-                 int strength, int magic, int endurance, int agility, int luck)
+                 int strength, int magic, int speed)
     : id_(std::move(id)), name_(std::move(name)), arcana_(std::move(arcana)), level_(level)
 {
     stats_[PersonaStat::Strength] = strength;
     stats_[PersonaStat::Magic] = magic;
-    stats_[PersonaStat::Endurance] = endurance;
-    stats_[PersonaStat::Agility] = agility;
-    stats_[PersonaStat::Luck] = luck;
+    stats_[PersonaStat::Speed] = speed;
 
     // Default all elements to Normal.
     affinities_[Element::Physical] = Affinity::Normal;
@@ -77,12 +75,7 @@ void Persona::levelUp()
 {
     ++level_;
     expToNextLevel_ = static_cast<int>(expToNextLevel_ * 1.5);
-    // Small, predictable growth for all Personas.
-    stats_[PersonaStat::Strength] += 1;
-    stats_[PersonaStat::Magic] += 1;
-    stats_[PersonaStat::Endurance] += 1;
-    stats_[PersonaStat::Agility] += 1;
-    stats_[PersonaStat::Luck] += 1;
+    growBaseStats(1.05);
 
     // Unlock any skills that meet the level requirement.
     checkSkillUnlocks(level_);
@@ -112,4 +105,14 @@ std::vector<std::shared_ptr<Skill>> Persona::checkSkillUnlocks(int currentLevel)
         }
     }
     return newlyUnlocked;
+}
+
+void Persona::growBaseStats(double multiplier)
+{
+    for (auto &kv : stats_)
+    {
+        kv.second = static_cast<int>(kv.second * multiplier);
+        if (kv.second < 1)
+            kv.second = 1;
+    }
 }

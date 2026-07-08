@@ -115,26 +115,6 @@ void LevelUpScene::render(engine::IRenderer &renderer)
 
     drawRow("Max HP", snap.oldMaxHp, snap.newMaxHp);
     drawRow("Max SP", snap.oldMaxSp, snap.newMaxSp);
-    drawRow("Attack", snap.oldAttack, snap.newAttack);
-    drawRow("Defense", snap.oldDefense, snap.newDefense);
-    drawRow("Speed", snap.oldSpeed, snap.newSpeed);
-    drawRow("Magic", snap.oldMagic, snap.newMagic);
-
-    // ---- Unlocked skills ----
-    if (!snap.unlockedSkills.empty())
-    {
-        rowY += 10;
-        renderer.drawRect({rightX + 10, static_cast<int>(rowY) - 4, rightW - 20, 1},
-                           engine::Color(180, 160, 50, 150));
-        rowY += 12;
-        renderer.drawText("New Skill Unlocked:", {rightX + 20, rowY}, 20, engine::Color(255, 215, 0, 255));
-        rowY += 28;
-        for (const auto &skillName : snap.unlockedSkills)
-        {
-            renderer.drawText(skillName, {rightX + 40, rowY}, 18, engine::Color(0, 255, 150, 255));
-            rowY += 26;
-        }
-    }
 
     // ---- Bottom hint bar ----
     float hintY = panelY + panelH - 36;

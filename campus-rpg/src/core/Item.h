@@ -95,28 +95,23 @@ class EquipmentItem : public Item
 {
 public:
     EquipmentItem(std::string id, std::string name, std::string description, int value,
-                  int attackBonus, int defenseBonus, int speedBonus = 0,
-                  int hpBonus = 0, int magicBonus = 0,
+                  int strengthBonus, int magicBonus, int speedBonus = 0,
                   EquipmentSlot slot = EquipmentSlot::None,
                   std::string textureId = "");
 
     std::unique_ptr<Item> clone() const override;
     void use(Character &character) override;
 
-    int attackBonus() const { return attackBonus_; }
-    int defenseBonus() const { return defenseBonus_; }
-    int speedBonus() const { return speedBonus_; }
-    int hpBonus() const { return hpBonus_; }
+    int strengthBonus() const { return strengthBonus_; }
     int magicBonus() const { return magicBonus_; }
+    int speedBonus() const { return speedBonus_; }
     EquipmentSlot slot() const { return slot_; }
     const std::string &textureId() const { return textureId_; }
 
 private:
-    int attackBonus_ = 0;
-    int defenseBonus_ = 0;
-    int speedBonus_ = 0;
-    int hpBonus_ = 0;
+    int strengthBonus_ = 0;
     int magicBonus_ = 0;
+    int speedBonus_ = 0;
     EquipmentSlot slot_ = EquipmentSlot::None;
     std::string textureId_;
 };

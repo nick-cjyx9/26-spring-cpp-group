@@ -12,7 +12,8 @@
 class Enemy
 {
 public:
-    Enemy(std::string id, std::string name, int hp, int attack, int defense, int speed,
+    Enemy(std::string id, std::string name, int hp,
+          int strength, int magic, int speed,
           int rewardExp, int rewardGold);
     virtual ~Enemy() = default;
 
@@ -23,8 +24,8 @@ public:
     const std::string &name() const { return name_; }
     int hp() const { return hp_; }
     int maxHp() const { return maxHp_; }
-    int attack() const { return attack_; }
-    int defense() const { return defense_; }
+    int strength() const { return strength_; }
+    int magic() const { return magic_; }
     int speed() const { return speed_; }
     int rewardExp() const { return rewardExp_; }
     int rewardGold() const { return rewardGold_; }
@@ -37,25 +38,36 @@ public:
 
     void addSkill(std::shared_ptr<Skill> skill);
     const std::vector<std::shared_ptr<Skill>> &skills() const { return skills_; }
-    virtual std::shared_ptr<Skill> chooseSkill() const;
 
-    void addDropItemId(const std::string &itemId);
-    const std::vector<std::string> &dropItemIds() const { return dropItemIds_; }
+    // Fixed attack pattern: sequence of skill IDs or "normal" for basic attack.
+    void setAttackPattern(std::vector<std::string> pattern);
+    const std::vector<std::string> &attackPattern() const { return attackPattern_; }
+    std::shared_ptr<Skill> chooseSkill(size_t turnIndex) const;
+
+    void addDropPersonaId(const std::string &personaId);
+    const std::vector<std::string> &dropPersonaIds() const { return dropPersonaIds_; }
+
+    // Scale stats based on player level.
+    void scaleToLevel(int playerLevel);
 
 protected:
     std::string id_;
     std::string name_;
     int hp_ = 0;
     int maxHp_ = 0;
-    int attack_ = 0;
-    int defense_ = 0;
+    int strength_ = 0;
+    int magic_ = 0;
     int speed_ = 0;
+    int baseStrength_ = 0;
+    int baseMagic_ = 0;
+    int baseSpeed_ = 0;
     int rewardExp_ = 0;
     int rewardGold_ = 0;
 
     std::map<Element, Affinity> affinities_;
     std::vector<std::shared_ptr<Skill>> skills_;
-    std::vector<std::string> dropItemIds_;
+    std::vector<std::string> attackPattern_;
+    std::vector<std::string> dropPersonaIds_;
 };
 
 class Slime : public Enemy
