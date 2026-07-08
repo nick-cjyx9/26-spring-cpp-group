@@ -2,6 +2,7 @@
 
 - DO NOT generate extra `.md` file unless user explicitly asks for it.
 - ALWAYS use PowerShell for build-related tasks; assume a Windows environment.
+- **DOCS ARE THE SINGLE SOURCE OF TRUTH**: when implementing or fixing code, treat `campus-rpg/docs/README.md`, `campus-rpg/docs/core.md`, and `campus-rpg/docs/social_link_api.md` as the authoritative specification. If code and docs disagree, update the code (or escalate the doc ambiguity before changing docs).
 
 ## Repo Structure
 
@@ -33,7 +34,15 @@ GameManager (singleton, state coordinator)
 Core (pure C++ domain models) + Data (SQLite3 persistence)
 ```
 
-- `src/core/`: `Character`, `Persona`, `Item` + `FoodItem`/`PotionItem`/`SpItem`/`EquipmentItem`/`PersonaItem`, `Inventory`, `Quest`/`QuestManager`, `Enemy` + `Slime`/`Goblin`/`Boss`, `Shop`, `BattleSystem`, `SocialLink`/`SocialLinkManager`, `Entity`, `TileMap`.
+- `src/core/`:
+  - `Persona` now has **3 combat stats** (Strength / Magic / Speed), level/exp, potential skills.
+  - `Character` no longer stores 5 base stats or defense; combat stats come entirely from the current `Persona` + equipment, scaled by `Persona` level.
+  - `Character` owns a list of `Persona` and can switch among them.
+  - `Enemy` has 3 stats, fixed attack patterns, level scaling, and direct Persona drops.
+  - `BattleSystem` uses an **initiative queue** (roll once at battle start), dodge on physical attacks, and a free item action.
+  - `EquipmentItem` bonuses are Strength / Magic / Speed (mapped by slot: Weapon→STR, Armor→MAG, Accessory→SPD, Relic→mixed).
+  - `SocialLink` rank-up rewards give the current `Persona` levels and may teach new skills.
+  - Other classes: `Item` + subclasses, `Inventory`, `Quest`/`QuestManager`, `Shop`, `Entity`/`TileMap`.
 - `src/manager/`: `GameManager` singleton holds the single source of truth for game state.
 - `src/data/`: `DatabaseManager` + `SaveRepository` handle SQLite3.
 - `src/engine/interfaces/`: abstract engine interfaces (`IRenderer`, `IWindow`, `IInput`).
@@ -108,25 +117,37 @@ With **multi-config generators** (e.g., Visual Studio) the executable still land
 - **SFML not found**: by default SFML is fetched automatically via CMake `FetchContent`. Ensure network is available during first configure. To use a local SFML, pass `-DCAMPUS_RPG_USE_SYSTEM_SFML=ON -DSFML_DIR=<path/to/SFMLConfig.cmake>`.
 - **SQLite3 not found**: similarly fetched automatically. To use a system SQLite3, pass `-DCAMPUS_RPG_USE_SYSTEM_SQLITE3=ON`.
 - **MinGW g++ not found**: either add MinGW `bin` to your system `Path`, or configure with explicit compiler paths:
+
   ```powershell
   cmake --preset windows-mingw-release `
       -DCMAKE_C_COMPILER=E:/Qt/Tools/mingw1310_64/bin/gcc.exe `
       -DCMAKE_CXX_COMPILER=E:/Qt/Tools/mingw1310_64/bin/g++.exe
   ```
+
 - **MSVC missing**: run from **Developer PowerShell for VS 2022** or execute `& "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"` before configuring.
 - **Test framework**: tests use a lightweight pure-C++ runner (`tests/test_core.cpp`). The core-only test executable links `CampusRPGCore` + mock implementations, so it runs without a GUI event loop in headless/CI environments.
 - **CI**: GitHub Actions (`.github/workflows/{auto-build.yml, pr-check.yml}`) build and test on `windows-latest` and `ubuntu-latest`.
+
+## Coding Tips & Conventions
+
+- **Docs first**: read `docs/README.md` and `docs/core.md` before changing combat/Persona/shop/Social Link code. Keep behavior in sync with the documented formulas.
+- **Persona as the stat source**: `Character::attack()/magic()/speed()` delegate to the current `Persona`. Do not add base combat stats back to `Character`.
+- **Equipment → Persona**: `EquipmentItem` only modifies `Character`'s equipment bonuses; the final stat is computed as `(personaBase + equipmentBonus) * levelMultiplier`. Use `EquipmentSlot` consistently.
+- **Persistence integration**: when you add new per-save state, you must update **both** `DatabaseManager` (schema) and `SaveRepository` (save/load). The tables are dropped and recreated on schema mismatch, so legacy migration paths are best-effort.
+- **Skill persistence**: `SaveRepository` stores skill IDs but does not reconstruct `Skill` objects. `GameManager::loadFromSlot()` re-applies skills from the seeded default personas. If you add new skills, register them in `GameManager::initDefaultPersonas()` and add them as `potentialSkills` so loads restore them.
+- **Battle turn order**: `BattleSystem` builds a fixed initiative queue at battle start. Player actions advance the queue and auto-run enemy turns via `processEnemyTurns()`. Scenes should call `isPlayerTurn()` before reading player input.
+- **Social Link rewards**: apply Persona level-ups and skill unlocks inside `GameManager::talkToNpc()`, not in `Character` or `SocialLinkManager`.
+- **Random starter Persona**: `GameManager::seedDefaultState()` picks one from the starter pool. Tests that assume a specific starter must either set it explicitly or not rely on a specific skill.
 
 ## Development Notes
 
 - Keep `core/` free of SFML/SQLite dependencies so unit tests stay fast and portable.
 - Scenes call `refresh()` when entered to reflect the latest `GameManager` state.
 - `GameManager::newGame()` initializes default shop/quest/enemy/Persona/SocialLink data; load save after this so definitions exist.
-- `SaveRepository` stores base stats only; equipment bonuses are recomputed on equip.
+- `SaveRepository` stores character vitals and owned Persona stats; equipment bonuses are recomputed on equip.
 - Singletons: `GameManager`, `DatabaseManager`. Do not create multiple instances.
 - Privacy: files with personal info (real name, student ID) must use `.secret.xxx` extension — enforced by `.gitignore`.
 - Extendable stubs:
-  - Equipment currently adds stats permanently on use; add real equipment slots later.
   - Quest conditions only support `kill:N`; add `collect:id:N`, `level:N`, etc.
   - Save/load currently supports one slot; extend for multiple save slots.
   - Persona fusion is a planned optional extension.

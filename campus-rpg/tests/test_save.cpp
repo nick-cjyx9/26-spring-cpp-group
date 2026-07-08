@@ -77,7 +77,7 @@ void testSaveAndLoadCharacterFullState()
     TempDatabase db("test_save_charstate.db");
     SaveRepository repo;
 
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     hero.gainExp(100); // level up to 2
     hero.addGold(250);
     hero.takeDamage(30); // hp < maxHp
@@ -109,7 +109,7 @@ void testSaveAndLoadCharacterFullState()
     CHECK_EQ(loaded.sp(), expectedSp);
     CHECK_EQ(loaded.gold(), expectedGold);
     CHECK_EQ(loaded.maxHp(), hero.maxHp());
-    CHECK_EQ(loaded.baseStrength(), hero.baseStrength());
+    // base stats now come from Persona, not persisted on Character
 
     auto info = repo.slotInfo(1);
     CHECK(info.exists);
@@ -122,11 +122,11 @@ void testInventoryPersistsAcrossLoad()
     TempDatabase db("test_save_inv.db");
     SaveRepository repo;
 
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     Inventory inv;
     inv.addItem(std::make_unique<FoodItem>("food_bread", "Bread", "tasty", 10, 20));
     inv.addItem(std::make_unique<PotionItem>("potion_hp", "HP Potion", "heals", 30, 50));
-    inv.addItem(std::make_unique<EquipmentItem>("eq_sword", "Sword", "sharp", 50, 5, 0, 0));
+    inv.addItem(std::make_unique<EquipmentItem>("eq_sword", "Sword", "sharp", 50, 5, 0, 0, EquipmentSlot::Weapon));
     SocialLinkManager slm;
     QuestManager qm;
     std::vector<std::shared_ptr<Persona>> personas;
@@ -149,7 +149,7 @@ void testQuestsAndSocialLinksPersist()
     TempDatabase db("test_save_quests.db");
     SaveRepository repo;
 
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     Inventory inv;
     SocialLinkManager slm;
     slm.addLink(SocialLink("sl_yosuke", "Yosuke", "Magician"));
@@ -180,9 +180,9 @@ void testMultipleSlotsAreIndependent()
     TempDatabase db("test_save_multi.db");
     SaveRepository repo;
 
-    Character a("Alice", 100, 50, 10, 10, 10, 10, 10);
+    Character a("Alice", 100, 50);
     a.addGold(100);
-    Character b("Bob", 120, 60, 12, 12, 12, 12, 12);
+    Character b("Bob", 120, 60);
     b.addGold(500);
 
     Inventory invA, invB;
@@ -226,9 +226,9 @@ void testOverwriteSlotReplacesPreviousData()
     TempDatabase db("test_save_overwrite.db");
     SaveRepository repo;
 
-    Character first("First", 100, 50, 10, 10, 10, 10, 10);
+    Character first("First", 100, 50);
     first.addGold(50);
-    Character second("Second", 100, 50, 10, 10, 10, 10, 10);
+    Character second("Second", 100, 50);
     second.addGold(999);
 
     Inventory inv;
@@ -254,7 +254,7 @@ void testDeleteSlotRemovesData()
     TempDatabase db("test_save_delete.db");
     SaveRepository repo;
 
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     Inventory inv;
     inv.addItem(std::make_unique<FoodItem>("food_bread", "Bread", "", 10, 20));
     SocialLinkManager slm;
@@ -282,7 +282,7 @@ void testLoadNonexistentSlotFailsCleanly()
     TempDatabase db("test_save_noexist.db");
     SaveRepository repo;
 
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     Inventory inv;
     SocialLinkManager slm;
     QuestManager qm;
@@ -297,10 +297,10 @@ void testCurrentPersonaIdPersisted()
     TempDatabase db("test_save_persona.db");
     SaveRepository repo;
 
-    auto izanagi = std::make_shared<Persona>("persona_izanagi", "Izanagi", "Fool", 2, 6, 5, 4, 5, 4);
-    auto pixie = std::make_shared<Persona>("persona_pixie", "Pixie", "Magician", 2, 3, 6, 3, 6, 5);
+    auto izanagi = std::make_shared<Persona>("persona_izanagi", "Izanagi", "Fool", 2, 6, 5, 5);
+    auto pixie = std::make_shared<Persona>("persona_pixie", "Pixie", "Magician", 2, 4, 6, 5);
 
-    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    Character hero("Hero", 100, 50);
     hero.setPersona(pixie); // equip the non-default persona
 
     std::vector<std::shared_ptr<Persona>> personas = {izanagi, pixie};
@@ -312,7 +312,7 @@ void testCurrentPersonaIdPersisted()
     CHECK_EQ(repo.currentPersonaId(1), std::string("persona_pixie"));
 
     // Slot 2 with no persona equipped.
-    Character noPersona("NoPersona", 100, 50, 10, 10, 10, 10, 10);
+    Character noPersona("NoPersona", 100, 50);
     CHECK(repo.saveAll(2, noPersona, inv, personas, slm, qm));
     CHECK_EQ(repo.currentPersonaId(2), std::string(""));
 }
@@ -325,9 +325,9 @@ void testListAllSlotsIsDynamic()
     // Start empty.
     CHECK(repo.listAllSlots().empty());
 
-    Character a("Alice", 100, 50, 10, 10, 10, 10, 10);
-    Character b("Bob", 100, 50, 10, 10, 10, 10, 10);
-    Character c("Cara", 100, 50, 10, 10, 10, 10, 10);
+    Character a("Alice", 100, 50);
+    Character b("Bob", 100, 50);
+    Character c("Cara", 100, 50);
     Inventory inv;
     SocialLinkManager slm;
     QuestManager qm;
@@ -358,7 +358,7 @@ void testNextSlotIdIsMaxPlusOne()
 
     CHECK_EQ(repo.nextSlotId(), 1); // no saves yet
 
-    Character a("Alice", 100, 50, 10, 10, 10, 10, 10);
+    Character a("Alice", 100, 50);
     Inventory inv;
     SocialLinkManager slm;
     QuestManager qm;
@@ -377,7 +377,7 @@ void testGameManagerLoadRestoresPersonaSkills()
 {
     TempDatabase db("test_save_skills.db");
 
-    // createNewSave seeds default Personas (Izanagi/Pixie WITH skills) and
+    // createNewSave seeds default Personas (Izanagi/Pixie/Orpheus WITH skills) and
     // saves them, then binds the session to the new slot.
     CHECK(GameManager::instance().createNewSave("Hero"));
     int slot = GameManager::instance().currentSlotId();
@@ -386,7 +386,11 @@ void testGameManagerLoadRestoresPersonaSkills()
     // The freshly-created game's starter persona must have its skills.
     Persona *starter = GameManager::instance().character().currentPersona();
     CHECK(starter != nullptr);
-    CHECK(starter->findSkill("skill_zio") != nullptr);
+    CHECK(!starter->skills().empty());
+    std::vector<std::string> starterSkillIds;
+    for (const auto &s : starter->skills())
+        if (s)
+            starterSkillIds.push_back(s->id());
 
     // Reload the slot: loadFromSlot re-seeds defaults, snapshots their skills,
     // loads the save (Personas reconstructed without skills), then re-applies
@@ -394,8 +398,10 @@ void testGameManagerLoadRestoresPersonaSkills()
     CHECK(GameManager::instance().loadFromSlot(slot));
     Persona *loaded = GameManager::instance().character().currentPersona();
     CHECK(loaded != nullptr);
-    CHECK(loaded->findSkill("skill_zio") != nullptr);
-    CHECK(loaded->findSkill("skill_cleave") != nullptr);
+    for (const auto &id : starterSkillIds)
+    {
+        CHECK(loaded->findSkill(id) != nullptr);
+    }
 }
 
 int main()

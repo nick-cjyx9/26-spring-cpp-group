@@ -2,6 +2,7 @@
 
 #include "Character.h"
 #include "Enemy.h"
+#include "Item.h"
 
 #include <memory>
 #include <string>
@@ -15,16 +16,18 @@ public:
     void startBattle(Character &player, Enemy &enemy);
     void startBattle(Character &player, std::vector<std::unique_ptr<Enemy>> enemies);
 
-    // Player actions.
+    // Returns true if it is currently the player's turn and the battle is ongoing.
+    bool isPlayerTurn() const;
+
+    // Player actions. These may be called only during the player's turn.
     bool playerAttack(size_t enemyIndex = 0);
     bool playerUseSkill(size_t enemyIndex, const Skill &skill);
-    bool playerUseItem(size_t inventoryIndex);
-    bool playerGuard();
+    bool playerUseItem(std::shared_ptr<Item> item); // free action, does not end turn
     bool playerSwitchPersona(std::shared_ptr<Persona> persona);
     bool playerFlee();
 
-    // Enemy turn.
-    void enemyTurn();
+    // Processes enemy turns until it is the player's turn or the battle ends.
+    void processEnemyTurns();
 
     bool isOver() const;
     bool playerWon() const;
@@ -37,13 +40,34 @@ public:
     void clearLog() { log_.clear(); }
     void appendLog(const std::string &message);
 
+    // Convenience: fully restore player SP (called when battle ends).
+    void recoverPlayerSp();
+
+    // Drop results populated on victory.
+    const std::vector<std::string> &droppedPersonaIds() const { return droppedPersonaIds_; }
+
 private:
+    struct TurnEntry
+    {
+        bool isPlayer = false;
+        size_t enemyIndex = 0;
+        int initiative = 0;
+    };
+
+    void buildTurnOrder();
+    void advanceTurn();
+    void executeEnemyTurn(size_t enemyIndex);
     int applyAffinityMultiplier(int rawDamage, Affinity affinity) const;
+    int physicalDamage(int attackerStrength) const;
+    bool rollDodge(int attackerSpeed, int defenderSpeed) const;
+    bool rollFleeSuccess(int playerSpeed, int enemySpeed) const;
 
     Character *player_ = nullptr;
     std::vector<std::unique_ptr<Enemy>> enemies_;
     std::vector<std::string> log_;
-
-    bool playerGuarding_ = false;
+    std::vector<TurnEntry> turnOrder_;
+    size_t currentTurnIndex_ = 0;
+    size_t enemyTurnCounter_ = 0; // counts enemy actions for fixed attack patterns
     bool fled_ = false;
+    std::vector<std::string> droppedPersonaIds_;
 };

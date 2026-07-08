@@ -10,10 +10,14 @@ namespace
     {
         switch (idx)
         {
-        case 0: return "Weapon";
-        case 1: return "Armor";
-        case 2: return "Accessory";
-        case 3: return "Relic";
+        case 0:
+            return "Weapon";
+        case 1:
+            return "Armor";
+        case 2:
+            return "Accessory";
+        case 3:
+            return "Relic";
         }
         return "";
     }
@@ -22,10 +26,14 @@ namespace
     {
         switch (idx)
         {
-        case 0: return engine::Color(255, 80, 80);   // Weapon - red
-        case 1: return engine::Color(80, 80, 255);   // Armor - blue
-        case 2: return engine::Color(255, 200, 0);   // Accessory - gold
-        case 3: return engine::Color(180, 80, 255);  // Relic - purple
+        case 0:
+            return engine::Color(255, 80, 80); // Weapon - red
+        case 1:
+            return engine::Color(80, 80, 255); // Armor - blue
+        case 2:
+            return engine::Color(255, 200, 0); // Accessory - gold
+        case 3:
+            return engine::Color(180, 80, 255); // Relic - purple
         }
         return engine::Color::white();
     }
@@ -40,27 +48,37 @@ void StatusScene::handleInput(engine::IInput &input)
     }
 
     // Switch section with Left/Right or A/D.
-    bool goLeft  = input.wasKeyJustPressed(engine::Key::Left)  || input.wasKeyJustPressed(engine::Key::A);
+    bool goLeft = input.wasKeyJustPressed(engine::Key::Left) || input.wasKeyJustPressed(engine::Key::A);
     bool goRight = input.wasKeyJustPressed(engine::Key::Right) || input.wasKeyJustPressed(engine::Key::D);
 
     if (goLeft)
     {
-        if (section_ == Section::Gear)        section_ = Section::Stats;
-        else if (section_ == Section::Backpack) section_ = Section::Gear;
+        if (section_ == Section::Gear)
+            section_ = Section::Stats;
+        else if (section_ == Section::Backpack)
+            section_ = Section::Gear;
         return;
     }
     if (goRight)
     {
-        if (section_ == Section::Stats)       section_ = Section::Gear;
-        else if (section_ == Section::Gear)   section_ = Section::Backpack;
+        if (section_ == Section::Stats)
+            section_ = Section::Gear;
+        else if (section_ == Section::Gear)
+            section_ = Section::Backpack;
         return;
     }
 
     switch (section_)
     {
-    case Section::Stats:   handleStatsInput(input);   break;
-    case Section::Gear:    handleGearInput(input);    break;
-    case Section::Backpack: handleBackpackInput(input); break;
+    case Section::Stats:
+        handleStatsInput(input);
+        break;
+    case Section::Gear:
+        handleGearInput(input);
+        break;
+    case Section::Backpack:
+        handleBackpackInput(input);
+        break;
     }
 }
 
@@ -83,11 +101,20 @@ void StatusScene::handleGearInput(engine::IInput &input)
         std::shared_ptr<EquipmentItem> item;
         switch (slot)
         {
-        case EquipmentSlot::Weapon:    item = gm.equippedGear().weapon;     break;
-        case EquipmentSlot::Armor:     item = gm.equippedGear().armor;      break;
-        case EquipmentSlot::Accessory: item = gm.equippedGear().accessory;  break;
-        case EquipmentSlot::Relic:     item = gm.equippedGear().relic;      break;
-        default: break;
+        case EquipmentSlot::Weapon:
+            item = gm.equippedGear().weapon;
+            break;
+        case EquipmentSlot::Armor:
+            item = gm.equippedGear().armor;
+            break;
+        case EquipmentSlot::Accessory:
+            item = gm.equippedGear().accessory;
+            break;
+        case EquipmentSlot::Relic:
+            item = gm.equippedGear().relic;
+            break;
+        default:
+            break;
         }
         if (item)
         {
@@ -108,15 +135,18 @@ void StatusScene::handleBackpackInput(engine::IInput &input)
     const auto &items = GameManager::instance().inventory().items();
     int count = static_cast<int>(items.size());
 
-    if (count == 0) return;
+    if (count == 0)
+        return;
 
     if (input.wasKeyJustPressed(engine::Key::Up) || input.wasKeyJustPressed(engine::Key::W))
     {
-        if (backpackIndex_ > 0) --backpackIndex_;
+        if (backpackIndex_ > 0)
+            --backpackIndex_;
     }
     if (input.wasKeyJustPressed(engine::Key::Down) || input.wasKeyJustPressed(engine::Key::S))
     {
-        if (backpackIndex_ < count - 1) ++backpackIndex_;
+        if (backpackIndex_ < count - 1)
+            ++backpackIndex_;
     }
 
     if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
@@ -159,11 +189,11 @@ void StatusScene::render(engine::IRenderer &renderer)
 
     // Section tabs.
     engine::Color statsColor = (section_ == Section::Stats) ? engine::Color::yellow() : engine::Color::gray();
-    engine::Color gearColor  = (section_ == Section::Gear) ? engine::Color::yellow() : engine::Color::gray();
-    engine::Color bpColor    = (section_ == Section::Backpack) ? engine::Color::yellow() : engine::Color::gray();
-    renderer.drawText("Stats",   {60, 570}, 18, statsColor);
-    renderer.drawText("Gear",    {360, 570}, 18, gearColor);
-    renderer.drawText("Backpack",{660, 570}, 18, bpColor);
+    engine::Color gearColor = (section_ == Section::Gear) ? engine::Color::yellow() : engine::Color::gray();
+    engine::Color bpColor = (section_ == Section::Backpack) ? engine::Color::yellow() : engine::Color::gray();
+    renderer.drawText("Stats", {60, 570}, 18, statsColor);
+    renderer.drawText("Gear", {360, 570}, 18, gearColor);
+    renderer.drawText("Backpack", {660, 570}, 18, bpColor);
     renderer.drawText("Esc: back", {720, 570}, 14, engine::Color::gray());
 
     // Feedback.
@@ -190,14 +220,20 @@ void StatusScene::renderStats(engine::IRenderer &renderer)
     float textY = y + 45;
     int step = 28;
     auto white = engine::Color::white();
-    renderer.drawText("Name: " + character.name(),                  {x + 10, textY}, 16, white); textY += step;
-    renderer.drawText("Level: " + std::to_string(character.level()), {x + 10, textY}, 16, white); textY += step;
-    renderer.drawText("HP:  " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()), {x + 10, textY}, 16, engine::Color(100, 255, 100)); textY += step;
-    renderer.drawText("SP:  " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()), {x + 10, textY}, 16, engine::Color(100, 200, 255)); textY += step;
-    renderer.drawText("ATK: " + std::to_string(character.attack()), {x + 10, textY}, 16, engine::Color(255, 100, 100)); textY += step;
-    renderer.drawText("DEF: " + std::to_string(character.defense()), {x + 10, textY}, 16, engine::Color(100, 100, 255)); textY += step;
-    renderer.drawText("SPD: " + std::to_string(character.speed()), {x + 10, textY}, 16, engine::Color(255, 255, 100)); textY += step;
-    renderer.drawText("MAG: " + std::to_string(character.magic()), {x + 10, textY}, 16, engine::Color(255, 100, 255)); textY += step;
+    renderer.drawText("Name: " + character.name(), {x + 10, textY}, 16, white);
+    textY += step;
+    renderer.drawText("Level: " + std::to_string(character.level()), {x + 10, textY}, 16, white);
+    textY += step;
+    renderer.drawText("HP:  " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()), {x + 10, textY}, 16, engine::Color(100, 255, 100));
+    textY += step;
+    renderer.drawText("SP:  " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()), {x + 10, textY}, 16, engine::Color(100, 200, 255));
+    textY += step;
+    renderer.drawText("ATK: " + std::to_string(character.attack()), {x + 10, textY}, 16, engine::Color(255, 100, 100));
+    textY += step;
+    renderer.drawText("MAG: " + std::to_string(character.magic()), {x + 10, textY}, 16, engine::Color(255, 100, 255));
+    textY += step;
+    renderer.drawText("SPD: " + std::to_string(character.speed()), {x + 10, textY}, 16, engine::Color(255, 255, 100));
+    textY += step;
     renderer.drawText("Gold: " + std::to_string(character.gold()), {x + 10, textY}, 16, engine::Color::yellow());
 }
 
@@ -233,21 +269,30 @@ void StatusScene::renderGear(engine::IRenderer &renderer)
         std::shared_ptr<EquipmentItem> item;
         switch (i)
         {
-        case 0: item = gear.weapon; break;
-        case 1: item = gear.armor; break;
-        case 2: item = gear.accessory; break;
-        case 3: item = gear.relic; break;
+        case 0:
+            item = gear.weapon;
+            break;
+        case 1:
+            item = gear.armor;
+            break;
+        case 2:
+            item = gear.accessory;
+            break;
+        case 3:
+            item = gear.relic;
+            break;
         }
 
         if (item)
         {
             renderer.drawText(item->name(), {x + 20, sy + 28}, 16, engine::Color::white());
             std::string stats;
-            if (item->attackBonus()  > 0) stats += "ATK+" + std::to_string(item->attackBonus()) + " ";
-            if (item->defenseBonus() > 0) stats += "DEF+" + std::to_string(item->defenseBonus()) + " ";
-            if (item->speedBonus()    > 0) stats += "SPD+" + std::to_string(item->speedBonus()) + " ";
-            if (item->hpBonus()       > 0) stats += "HP+" + std::to_string(item->hpBonus()) + " ";
-            if (item->magicBonus()    > 0) stats += "MAG+" + std::to_string(item->magicBonus());
+            if (item->strengthBonus() > 0)
+                stats += "STR+" + std::to_string(item->strengthBonus()) + " ";
+            if (item->magicBonus() > 0)
+                stats += "MAG+" + std::to_string(item->magicBonus()) + " ";
+            if (item->speedBonus() > 0)
+                stats += "SPD+" + std::to_string(item->speedBonus()) + " ";
             renderer.drawText(stats, {x + 20, sy + 52}, 12, engine::Color::gray());
         }
         else
@@ -286,7 +331,8 @@ void StatusScene::renderBackpack(engine::IRenderer &renderer)
 
     for (int i = start; i < end; ++i)
     {
-        if (!items[i]) continue;
+        if (!items[i])
+            continue;
         float rowY = y + 45 + (i - start) * rowH;
         bool selected = (section_ == Section::Backpack && i == backpackIndex_);
         engine::Color color = selected ? engine::Color::yellow() : engine::Color::white();

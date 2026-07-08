@@ -11,7 +11,7 @@ namespace
 
     int randomVariance(int base)
     {
-        // Persona-style ~5% variance on either side.
+        // ~5% variance on either side.
         std::uniform_int_distribution<int> dist(-base / 20, base / 20);
         return base + dist(rng);
     }
@@ -46,16 +46,14 @@ void Skill::applyCost(Character &caster) const
         caster.takeDamage(cost_);
 }
 
-int Skill::calculateRawDamage(const Character &caster, const Enemy &target) const
+int Skill::calculateRawDamage(const Character &caster, const Enemy & /*target*/) const
 {
     if (healing_)
         return 0;
 
-    // Damage formula: deterministic-ish scaling suitable for course-project numbers.
-    // Keeps early-game skills from one-shotting basic enemies while still scaling.
+    // Magic determines the skill damage multiplier.
     int attackStat = std::max(1, caster.magic());
-    int defenseStat = std::max(1, target.defense());
-    int raw = (power_ * attackStat) / (defenseStat + 10);
+    int raw = static_cast<int>(power_ * (1.0 + attackStat / 10.0));
     return std::max(1, randomVariance(raw));
 }
 
@@ -68,7 +66,6 @@ int Skill::use(Character &caster, Enemy &target) const
 
     if (healing_)
     {
-        // Healing skills target the caster themselves in this simplified model.
         caster.heal(power_);
         return -power_;
     }

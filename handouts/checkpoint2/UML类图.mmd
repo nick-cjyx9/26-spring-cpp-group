@@ -54,19 +54,23 @@ classDiagram
     %% Core Domain
     class Character {
         -name, level, hp, sp, exp, gold
-        -base stats, equipment bonuses
-        -currentPersona
+        -equipmentStrengthBonus, equipmentMagicBonus, equipmentSpeedBonus
+        -currentPersona, ownedPersonas
+        -levelUpSnapshot
+        +attack()/magic()/speed()/affinity()
         +takeDamage/heal/gainExp/equip
+        +addPersona()/clearOwnedPersonas()
     }
     class Persona {
-        -name, arcana, level
-        -stats, affinities
-        -skills
-        +affinity()/learnSkill()
+        -name, arcana, level, exp, expToNextLevel
+        -strength, magic, speed, affinities
+        -skills, potentialSkills
+        +affinity()/learnSkill()/addPotentialSkill()
+        +gainExp()/growBaseStats()
     }
     class Skill {
-        -name, element, power, cost
-        +canUse()/use()
+        -name, element, power, cost, costType, healing, requiredLevel
+        +canUse()/use()/calculateRawDamage()
     }
     class Item {
         <<abstract>>
@@ -84,21 +88,39 @@ classDiagram
     }
     class Enemy {
         <<abstract>>
-        -hp, attack, defense, speed
-        -affinities, skills
-        +battleCry()/clone()
+        -hp, strength, magic, speed
+        -baseStrength, baseMagic, baseSpeed
+        -affinities, skills, attackPattern, dropPersonaIds
+        +battleCry()/clone()/scaleToLevel()/chooseSkill()
     }
     class Slime
     class Goblin
     class Boss
     class BattleSystem {
-        -player, enemies, log
-        +startBattle/playerAttack/useSkill/flee
+        -player, enemies, log, turnOrder, currentTurnIndex
+        -enemyTurnCounter, fled, droppedPersonaIds
+        +startBattle()/isPlayerTurn()/processEnemyTurns()
+        +playerAttack()/playerUseSkill()/playerUseItem()
+        +playerSwitchPersona()/playerFlee()
+        +recoverPlayerSp()
     }
     class Shop
     class Quest
     class QuestManager
-    class SocialLink
+    class SocialLink {
+        -id, name, arcana, portraitId
+        -rank, points
+        -rankData[]
+        +addPoints()/rankUp()/currentDialogue()
+    }
+    class SocialLinkReward {
+        +personaLevels
+        +newSkill
+    }
+    class SocialLinkRankData {
+        +dialogue
+        +reward
+    }
     class SocialLinkManager
     class Entity {
         <<abstract>>
@@ -114,6 +136,7 @@ classDiagram
     }
 
     Character --> Persona
+    Character *-- Persona
     Persona *-- Skill
     Item <|-- FoodItem
     Item <|-- PotionItem
@@ -127,8 +150,12 @@ classDiagram
     Enemy *-- Skill
     BattleSystem ..> Character
     BattleSystem ..> Enemy
+    BattleSystem ..> Item
     QuestManager *-- Quest
     SocialLinkManager *-- SocialLink
+    SocialLink *-- SocialLinkRankData
+    SocialLinkRankData *-- SocialLinkReward
+    SocialLinkReward *-- Skill
     Entity <|-- PlayerEntity
     Entity <|-- NpcEntity
     Entity <|-- EnemyEntity
@@ -169,6 +196,7 @@ classDiagram
     class InventoryScene
     class CharacterScene
     class DialogueScene
+    class LevelUpScene
 
     IScene <|-- TitleScene
     IScene <|-- TownScene
@@ -178,6 +206,7 @@ classDiagram
     IScene <|-- InventoryScene
     IScene <|-- CharacterScene
     IScene <|-- DialogueScene
+    IScene <|-- LevelUpScene
 
     TitleScene ..> GameManager
     TownScene ..> GameManager

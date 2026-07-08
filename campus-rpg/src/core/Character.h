@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 class EquipmentItem;
 
@@ -11,51 +12,51 @@ class Character
 {
 public:
     Character() = default;
-    Character(std::string name, int maxHp, int maxSp,
-              int strength, int magic, int endurance, int agility, int luck);
+    Character(std::string name, int maxHp, int maxSp);
 
     // Getters
     const std::string &name() const { return name_; }
     int level() const { return level_; }
     int hp() const { return hp_; }
     int maxHp() const { return maxHp_; }
-    int totalMaxHp() const { return maxHp_ + equipmentHpBonus_; }
     int sp() const { return sp_; }
     int maxSp() const { return maxSp_; }
     int exp() const { return exp_; }
     int expToNextLevel() const { return expToNextLevel_; }
     int gold() const { return gold_; }
 
+    // Combat stats are derived from current Persona + equipment, scaled by Persona level.
     int attack() const;
-    int defense() const;
-    int speed() const;
     int magic() const;
-    int totalMagic() const { return magic() + equipmentMagicBonus_; }
-
-    int baseStrength() const { return baseStrength_; }
-    int baseMagic() const { return baseMagic_; }
-    int baseEndurance() const { return baseEndurance_; }
-    int baseAgility() const { return baseAgility_; }
-    int baseLuck() const { return baseLuck_; }
-
-    int equipmentAttackBonus() const { return equipmentAttackBonus_; }
-    int equipmentDefenseBonus() const { return equipmentDefenseBonus_; }
-    int equipmentSpeedBonus() const { return equipmentSpeedBonus_; }
-    int equipmentHpBonus() const { return equipmentHpBonus_; }
-    int equipmentMagicBonus() const { return equipmentMagicBonus_; }
-
-    // Social Link stat bonuses (recomputed by GameManager after talk/load).
-    int socialLinkStrengthBonus() const { return slStrengthBonus_; }
-    int socialLinkMagicBonus() const { return slMagicBonus_; }
-    int socialLinkEnduranceBonus() const { return slEnduranceBonus_; }
-    int socialLinkAgilityBonus() const { return slAgilityBonus_; }
-    int socialLinkLuckBonus() const { return slLuckBonus_; }
-    void applySocialLinkBonus(PersonaStat s, int value);
-    void clearSocialLinkBonuses();
-
+    int speed() const;
     Affinity affinity(Element e) const;
+
+    int equipmentStrengthBonus() const { return equipmentStrengthBonus_; }
+    int equipmentMagicBonus() const { return equipmentMagicBonus_; }
+    int equipmentSpeedBonus() const { return equipmentSpeedBonus_; }
+
+    // Persona management
     Persona *currentPersona() const { return persona_.get(); }
     std::shared_ptr<Persona> persona() const { return persona_; }
+    void setPersona(std::shared_ptr<Persona> persona);
+
+    const std::vector<std::shared_ptr<Persona>> &ownedPersonas() const { return ownedPersonas_; }
+    std::vector<std::shared_ptr<Persona>> &ownedPersonas() { return ownedPersonas_; }
+    void addPersona(std::shared_ptr<Persona> persona);
+    void clearOwnedPersonas() { ownedPersonas_.clear(); }
+    bool ownsPersona(const std::string &id) const;
+
+    // Level-up snapshot (cleared on read). Records only character-level changes
+    // (HP/SP max); Persona growth is tracked separately via Persona::checkSkillUnlocks.
+    struct LevelUpSnapshot
+    {
+        int oldLevel = 0, newLevel = 0;
+        int oldMaxHp = 0, newMaxHp = 0;
+        int oldMaxSp = 0, newMaxSp = 0;
+    };
+    bool hasLevelUpSnapshot() const { return hasSnapshot_; }
+    const LevelUpSnapshot &levelUpSnapshot() const { return snapshot_; }
+    void clearLevelUpSnapshot() { hasSnapshot_ = false; snapshot_ = LevelUpSnapshot(); }
 
     // Setters / mutations
     void setName(const std::string &name) { name_ = name; }
@@ -67,26 +68,6 @@ public:
     bool spendGold(int amount);
     void gainExp(int amount);
 
-    // Level-up snapshot (cleared on read).
-    struct LevelUpSnapshot
-    {
-        int oldLevel = 0, newLevel = 0;
-        int oldMaxHp = 0, newMaxHp = 0;
-        int oldMaxSp = 0, newMaxSp = 0;
-        int oldStrength = 0, newStrength = 0;
-        int oldMagic = 0, newMagic = 0;
-        int oldEndurance = 0, newEndurance = 0;
-        int oldAgility = 0, newAgility = 0;
-        int oldLuck = 0, newLuck = 0;
-        int oldAttack = 0, newAttack = 0;
-        int oldDefense = 0, newDefense = 0;
-        int oldSpeed = 0, newSpeed = 0;
-        std::vector<std::string> unlockedSkills;
-    };
-    bool hasLevelUpSnapshot() const { return hasSnapshot_; }
-    const LevelUpSnapshot &levelUpSnapshot() const { return snapshot_; }
-    void clearLevelUpSnapshot() { hasSnapshot_ = false; snapshot_ = LevelUpSnapshot(); }
-
     // Persistence restore setters (used by SaveRepository::loadCharacter).
     void setLevel(int v) { level_ = v; }
     void setHp(int v) { hp_ = v; }
@@ -96,16 +77,17 @@ public:
     void setExp(int v) { exp_ = v; }
     void setExpToNextLevel(int v) { expToNextLevel_ = v; }
     void setGold(int v) { gold_ = v; }
-    void setBaseStats(int strength, int magic, int endurance, int agility, int luck);
-    void setEquipmentBonuses(int attack, int defense, int speed, int hp = 0, int magic = 0);
 
-    void setPersona(std::shared_ptr<Persona> persona);
+    void setEquipmentBonuses(int strength, int magic, int speed);
     void equip(std::shared_ptr<EquipmentItem> equipment);
 
     bool isAlive() const { return hp_ > 0; }
 
 private:
     void levelUp();
+
+    // Final stat = (personaStat + equipmentBonus) * levelMultiplier
+    int computePersonaStat(PersonaStat s) const;
 
     std::string name_;
     int level_ = 1;
@@ -117,25 +99,12 @@ private:
     int expToNextLevel_ = 100;
     int gold_ = 0;
 
-    int baseStrength_ = 5;
-    int baseMagic_ = 5;
-    int baseEndurance_ = 5;
-    int baseAgility_ = 5;
-    int baseLuck_ = 5;
-
-    int equipmentAttackBonus_ = 0;
-    int equipmentDefenseBonus_ = 0;
-    int equipmentSpeedBonus_ = 0;
-    int equipmentHpBonus_ = 0;
+    int equipmentStrengthBonus_ = 0;
     int equipmentMagicBonus_ = 0;
-
-    int slStrengthBonus_ = 0;
-    int slMagicBonus_ = 0;
-    int slEnduranceBonus_ = 0;
-    int slAgilityBonus_ = 0;
-    int slLuckBonus_ = 0;
+    int equipmentSpeedBonus_ = 0;
 
     std::shared_ptr<Persona> persona_;
+    std::vector<std::shared_ptr<Persona>> ownedPersonas_;
 
     LevelUpSnapshot snapshot_;
     bool hasSnapshot_ = false;

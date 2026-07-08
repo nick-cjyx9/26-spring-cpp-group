@@ -34,9 +34,10 @@ namespace
         case ItemType::Equipment:
         {
             const auto &eq = static_cast<const EquipmentItem &>(item);
-            oss << "attackBonus=" << eq.attackBonus()
-                << ",defenseBonus=" << eq.defenseBonus()
-                << ",speedBonus=" << eq.speedBonus();
+            oss << "strengthBonus=" << eq.strengthBonus()
+                << ",magicBonus=" << eq.magicBonus()
+                << ",speedBonus=" << eq.speedBonus()
+                << ",slot=" << static_cast<int>(eq.slot());
             break;
         }
         case ItemType::Persona:
@@ -73,8 +74,9 @@ namespace
             return std::make_unique<SpItem>(id, n, desc, value, getInt("spAmount"));
         if (std::string(typeStr) == "Equipment")
             return std::make_unique<EquipmentItem>(id, n, desc, value,
-                                                   getInt("attackBonus"), getInt("defenseBonus"),
-                                                   getInt("speedBonus"));
+                                                   getInt("strengthBonus"), getInt("magicBonus"),
+                                                   getInt("speedBonus"),
+                                                   static_cast<EquipmentSlot>(getInt("slot")));
         if (std::string(typeStr) == "Persona")
         {
             size_t pos = extra.find("personaId=");
@@ -159,9 +161,9 @@ bool SaveRepository::saveCharacter_(int slotId, const Character &character)
 
     const char *sql = R"(
         REPLACE INTO character (slot_id, name, level, hp, max_hp, sp, max_sp, exp, exp_to_next, gold,
-                                st, ma, en, ag, lu, eq_atk, eq_def, eq_spd,
+                                eq_str, eq_mag, eq_spd,
                                 pos_x, pos_y, is_night, current_persona_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?)
     )";
 
     sqlite3_stmt *stmt = nullptr;
@@ -178,17 +180,12 @@ bool SaveRepository::saveCharacter_(int slotId, const Character &character)
     sqlite3_bind_int(stmt, 8, character.exp());
     sqlite3_bind_int(stmt, 9, character.expToNextLevel());
     sqlite3_bind_int(stmt, 10, character.gold());
-    sqlite3_bind_int(stmt, 11, character.baseStrength());
-    sqlite3_bind_int(stmt, 12, character.baseMagic());
-    sqlite3_bind_int(stmt, 13, character.baseEndurance());
-    sqlite3_bind_int(stmt, 14, character.baseAgility());
-    sqlite3_bind_int(stmt, 15, character.baseLuck());
-    sqlite3_bind_int(stmt, 16, character.equipmentAttackBonus());
-    sqlite3_bind_int(stmt, 17, character.equipmentDefenseBonus());
-    sqlite3_bind_int(stmt, 18, character.equipmentSpeedBonus());
+    sqlite3_bind_int(stmt, 11, character.equipmentStrengthBonus());
+    sqlite3_bind_int(stmt, 12, character.equipmentMagicBonus());
+    sqlite3_bind_int(stmt, 13, character.equipmentSpeedBonus());
 
     std::string personaId = character.currentPersona() ? character.currentPersona()->id() : "";
-    sqlite3_bind_text(stmt, 19, personaId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 14, personaId.c_str(), -1, SQLITE_TRANSIENT);
 
     bool ok = sqlite3_step(stmt) == SQLITE_DONE;
     sqlite3_finalize(stmt);
@@ -202,7 +199,7 @@ bool SaveRepository::loadCharacter_(int slotId, Character &character)
         return false;
 
     const char *sql = "SELECT name, level, hp, max_hp, sp, max_sp, exp, exp_to_next, gold, "
-                      "st, ma, en, ag, lu, eq_atk, eq_def, eq_spd, current_persona_id "
+                      "eq_str, eq_mag, eq_spd, current_persona_id "
                       "FROM character WHERE slot_id = ?";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -222,25 +219,20 @@ bool SaveRepository::loadCharacter_(int slotId, Character &character)
         int exp = sqlite3_column_int(stmt, 6);
         int expToNext = sqlite3_column_int(stmt, 7);
         int gold = sqlite3_column_int(stmt, 8);
-        int st = sqlite3_column_int(stmt, 9);
-        int ma = sqlite3_column_int(stmt, 10);
-        int en = sqlite3_column_int(stmt, 11);
-        int ag = sqlite3_column_int(stmt, 12);
-        int lu = sqlite3_column_int(stmt, 13);
-        int eqAtk = sqlite3_column_int(stmt, 14);
-        int eqDef = sqlite3_column_int(stmt, 15);
-        int eqSpd = sqlite3_column_int(stmt, 16);
-        const char *personaIdText = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 17));
+        int eqStr = sqlite3_column_int(stmt, 9);
+        int eqMag = sqlite3_column_int(stmt, 10);
+        int eqSpd = sqlite3_column_int(stmt, 11);
+        const char *personaIdText = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 12));
 
         // Reconstruct the character with base vitals, then restore all fields.
-        character = Character(name, maxHp, maxSp, st, ma, en, ag, lu);
+        character = Character(name, maxHp, maxSp);
         character.setLevel(level);
         character.setHp(hp);
         character.setSp(sp);
         character.setExp(exp);
         character.setExpToNextLevel(expToNext);
         character.setGold(gold);
-        character.setEquipmentBonuses(eqAtk, eqDef, eqSpd);
+        character.setEquipmentBonuses(eqStr, eqMag, eqSpd);
         // current_persona_id is resolved by the caller (GameManager::loadFromSlot)
         // via findPersona(); store nothing here beyond what Character exposes.
         (void)personaIdText;
@@ -341,8 +333,8 @@ bool SaveRepository::savePersonas_(int slotId, const std::vector<std::shared_ptr
     sqlite3_finalize(delStmt);
 
     const char *sql = R"(
-        INSERT INTO persona (slot_id, id, name, arcana, level, st, ma, en, ag, lu, affinities, skills, owner)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO persona (slot_id, id, name, arcana, level, strength, magic, speed, affinities, skills, owner)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )";
 
     sqlite3_stmt *stmt = nullptr;
@@ -361,14 +353,12 @@ bool SaveRepository::savePersonas_(int slotId, const std::vector<std::shared_ptr
         sqlite3_bind_int(stmt, 5, p->level());
         sqlite3_bind_int(stmt, 6, p->strength());
         sqlite3_bind_int(stmt, 7, p->magic());
-        sqlite3_bind_int(stmt, 8, p->endurance());
-        sqlite3_bind_int(stmt, 9, p->agility());
-        sqlite3_bind_int(stmt, 10, p->luck());
+        sqlite3_bind_int(stmt, 8, p->speed());
         std::string affs = affinitiesToString(*p);
-        sqlite3_bind_text(stmt, 11, affs.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 9, affs.c_str(), -1, SQLITE_TRANSIENT);
         std::string skills = skillsToString(*p);
-        sqlite3_bind_text(stmt, 12, skills.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 13, "player", -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 10, skills.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 11, "player", -1, SQLITE_TRANSIENT);
         sqlite3_step(stmt);
     }
 
@@ -384,7 +374,7 @@ bool SaveRepository::loadPersonas_(int slotId, std::vector<std::shared_ptr<Perso
         return false;
 
     personas.clear();
-    const char *sql = "SELECT id, name, arcana, level, st, ma, en, ag, lu, affinities, skills "
+    const char *sql = "SELECT id, name, arcana, level, strength, magic, speed, affinities, skills "
                       "FROM persona WHERE slot_id = ? AND owner = 'player'";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -400,11 +390,9 @@ bool SaveRepository::loadPersonas_(int slotId, std::vector<std::shared_ptr<Perso
         int level = sqlite3_column_int(stmt, 3);
         int st = sqlite3_column_int(stmt, 4);
         int ma = sqlite3_column_int(stmt, 5);
-        int en = sqlite3_column_int(stmt, 6);
-        int ag = sqlite3_column_int(stmt, 7);
-        int lu = sqlite3_column_int(stmt, 8);
+        int sp = sqlite3_column_int(stmt, 6);
 
-        auto p = std::make_shared<Persona>(id, name, arcana, level, st, ma, en, ag, lu);
+        auto p = std::make_shared<Persona>(id, name, arcana, level, st, ma, sp);
         const char *affs = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 9));
         if (affs)
             applyAffinitiesFromString(*p, affs);

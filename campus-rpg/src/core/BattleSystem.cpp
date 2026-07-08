@@ -1,5 +1,7 @@
 #include "BattleSystem.h"
 
+#include "Item.h"
+
 #include <algorithm>
 #include <random>
 
@@ -7,19 +9,10 @@ namespace
 {
     thread_local std::mt19937 rng{std::random_device{}()};
 
-    int physicalDamage(int attackerAttack, int targetDefense)
+    int randomVariance(int base)
     {
-        int raw = std::max(1, attackerAttack - targetDefense / 2);
-        std::uniform_int_distribution<int> dist(-raw / 20, raw / 20);
-        return std::max(1, raw + dist(rng));
-    }
-
-    bool rollFleeSuccess(int playerSpeed, int enemySpeed)
-    {
-        int chance = 50 + (playerSpeed - enemySpeed) * 2;
-        chance = std::clamp(chance, 10, 90);
-        std::uniform_int_distribution<int> dist(1, 100);
-        return dist(rng) <= chance;
+        std::uniform_int_distribution<int> dist(-base / 20, base / 20);
+        return std::max(1, base + dist(rng));
     }
 } // namespace
 
@@ -36,8 +29,11 @@ void BattleSystem::startBattle(Character &player, std::vector<std::unique_ptr<En
     player_ = &player;
     enemies_ = std::move(enemies);
     log_.clear();
-    playerGuarding_ = false;
+    turnOrder_.clear();
+    currentTurnIndex_ = 0;
+    enemyTurnCounter_ = 0;
     fled_ = false;
+    droppedPersonaIds_.clear();
 
     appendLog("Battle started: " + player.name() + " vs shadows");
     for (const auto &enemy : enemies_)
@@ -45,28 +41,92 @@ void BattleSystem::startBattle(Character &player, std::vector<std::unique_ptr<En
         if (enemy)
             appendLog(enemy->battleCry());
     }
+
+    buildTurnOrder();
+
+    // If the first turn belongs to an enemy, run enemy turns immediately.
+    if (!isPlayerTurn() && !isOver())
+        processEnemyTurns();
+}
+
+void BattleSystem::buildTurnOrder()
+{
+    turnOrder_.clear();
+
+    // Player entry.
+    int playerSpeed = player_ ? player_->speed() : 0;
+    std::uniform_real_distribution<double> dist(-0.1, 0.1);
+    TurnEntry playerEntry;
+    playerEntry.isPlayer = true;
+    playerEntry.enemyIndex = 0;
+    playerEntry.initiative = static_cast<int>(playerSpeed * (1.0 + dist(rng)));
+    turnOrder_.push_back(playerEntry);
+
+    // Enemy entries.
+    for (size_t i = 0; i < enemies_.size(); ++i)
+    {
+        if (!enemies_[i] || !enemies_[i]->isAlive())
+            continue;
+        TurnEntry entry;
+        entry.isPlayer = false;
+        entry.enemyIndex = i;
+        entry.initiative = static_cast<int>(enemies_[i]->speed() * (1.0 + dist(rng)));
+        turnOrder_.push_back(entry);
+    }
+
+    // Sort by initiative descending; player wins ties.
+    std::sort(turnOrder_.begin(), turnOrder_.end(),
+              [](const TurnEntry &a, const TurnEntry &b)
+              {
+                  if (a.initiative != b.initiative)
+                      return a.initiative > b.initiative;
+                  return a.isPlayer && !b.isPlayer;
+              });
+}
+
+bool BattleSystem::isPlayerTurn() const
+{
+    if (turnOrder_.empty() || isOver())
+        return false;
+    return turnOrder_[currentTurnIndex_].isPlayer;
+}
+
+void BattleSystem::advanceTurn()
+{
+    if (turnOrder_.empty())
+        return;
+    currentTurnIndex_ = (currentTurnIndex_ + 1) % turnOrder_.size();
 }
 
 bool BattleSystem::playerAttack(size_t enemyIndex)
 {
-    if (isOver())
+    if (isOver() || !isPlayerTurn())
         return false;
+
     Enemy *target = enemyAt(enemyIndex);
     if (!target || !target->isAlive())
         return false;
 
-    int damage = physicalDamage(player_->attack(), target->defense());
-    target->takeDamage(damage);
-    appendLog(player_->name() + " attacks " + target->name() + " for " +
-              std::to_string(damage) + " damage.");
+    if (rollDodge(player_->speed(), target->speed()))
+    {
+        appendLog(target->name() + " dodged " + player_->name() + "'s attack!");
+    }
+    else
+    {
+        int damage = physicalDamage(player_->attack());
+        target->takeDamage(damage);
+        appendLog(player_->name() + " attacks " + target->name() + " for " +
+                  std::to_string(damage) + " damage.");
+    }
 
-    enemyTurn();
+    advanceTurn();
+    processEnemyTurns();
     return true;
 }
 
 bool BattleSystem::playerUseSkill(size_t enemyIndex, const Skill &skill)
 {
-    if (isOver())
+    if (isOver() || !isPlayerTurn())
         return false;
     if (!skill.canUse(*player_))
         return false;
@@ -91,44 +151,38 @@ bool BattleSystem::playerUseSkill(size_t enemyIndex, const Skill &skill)
                   " for " + std::to_string(damage) + " damage.");
     }
 
-    enemyTurn();
+    advanceTurn();
+    processEnemyTurns();
     return true;
 }
 
-bool BattleSystem::playerUseItem(size_t inventoryIndex)
+bool BattleSystem::playerUseItem(std::shared_ptr<Item> item)
 {
-    if (isOver())
+    if (isOver() || !isPlayerTurn() || !item)
         return false;
-    // Item usage is handled by the caller (InventoryScene / GameManager) because
-    // BattleSystem does not own the inventory. This stub remains for interface symmetry.
-    appendLog(player_->name() + " uses an item.");
-    enemyTurn();
-    return true;
-}
 
-bool BattleSystem::playerGuard()
-{
-    if (isOver())
-        return false;
-    playerGuarding_ = true;
-    appendLog(player_->name() + " takes a defensive stance.");
-    enemyTurn();
+    item->use(*player_);
+    appendLog(player_->name() + " uses " + item->name() + ".");
+    // Free action: do not advance turn or trigger enemy turns.
     return true;
 }
 
 bool BattleSystem::playerSwitchPersona(std::shared_ptr<Persona> persona)
 {
-    if (isOver() || !persona)
+    if (isOver() || !isPlayerTurn() || !persona)
         return false;
+
     player_->setPersona(persona);
     appendLog(player_->name() + " switches to " + persona->name() + ".");
-    enemyTurn();
+
+    advanceTurn();
+    processEnemyTurns();
     return true;
 }
 
 bool BattleSystem::playerFlee()
 {
-    if (isOver())
+    if (isOver() || !isPlayerTurn())
         return false;
 
     int enemySpeed = 0;
@@ -146,49 +200,53 @@ bool BattleSystem::playerFlee()
     }
 
     appendLog("Failed to flee!");
-    enemyTurn();
+    advanceTurn();
+    processEnemyTurns();
     return false;
 }
 
-void BattleSystem::enemyTurn()
+void BattleSystem::processEnemyTurns()
 {
-    if (isOver())
+    while (!isOver() && !isPlayerTurn())
+    {
+        size_t enemyIndex = turnOrder_[currentTurnIndex_].enemyIndex;
+        executeEnemyTurn(enemyIndex);
+        advanceTurn();
+    }
+}
+
+void BattleSystem::executeEnemyTurn(size_t enemyIndex)
+{
+    if (enemyIndex >= enemies_.size() || !enemies_[enemyIndex] || !enemies_[enemyIndex]->isAlive())
         return;
 
-    playerGuarding_ = false;
+    Enemy &enemy = *enemies_[enemyIndex];
+    auto skill = enemy.chooseSkill(enemyTurnCounter_);
+    ++enemyTurnCounter_;
 
-    for (auto &enemy : enemies_)
+    if (skill && !skill->isHealing())
     {
-        if (!enemy || !enemy->isAlive())
-            continue;
-
-        auto skill = enemy->chooseSkill();
-        if (skill && !skill->isHealing())
+        // Enemy skill damage: power scaled by enemy magic.
+        int raw = static_cast<int>(skill->power() * (1.0 + enemy.magic() / 10.0));
+        raw = randomVariance(raw);
+        int actual = applyAffinityMultiplier(raw, player_->affinity(skill->element()));
+        player_->takeDamage(actual);
+        appendLog(enemy.name() + " casts " + skill->name() + " for " +
+                  std::to_string(actual) + " damage.");
+    }
+    else
+    {
+        if (rollDodge(enemy.speed(), player_->speed()))
         {
-            int raw = (skill->power() * enemy->attack()) / (player_->defense() + 10);
-            std::uniform_int_distribution<int> dist(-raw / 20, raw / 20);
-            int actual = std::max(1, raw + dist(rng));
-            actual = applyAffinityMultiplier(actual, player_->affinity(skill->element()));
-
-            if (playerGuarding_)
-                actual /= 2;
-
-            player_->takeDamage(actual);
-            appendLog(enemy->name() + " casts " + skill->name() + " for " +
-                      std::to_string(actual) + " damage.");
+            appendLog(player_->name() + " dodged " + enemy.name() + "'s attack!");
         }
         else
         {
-            int actual = physicalDamage(enemy->attack(), player_->defense());
-            if (playerGuarding_)
-                actual /= 2;
+            int actual = physicalDamage(enemy.strength());
             player_->takeDamage(actual);
-            appendLog(enemy->name() + " attacks " + player_->name() + " for " +
+            appendLog(enemy.name() + " attacks " + player_->name() + " for " +
                       std::to_string(actual) + " damage.");
         }
-
-        if (!player_->isAlive())
-            break;
     }
 }
 
@@ -196,14 +254,16 @@ bool BattleSystem::isOver() const
 {
     return fled_ || !player_->isAlive() ||
            std::none_of(enemies_.begin(), enemies_.end(),
-                        [](const auto &e) { return e && e->isAlive(); });
+                        [](const auto &e)
+                        { return e && e->isAlive(); });
 }
 
 bool BattleSystem::playerWon() const
 {
     return player_->isAlive() &&
            std::none_of(enemies_.begin(), enemies_.end(),
-                        [](const auto &e) { return e && e->isAlive(); });
+                        [](const auto &e)
+                        { return e && e->isAlive(); });
 }
 
 bool BattleSystem::playerLost() const
@@ -233,6 +293,36 @@ int BattleSystem::applyAffinityMultiplier(int rawDamage, Affinity affinity) cons
     default:
         return rawDamage;
     }
+}
+
+int BattleSystem::physicalDamage(int attackerStrength) const
+{
+    int basePower = 8;
+    int raw = static_cast<int>(basePower * (1.0 + attackerStrength / 10.0));
+    return std::max(1, randomVariance(raw));
+}
+
+bool BattleSystem::rollDodge(int attackerSpeed, int defenderSpeed) const
+{
+    double rate = (static_cast<double>(defenderSpeed) - attackerSpeed) / attackerSpeed * 0.5;
+    int chance = static_cast<int>(rate * 100.0);
+    chance = std::clamp(chance, 5, 50);
+    std::uniform_int_distribution<int> dist(1, 100);
+    return dist(rng) <= chance;
+}
+
+bool BattleSystem::rollFleeSuccess(int playerSpeed, int enemySpeed) const
+{
+    int chance = 50 + (playerSpeed - enemySpeed) * 2;
+    chance = std::clamp(chance, 10, 90);
+    std::uniform_int_distribution<int> dist(1, 100);
+    return dist(rng) <= chance;
+}
+
+void BattleSystem::recoverPlayerSp()
+{
+    if (player_)
+        player_->recoverSp(player_->maxSp());
 }
 
 void BattleSystem::appendLog(const std::string &message)
