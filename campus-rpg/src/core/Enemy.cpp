@@ -83,9 +83,9 @@ void Enemy::addDropPersonaId(const std::string &personaId)
     dropPersonaIds_.push_back(personaId);
 }
 
-void Enemy::scaleToLevel(int playerLevel)
+void Enemy::scaleToLevel(int playerLevel, double extraMultiplier)
 {
-    double multiplier = 1.0 + (playerLevel - 1) * 0.1;
+    double multiplier = (1.0 + (playerLevel - 1) * 0.1) * extraMultiplier;
     strength_ = static_cast<int>(baseStrength_ * multiplier);
     magic_ = static_cast<int>(baseMagic_ * multiplier);
     speed_ = static_cast<int>(baseSpeed_ * multiplier);

@@ -19,6 +19,7 @@
 #include "StatusScene.h"
 #include "ArmoryScene.h"
 #include "LevelUpScene.h"
+#include "RestConfirmScene.h"
 
 #include <algorithm>
 #include <map>
@@ -45,15 +46,18 @@ void GameManager::seedDefaultState(const std::string &playerName)
     day_ = 1;
     talkCountToday_.clear();
     todayNpcIds_.clear();
+    todaySchoolNpcIds_.clear();
     npcPool_.clear();
+    onSecondMap_ = false;
 
     initDefaultPersonas();
     initDefaultShop();
     initDefaultQuests();
     initDefaultEnemies();
     initDefaultSocialLinks(); // builds the 10-NPC pool + dialogue
-    refreshDailyNpcs();        // pick today's 2 NPCs, reset talk counts
-    initDefaultMap();          // place player + today's NPCs
+    refreshDailyNpcs();        // pick today's 2+2 NPCs, reset talk counts
+    initDefaultMap();          // place player + today's NPCs on town map
+    initSecondMap();           // build school map + today's NPCs
     initDefaultEquipment();
 
     // All default personas are owned by the player.
@@ -268,6 +272,9 @@ void GameManager::enterScene(SceneType type)
     case SceneType::LevelUp:
         currentScene_ = std::make_unique<LevelUpScene>();
         break;
+    case SceneType::RestConfirm:
+        currentScene_ = std::make_unique<RestConfirmScene>(isNight_);
+        break;
     }
 }
 
@@ -293,7 +300,11 @@ std::unique_ptr<Enemy> GameManager::createEnemyFromTemplate(const std::string &i
         {
             auto cloned = enemy->clone();
             if (cloned)
-                cloned->scaleToLevel(character_.level());
+            {
+                // Enemies on the second (school) night map are tougher.
+                double boost = onSecondMap_ ? 1.3 : 1.0;
+                cloned->scaleToLevel(character_.level(), boost);
+            }
             return cloned;
         }
     }
@@ -499,6 +510,7 @@ void GameManager::refreshDailyNpcs()
 {
     talkCountToday_.clear();
     todayNpcIds_.clear();
+    todaySchoolNpcIds_.clear();
 
     std::vector<std::string> ids;
     ids.reserve(npcPool_.size());
@@ -507,29 +519,57 @@ void GameManager::refreshDailyNpcs()
 
     std::mt19937 rng(std::random_device{}());
     std::shuffle(ids.begin(), ids.end(), rng);
-    for (int i = 0; i < kNpcsPerDay && i < static_cast<int>(ids.size()); ++i)
-        todayNpcIds_.push_back(ids[i]);
+    // Pick kNpcsPerDay for town and kNpcsPerDay different ones for school,
+    // so within a day both maps show distinct NPCs.
+    int totalNeeded = kNpcsPerDay * 2;
+    for (int i = 0; i < totalNeeded && i < static_cast<int>(ids.size()); ++i)
+    {
+        if (i < kNpcsPerDay)
+            todayNpcIds_.push_back(ids[i]);
+        else
+            todaySchoolNpcIds_.push_back(ids[i]);
+    }
 }
 
 void GameManager::rebuildMapNpcs()
 {
-    if (!currentMap_)
-        return;
-    TileMap &map = *currentMap_;
-
-    engine::Vec2 playerPos{100.0f, 100.0f};
-    for (const auto &e : map.entities())
+    // Town map
+    if (currentMap_)
     {
-        if (e && e->type() == "player")
-            playerPos = e->position();
-    }
-    map.clearEntities();
-    map.addEntity(std::make_unique<PlayerEntity>(playerPos));
+        TileMap &map = *currentMap_;
+        engine::Vec2 playerPos{100.0f, 100.0f};
+        for (const auto &e : map.entities())
+        {
+            if (e && e->type() == "player")
+                playerPos = e->position();
+        }
+        map.clearEntities();
+        map.addEntity(std::make_unique<PlayerEntity>(playerPos));
 
-    static const engine::Vec2 kSpots[kNpcsPerDay] = {
-        engine::Vec2{200.0f, 150.0f}, engine::Vec2{300.0f, 200.0f}};
-    for (size_t i = 0; i < todayNpcIds_.size() && i < kNpcsPerDay; ++i)
-        map.addEntity(std::make_unique<NpcEntity>(kSpots[i], todayNpcIds_[i]));
+        static const engine::Vec2 kSpots[kNpcsPerDay] = {
+            engine::Vec2{200.0f, 150.0f}, engine::Vec2{300.0f, 200.0f}};
+        for (size_t i = 0; i < todayNpcIds_.size() && i < kNpcsPerDay; ++i)
+            map.addEntity(std::make_unique<NpcEntity>(kSpots[i], todayNpcIds_[i]));
+    }
+
+    // School map (second map)
+    if (secondMap_)
+    {
+        TileMap &map = *secondMap_;
+        engine::Vec2 playerPos{100.0f, 100.0f};
+        for (const auto &e : map.entities())
+        {
+            if (e && e->type() == "player")
+                playerPos = e->position();
+        }
+        map.clearEntities();
+        map.addEntity(std::make_unique<PlayerEntity>(playerPos));
+
+        static const engine::Vec2 kSpots[kNpcsPerDay] = {
+            engine::Vec2{250.0f, 180.0f}, engine::Vec2{400.0f, 230.0f}};
+        for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kNpcsPerDay; ++i)
+            map.addEntity(std::make_unique<NpcEntity>(kSpots[i], todaySchoolNpcIds_[i]));
+    }
 }
 
 void GameManager::advanceDay()
@@ -612,25 +652,9 @@ void GameManager::recomputeSocialLinkBonuses()
 
 void GameManager::initDefaultMap()
 {
-    currentMap_ = std::make_unique<TileMap>(20, 15);
-
-    // Simple border walls.
-    for (int x = 0; x < 20; ++x)
-    {
-        currentMap_->tileAt(x, 0) = Tile(TileType::Wall);
-        currentMap_->tileAt(x, 14) = Tile(TileType::Wall);
-    }
-    for (int y = 0; y < 15; ++y)
-    {
-        currentMap_->tileAt(0, y) = Tile(TileType::Wall);
-        currentMap_->tileAt(19, y) = Tile(TileType::Wall);
-    }
-
-    // Some interior walls.
-    currentMap_->tileAt(5, 5) = Tile(TileType::Wall);
-    currentMap_->tileAt(5, 6) = Tile(TileType::Wall);
-    currentMap_->tileAt(14, 8) = Tile(TileType::Wall);
-    currentMap_->tileAt(14, 9) = Tile(TileType::Wall);
+    // 25x19 tiles * 32px = 800x600, matching the full window. No walls: the
+    // player can walk anywhere on the background image.
+    currentMap_ = std::make_unique<TileMap>(25, 19);
 
     // Player start.
     currentMap_->addEntity(std::make_unique<PlayerEntity>(engine::Vec2{100.0f, 100.0f}));
@@ -640,6 +664,21 @@ void GameManager::initDefaultMap()
         engine::Vec2{200.0f, 150.0f}, engine::Vec2{300.0f, 200.0f}};
     for (size_t i = 0; i < todayNpcIds_.size() && i < kNpcsPerDay; ++i)
         currentMap_->addEntity(std::make_unique<NpcEntity>(kNpcSpots[i], todayNpcIds_[i]));
+}
+
+void GameManager::initSecondMap()
+{
+    // Full 800x600 walkable area, no walls.
+    secondMap_ = std::make_unique<TileMap>(25, 19);
+
+    // Player start.
+    secondMap_->addEntity(std::make_unique<PlayerEntity>(engine::Vec2{100.0f, 100.0f}));
+
+    // Today's school NPCs.
+    static const engine::Vec2 kNpcSpots[kNpcsPerDay] = {
+        engine::Vec2{250.0f, 180.0f}, engine::Vec2{400.0f, 230.0f}};
+    for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kNpcsPerDay; ++i)
+        secondMap_->addEntity(std::make_unique<NpcEntity>(kNpcSpots[i], todaySchoolNpcIds_[i]));
 }
 
 // ---- Equipment system ----

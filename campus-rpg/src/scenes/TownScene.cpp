@@ -13,11 +13,10 @@ namespace
         return {pos.x - 28.0f, pos.y - 28.0f, 56.0f, 56.0f};
     }
 
-    bool canMoveTo(engine::Vec2 pos, const TileMap &map)
+    bool canMoveTo(engine::Vec2 pos, const TileMap & /*map*/)
     {
-        int tileX = static_cast<int>(pos.x / 32.0f);
-        int tileY = static_cast<int>(pos.y / 32.0f);
-        return map.isWalkable(tileX, tileY);
+        // No tile collision: allow movement anywhere within the 800x600 window.
+        return pos.x >= 0.0f && pos.x <= 800.0f && pos.y >= 0.0f && pos.y <= 600.0f;
     }
 
     PlayerEntity *findPlayer(TileMap &map)
@@ -121,24 +120,73 @@ void TownScene::update(float deltaTime)
     newPos.y += moveY_ * moveSpeed_ * deltaTime;
     if (canMoveTo(newPos, map))
         player->setPosition({player->position().x, newPos.y});
+
+    // Map switching: entering school area (town, bottom-right crossroad) or
+    // exit area (school, left-center road start).
+    engine::Vec2 pp = player->position();
+    bool onSecond = GameManager::instance().onSecondMap();
+    if (!onSecond && pp.x >= 700.0f && pp.y >= 480.0f)
+    {
+        // Travel to school map.
+        GameManager::instance().setOnSecondMap(true);
+        TileMap &school = GameManager::instance().schoolMap();
+        // Spawn at left-center of school map (the exit road start).
+        engine::Vec2 spawnPos = {80.0f, 220.0f};
+        for (const auto &e : school.entities())
+        {
+            if (e && e->type() == "player")
+            {
+                static_cast<PlayerEntity *>(e.get())->setPosition(spawnPos);
+                break;
+            }
+        }
+    }
+    else if (onSecond && pp.x <= 50.0f)
+    {
+        // Travel back to town map.
+        GameManager::instance().setOnSecondMap(false);
+        TileMap &town = GameManager::instance().townMap();
+        // Spawn near bottom-right crossroad so we don't bounce back.
+        engine::Vec2 spawnPos = {640.0f, 430.0f};
+        for (const auto &e : town.entities())
+        {
+            if (e && e->type() == "player")
+            {
+                static_cast<PlayerEntity *>(e.get())->setPosition(spawnPos);
+                break;
+            }
+        }
+    }
 }
 
 void TownScene::render(engine::IRenderer &renderer)
 {
     renderer.clear();
 
+    bool onSecond = GameManager::instance().onSecondMap();
+
     // Background scaled to fill window
-    renderer.drawTexture("town_bg", {0, 0, 800, 600});
+    if (onSecond)
+        renderer.drawTexture("town_bg2", {0, 0, 800, 600});
+    else
+        renderer.drawTexture("town_bg", {0, 0, 800, 600});
 
     TileMap &map = GameManager::instance().currentMap();
 
-    // Draw shop area label
-    renderer.drawRect({0, 0, 140, 140}, engine::Color(80, 80, 120, 120));
-    renderer.drawText("shop", {45, 55}, 20, engine::Color::white());
+    if (!onSecond)
+    {
+        // Shop & home: no overlay, just labels to hint location.
+        renderer.drawText("shop", {45, 55}, 20, engine::Color(255, 255, 255, 200));
+        renderer.drawText("home", {578, 35}, 18, engine::Color(255, 255, 255, 200));
 
-    // Draw school area label
-    renderer.drawRect({620, 100, 180, 450}, engine::Color(80, 120, 80, 120));
-    renderer.drawText("school", {670, 300}, 20, engine::Color::white());
+        // School arrow (right-pointing) at bottom-right crossroad.
+        renderer.drawText(">", {740, 520}, 48, engine::Color(255, 255, 255, 230));
+    }
+    else
+    {
+        // Exit arrow (left-pointing) on school map left-center road start.
+        renderer.drawText("<", {30, 215}, 48, engine::Color(255, 255, 255, 230));
+    }
 
     // Draw entities
     for (const auto &entity : map.entities())
@@ -169,8 +217,16 @@ void TownScene::render(engine::IRenderer &renderer)
                       {650, 22}, 20, engine::Color::cyan());
 
     // Interaction hint
-    renderer.drawText("E:Talk  I:Items  C:Status  L:Social  Space:Armory  N:Night  F5:Save",
-                      {80, 570}, 14, engine::Color::white());
+    if (onSecond)
+    {
+        renderer.drawText("E:Talk/Exit  I:Items  C:Status  L:Social  Space:Armory  N:Night  F5:Save  [School]",
+                          {40, 570}, 14, engine::Color::white());
+    }
+    else
+    {
+        renderer.drawText("E:Talk/Shop/Home  I:Items  C:Status  L:Social  Space:Armory  N:Night  F5:Save",
+                          {50, 570}, 14, engine::Color::white());
+    }
 
     // Save feedback overlay.
     if (!saveMessage_.empty())
@@ -194,9 +250,21 @@ void TownScene::tryInteract()
         return;
     }
 
-    // Check if near shop area
-    if (player->position().x < 140 && player->position().y < 140)
+    if (!GameManager::instance().onSecondMap())
     {
-        GameManager::instance().enterScene(SceneType::Shop);
+        // Home area: rest until night.
+        if (player->position().x > 550.0f && player->position().x < 650.0f &&
+            player->position().y <= 90.0f)
+        {
+            GameManager::instance().enterScene(SceneType::RestConfirm);
+            return;
+        }
+
+        // Shop area: enter shop (requires E/Enter, not auto).
+        if (player->position().x < 150.0f && player->position().y < 150.0f)
+        {
+            GameManager::instance().enterScene(SceneType::Shop);
+            return;
+        }
     }
 }

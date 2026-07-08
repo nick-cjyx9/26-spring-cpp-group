@@ -32,7 +32,8 @@ enum class SceneType
     HeroSelect,
     Status,
     Armory,
-    LevelUp
+    LevelUp,
+    RestConfirm
 };
 
 // Fired whenever a Social Link ranks up. The UI layer registers a callback
@@ -92,7 +93,11 @@ public:
     Shop &shop() { return shop_; }
     QuestManager &questManager() { return questManager_; }
     SocialLinkManager &socialLinkManager() { return socialLinkManager_; }
-    TileMap &currentMap() { return *currentMap_; }
+    TileMap &currentMap() { return onSecondMap_ ? *secondMap_ : *currentMap_; }
+    TileMap &townMap() { return *currentMap_; }
+    TileMap &schoolMap() { return *secondMap_; }
+    bool onSecondMap() const { return onSecondMap_; }
+    void setOnSecondMap(bool onSecond) { onSecondMap_ = onSecond; }
     BattleSystem &battleSystem() { return battleSystem_; }
     engine::IScene *currentScene() { return currentScene_.get(); }
 
@@ -141,6 +146,7 @@ public:
     void initDefaultSocialLinks();
     void initDefaultPersonas();
     void initDefaultMap();
+    void initSecondMap();
     void initDefaultEquipment();
 
     // ---- NPC pool & day system ----
@@ -159,6 +165,7 @@ public:
     int day() const { return day_; }
     void advanceDay(); // night -> day transition: day++, refresh NPCs on map.
     const std::vector<std::string> &todayNpcIds() const { return todayNpcIds_; }
+    const std::vector<std::string> &todaySchoolNpcIds() const { return todaySchoolNpcIds_; }
     const NpcDefinition *findNpc(const std::string &id) const;
     // Today's talk count for a given NPC id (capped at kMaxTalksPerNpc).
     int talkCountToday(const std::string &npcId) const;
@@ -194,8 +201,8 @@ private:
     // NPC pool helpers.
     void generateNpcPool();        // create kNpcPoolSize random NPCs + dialogue.
     void applyNpcDialogueTemplates(); // (re)fill generic dialogue + rewards.
-    void refreshDailyNpcs();       // pick kNpcsPerDay random ids, reset counts.
-    void rebuildMapNpcs();         // clear non-player entities, place today's NPCs.
+    void refreshDailyNpcs();       // pick kNpcsPerDay random ids for both maps, reset counts.
+    void rebuildMapNpcs();         // clear non-player entities, place today's NPCs on both maps.
 
     Character character_;
     Inventory inventory_;
@@ -203,6 +210,7 @@ private:
     QuestManager questManager_;
     SocialLinkManager socialLinkManager_;
     std::unique_ptr<TileMap> currentMap_;
+    std::unique_ptr<TileMap> secondMap_;
     BattleSystem battleSystem_;
 
     std::vector<std::unique_ptr<Enemy>> enemyTemplates_;
@@ -214,6 +222,7 @@ private:
     SceneType currentSceneType_ = SceneType::Town;
 
     bool isNight_ = false;
+    bool onSecondMap_ = false;
     bool shouldQuit_ = false;
     int currentSlotId_ = 1;
     int selectedHeroIndex_ = 0;
@@ -222,6 +231,7 @@ private:
     int day_ = 1;
     std::vector<NpcDefinition> npcPool_;
     std::vector<std::string> todayNpcIds_;
+    std::vector<std::string> todaySchoolNpcIds_;
     std::map<std::string, int> talkCountToday_;
 
     RankUpCallback rankUpCallback_;
