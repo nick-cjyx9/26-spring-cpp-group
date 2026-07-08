@@ -118,8 +118,11 @@ void StatusScene::handleGearInput(engine::IInput &input)
         }
         if (item)
         {
-            gm.unequipItem(slot);
-            message_ = "Unequipped: " + item->name();
+            std::string itemName = item->name();
+            if (gm.unequipToInventory(slot))
+                message_ = "Unequipped: " + itemName;
+            else
+                message_ = "Backpack full. Cannot unequip.";
             messageTimer_ = 2.0f;
         }
         else
@@ -153,12 +156,25 @@ void StatusScene::handleBackpackInput(engine::IInput &input)
     {
         if (backpackIndex_ >= 0 && backpackIndex_ < count && items[backpackIndex_])
         {
-            auto *eq = dynamic_cast<EquipmentItem *>(items[backpackIndex_].get());
-            if (eq)
+            Item *item = items[backpackIndex_].get();
+            if (dynamic_cast<EquipmentItem *>(item))
             {
-                auto item = std::make_shared<EquipmentItem>(*eq);
-                GameManager::instance().equipItem(item);
-                message_ = "Equipped: " + item->name();
+                std::string itemName = item->name();
+                if (GameManager::instance().equipFromInventory(static_cast<size_t>(backpackIndex_)))
+                {
+                    message_ = "Equipped: " + itemName;
+                    if (backpackIndex_ >= static_cast<int>(GameManager::instance().inventory().size()))
+                        backpackIndex_ = std::max(0, static_cast<int>(GameManager::instance().inventory().size()) - 1);
+                }
+                else
+                {
+                    message_ = "Cannot equip item.";
+                }
+                messageTimer_ = 2.0f;
+            }
+            else
+            {
+                message_ = "Select equipment to equip here.";
                 messageTimer_ = 2.0f;
             }
         }
@@ -214,12 +230,15 @@ void StatusScene::renderStats(engine::IRenderer &renderer)
     renderer.drawRect({x, y, 2, h}, border);
     renderer.drawRect({x + w - 2, y, 2, h}, border);
 
-    renderer.drawText("Character Stats", {x + 10, y + 10}, 20, engine::Color::white());
+    renderer.drawText("Status", {x + 10, y + 10}, 20, engine::Color::white());
 
     const auto &character = GameManager::instance().character();
+    const Persona *persona = character.currentPersona();
     float textY = y + 45;
-    int step = 28;
+    int step = 26;
     auto white = engine::Color::white();
+
+    // ---- Character vitals ----
     renderer.drawText("Name: " + character.name(), {x + 10, textY}, 16, white);
     textY += step;
     renderer.drawText("Level: " + std::to_string(character.level()), {x + 10, textY}, 16, white);
@@ -228,13 +247,80 @@ void StatusScene::renderStats(engine::IRenderer &renderer)
     textY += step;
     renderer.drawText("SP:  " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()), {x + 10, textY}, 16, engine::Color(100, 200, 255));
     textY += step;
-    renderer.drawText("ATK: " + std::to_string(character.attack()), {x + 10, textY}, 16, engine::Color(255, 100, 100));
-    textY += step;
-    renderer.drawText("MAG: " + std::to_string(character.magic()), {x + 10, textY}, 16, engine::Color(255, 100, 255));
-    textY += step;
-    renderer.drawText("SPD: " + std::to_string(character.speed()), {x + 10, textY}, 16, engine::Color(255, 255, 100));
-    textY += step;
     renderer.drawText("Gold: " + std::to_string(character.gold()), {x + 10, textY}, 16, engine::Color::yellow());
+    textY += step + 10;
+
+    // ---- Current Persona (the real source of combat stats) ----
+    renderer.drawRect({x + 8, textY - 4, w - 16, 2}, engine::Color(120, 130, 180, 200));
+    textY += 10;
+    renderer.drawText("Current Persona", {x + 10, textY}, 18, engine::Color::cyan());
+    textY += step;
+
+    if (persona)
+    {
+        renderer.drawText(persona->name() + " (" + persona->arcana() + ")", {x + 10, textY}, 16, white);
+        textY += step;
+        renderer.drawText("Lv: " + std::to_string(persona->level()) +
+                              "  Exp: " + std::to_string(persona->exp()) + "/" + std::to_string(persona->expToNextLevel()),
+                          {x + 10, textY}, 14, engine::Color(200, 200, 200));
+        textY += step;
+
+        int baseStr = persona->strength();
+        int baseMag = persona->magic();
+        int baseSpd = persona->speed();
+        int eqStr = character.equipmentStrengthBonus();
+        int eqMag = character.equipmentMagicBonus();
+        int eqSpd = character.equipmentSpeedBonus();
+        int finalStr = character.attack();
+        int finalMag = character.magic();
+        int finalSpd = character.speed();
+
+        renderer.drawText("Base STR/MAG/SPD", {x + 10, textY}, 14, engine::Color(180, 180, 180));
+        textY += step - 4;
+        renderer.drawText(std::to_string(baseStr) + " / " + std::to_string(baseMag) + " / " + std::to_string(baseSpd),
+                          {x + 10, textY}, 16, white);
+        textY += step;
+
+        renderer.drawText("Equip +STR/+MAG/+SPD", {x + 10, textY}, 14, engine::Color(180, 180, 180));
+        textY += step - 4;
+        renderer.drawText("+" + std::to_string(eqStr) + " / +" + std::to_string(eqMag) + " / +" + std::to_string(eqSpd),
+                          {x + 10, textY}, 16, engine::Color(255, 220, 100));
+        textY += step;
+
+        renderer.drawText("Final STR/MAG/SPD", {x + 10, textY}, 14, engine::Color(180, 180, 180));
+        textY += step - 4;
+        renderer.drawText(std::to_string(finalStr) + " / " + std::to_string(finalMag) + " / " + std::to_string(finalSpd),
+                          {x + 10, textY}, 16, engine::Color(100, 255, 100));
+        textY += step + 4;
+
+        // Skills
+        renderer.drawText("Skills:", {x + 10, textY}, 16, engine::Color::cyan());
+        textY += step - 4;
+        const auto &skills = persona->skills();
+        if (skills.empty())
+        {
+            renderer.drawText("(none)", {x + 10, textY}, 14, engine::Color(100, 100, 100));
+        }
+        else
+        {
+            for (const auto &skill : skills)
+            {
+                if (!skill)
+                    continue;
+                std::string line = skill->name();
+                if (skill->cost() > 0)
+                    line += " (" + std::to_string(skill->cost()) + (skill->costType() == SkillCostType::HP ? " HP" : " SP") + ")";
+                renderer.drawText("- " + line, {x + 10, textY}, 13, engine::Color(200, 200, 200));
+                textY += 20;
+                if (textY > y + h - 20)
+                    break;
+            }
+        }
+    }
+    else
+    {
+        renderer.drawText("(no Persona equipped)", {x + 10, textY}, 14, engine::Color(100, 100, 100));
+    }
 }
 
 void StatusScene::renderGear(engine::IRenderer &renderer)

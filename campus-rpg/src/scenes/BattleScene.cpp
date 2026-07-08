@@ -5,6 +5,101 @@
 #include "Inventory.h"
 #include "Item.h"
 #include "Persona.h"
+#include "Element.h"
+#include "Affinity.h"
+
+#include <algorithm>
+#include <string>
+#include <vector>
+
+namespace
+{
+    bool isBattleUsableItem(const Item *item)
+    {
+        return item && (item->type() == ItemType::Food || item->type() == ItemType::Potion ||
+                        item->type() == ItemType::SpRecovery);
+    }
+
+    std::vector<size_t> battleItemIndices(const Inventory &inventory)
+    {
+        std::vector<size_t> result;
+        for (size_t i = 0; i < inventory.size(); ++i)
+        {
+            if (isBattleUsableItem(inventory.itemAt(i)))
+                result.push_back(i);
+        }
+        return result;
+    }
+
+    std::string costText(const Skill &skill)
+    {
+        if (skill.cost() <= 0)
+            return "Free";
+        return std::to_string(skill.cost()) + (skill.costType() == SkillCostType::HP ? " HP" : " SP");
+    }
+
+    std::string shortElementName(Element e)
+    {
+        switch (e)
+        {
+        case Element::Physical: return "Phys";
+        case Element::Fire: return "Fire";
+        case Element::Ice: return "Ice";
+        case Element::Electric: return "Elec";
+        case Element::Wind: return "Wind";
+        case Element::Light: return "Light";
+        case Element::Dark: return "Dark";
+        case Element::Almighty: return "Almighty";
+        default: return "?";
+        }
+    }
+
+    void appendAffinity(std::string &out, const Enemy &enemy, Affinity wanted, const std::string &label)
+    {
+        std::string values;
+        const Element elements[] = {Element::Physical, Element::Fire, Element::Ice, Element::Electric,
+                                    Element::Wind, Element::Light, Element::Dark, Element::Almighty};
+        for (Element e : elements)
+        {
+            if (enemy.affinity(e) == wanted)
+            {
+                if (!values.empty())
+                    values += ",";
+                values += shortElementName(e);
+            }
+        }
+        if (!values.empty())
+        {
+            if (!out.empty())
+                out += "  ";
+            out += label + ": " + values;
+        }
+    }
+
+    std::string affinitySummary(const Enemy &enemy)
+    {
+        std::string result;
+        appendAffinity(result, enemy, Affinity::Weak, "Weak");
+        appendAffinity(result, enemy, Affinity::Resist, "Resist");
+        appendAffinity(result, enemy, Affinity::Null, "Null");
+        appendAffinity(result, enemy, Affinity::Drain, "Drain");
+        appendAffinity(result, enemy, Affinity::Repel, "Repel");
+        return result.empty() ? "Affinity: Normal" : result;
+    }
+
+    void clampIndex(int &index, int count)
+    {
+        if (count <= 0)
+        {
+            index = 0;
+            return;
+        }
+        if (index < 0)
+            index = count - 1;
+        if (index >= count)
+            index = 0;
+    }
+} // namespace
 
 void BattleScene::handleInput(engine::IInput &input)
 {
@@ -13,155 +108,353 @@ void BattleScene::handleInput(engine::IInput &input)
     if (battle.isOver())
     {
         if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::Escape))
-        {
-            if (battle.playerWon())
-            {
-                bool leveledUp = processVictory();
-                battle.recoverPlayerSp();
-                if (leveledUp)
-                {
-                    GameManager::instance().enterScene(SceneType::LevelUp);
-                    return;
-                }
-            }
-            else
-            {
-                processDefeat();
-            }
-            GameManager::instance().setNight(false);
-            // Returning from night (battle) to day = next day: refresh NPCs.
-            GameManager::instance().advanceDay();
-            GameManager::instance().enterScene(SceneType::Town);
-        }
+            returnAfterBattle();
         return;
     }
 
-    // Only accept player commands during the player's turn.
     if (!battle.isPlayerTurn())
         return;
 
+    if (menu_ != BattleMenu::Main && input.wasKeyJustPressed(engine::Key::Escape))
+    {
+        menu_ = BattleMenu::Main;
+        message_.clear();
+        return;
+    }
+
+    switch (menu_)
+    {
+    case BattleMenu::Main:
+        handleMainMenu(input);
+        break;
+    case BattleMenu::Skill:
+        handleSkillMenu(input);
+        break;
+    case BattleMenu::Item:
+        handleItemMenu(input);
+        break;
+    case BattleMenu::Persona:
+        handlePersonaMenu(input);
+        break;
+    }
+}
+
+void BattleScene::handleMainMenu(engine::IInput &input)
+{
+    auto &battle = GameManager::instance().battleSystem();
     const int actionCount = 5;
     if (input.wasKeyJustPressed(engine::Key::Up))
         selectedAction_ = (selectedAction_ + actionCount - 1) % actionCount;
     if (input.wasKeyJustPressed(engine::Key::Down))
         selectedAction_ = (selectedAction_ + 1) % actionCount;
 
-    if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
-    {
-        auto &character = GameManager::instance().character();
-        Persona *p = character.currentPersona();
+    if (!(input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E)))
+        return;
 
-        switch (selectedAction_)
+    auto &character = GameManager::instance().character();
+    switch (selectedAction_)
+    {
+    case 0:
+        battle.playerAttack(0);
+        message_.clear();
+        break;
+    case 1:
+        menu_ = BattleMenu::Skill;
+        selectedSkill_ = 0;
+        message_.clear();
+        break;
+    case 2:
+        menu_ = BattleMenu::Item;
+        selectedItem_ = 0;
+        message_.clear();
+        break;
+    case 3:
+        menu_ = BattleMenu::Persona;
+        selectedPersona_ = 0;
+        if (Persona *p = character.currentPersona())
         {
-        case 0:
-            battle.playerAttack(0);
-            break;
-        case 1:
-        {
-            if (p && !p->skills().empty())
-                battle.playerUseSkill(0, *p->skills()[0]);
-            break;
-        }
-        case 2:
-        {
-            // Use the first usable recovery item as a free action.
-            Inventory &inv = GameManager::instance().inventory();
-            for (size_t i = 0; i < inv.size(); ++i)
+            const auto &owned = character.ownedPersonas();
+            for (size_t i = 0; i < owned.size(); ++i)
             {
-                Item *item = inv.itemAt(i);
-                if (item && (item->type() == ItemType::Food || item->type() == ItemType::Potion ||
-                             item->type() == ItemType::SpRecovery))
+                if (owned[i] && owned[i]->id() == p->id())
                 {
-                    if (battle.playerUseItem(item->clone()))
-                        inv.removeItem(i);
+                    selectedPersona_ = static_cast<int>(i);
                     break;
                 }
             }
-            break;
         }
-        case 3:
+        message_.clear();
+        break;
+    case 4:
+        battle.playerFlee();
+        message_.clear();
+        break;
+    }
+}
+
+void BattleScene::handleSkillMenu(engine::IInput &input)
+{
+    auto &battle = GameManager::instance().battleSystem();
+    auto &character = GameManager::instance().character();
+    Persona *persona = character.currentPersona();
+    int count = persona ? static_cast<int>(persona->skills().size()) : 0;
+    if (count <= 0)
+    {
+        message_ = "No skills available.";
+        if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
+            menu_ = BattleMenu::Main;
+        return;
+    }
+
+    if (input.wasKeyJustPressed(engine::Key::Up))
+        --selectedSkill_;
+    if (input.wasKeyJustPressed(engine::Key::Down))
+        ++selectedSkill_;
+    clampIndex(selectedSkill_, count);
+
+    if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
+    {
+        const auto &skill = persona->skills()[static_cast<size_t>(selectedSkill_)];
+        if (!skill)
+            return;
+        if (!skill->canUse(character))
         {
-            // Cycle to next owned Persona for simplicity.
-            const auto &owned = character.ownedPersonas();
-            if (owned.size() > 1 && p)
-            {
-                size_t currentIdx = 0;
-                for (size_t i = 0; i < owned.size(); ++i)
-                {
-                    if (owned[i] && owned[i]->id() == p->id())
-                    {
-                        currentIdx = i;
-                        break;
-                    }
-                }
-                size_t nextIdx = (currentIdx + 1) % owned.size();
-                battle.playerSwitchPersona(owned[nextIdx]);
-            }
-            break;
+            message_ = "Not enough " + std::string(skill->costType() == SkillCostType::HP ? "HP." : "SP.");
+            return;
         }
-        case 4:
-            battle.playerFlee();
-            break;
+        if (battle.playerUseSkill(0, *skill))
+        {
+            menu_ = BattleMenu::Main;
+            message_.clear();
+        }
+    }
+}
+
+void BattleScene::handleItemMenu(engine::IInput &input)
+{
+    auto &battle = GameManager::instance().battleSystem();
+    Inventory &inventory = GameManager::instance().inventory();
+    auto usable = battleItemIndices(inventory);
+    int count = static_cast<int>(usable.size());
+    if (count <= 0)
+    {
+        message_ = "No usable battle items.";
+        if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
+            menu_ = BattleMenu::Main;
+        return;
+    }
+
+    if (input.wasKeyJustPressed(engine::Key::Up))
+        --selectedItem_;
+    if (input.wasKeyJustPressed(engine::Key::Down))
+        ++selectedItem_;
+    clampIndex(selectedItem_, count);
+
+    if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
+    {
+        size_t inventoryIndex = usable[static_cast<size_t>(selectedItem_)];
+        Item *item = inventory.itemAt(inventoryIndex);
+        if (item && battle.playerUseItem(item->clone()))
+        {
+            std::string itemName = item->name();
+            inventory.removeItem(inventoryIndex);
+            battle.appendLog("Consumed " + itemName + ".");
+            menu_ = BattleMenu::Main;
+            message_.clear();
+        }
+    }
+}
+
+void BattleScene::handlePersonaMenu(engine::IInput &input)
+{
+    auto &battle = GameManager::instance().battleSystem();
+    auto &character = GameManager::instance().character();
+    const auto &owned = character.ownedPersonas();
+    int count = static_cast<int>(owned.size());
+    if (count <= 0)
+    {
+        message_ = "No Personas owned.";
+        if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
+            menu_ = BattleMenu::Main;
+        return;
+    }
+
+    if (input.wasKeyJustPressed(engine::Key::Up))
+        --selectedPersona_;
+    if (input.wasKeyJustPressed(engine::Key::Down))
+        ++selectedPersona_;
+    clampIndex(selectedPersona_, count);
+
+    if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
+    {
+        auto selected = owned[static_cast<size_t>(selectedPersona_)];
+        Persona *current = character.currentPersona();
+        if (!selected)
+            return;
+        if (current && selected->id() == current->id())
+        {
+            message_ = "Already equipped.";
+            return;
+        }
+        if (battle.playerSwitchPersona(selected))
+        {
+            menu_ = BattleMenu::Main;
+            message_.clear();
         }
     }
 }
 
 void BattleScene::update(float /*deltaTime*/)
 {
-    // Enemy turns are processed synchronously inside the player action methods.
 }
 
 void BattleScene::render(engine::IRenderer &renderer)
 {
     renderer.clear();
 
-    // Reuse town background scaled to fill window with dark overlay.
     renderer.drawTexture("town_bg", {0, 0, 800, 600});
     renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 20, 200));
 
     auto &battle = GameManager::instance().battleSystem();
     auto &character = GameManager::instance().character();
     Enemy *enemy = battle.enemyAt(0);
+    Persona *persona = character.currentPersona();
 
-    // Enemy sprite
+    // Enemy panel
     if (enemy)
     {
-        renderer.drawTexture("shadow", {520, 120, 96, 96});
-        renderer.drawText(enemy->name(), {520, 80}, 22, engine::Color::white());
+        renderer.drawTexture("shadow", {520, 95, 96, 96});
+        renderer.drawText(enemy->name(), {500, 60}, 22, engine::Color::white());
         renderer.drawText("HP " + std::to_string(enemy->hp()) + "/" + std::to_string(enemy->maxHp()),
-                          {520, 260}, 18, engine::Color::red());
+                          {500, 205}, 18, engine::Color::red());
+        renderer.drawText("STR " + std::to_string(enemy->strength()) + "  MAG " + std::to_string(enemy->magic()) +
+                              "  SPD " + std::to_string(enemy->speed()),
+                          {500, 230}, 14, engine::Color::white());
+        renderer.drawText(affinitySummary(*enemy), {500, 252}, 12, engine::Color::cyan());
     }
 
-    // Player sprite
-    renderer.drawTexture("player", {150, 280, 64, 64});
-    renderer.drawText(character.name(), {150, 260}, 22, engine::Color::white());
+    // Player panel
+    renderer.drawTexture("player", {145, 250, 64, 64});
+    renderer.drawText(character.name(), {145, 225}, 22, engine::Color::white());
     renderer.drawText("HP " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()) +
                           "  SP " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()),
-                      {150, 390}, 16, engine::Color::green());
-
-    // Action menu panel
-    renderer.drawRect({20, 420, 240, 160}, engine::Color(0, 0, 0, 200));
-    const char *actions[] = {"Attack", "Skill", "Item", "Switch Persona", "Flee"};
-    int actionCount = sizeof(actions) / sizeof(actions[0]);
-    for (int i = 0; i < actionCount; ++i)
+                      {145, 330}, 16, engine::Color::green());
+    if (persona)
     {
-        engine::Color color = (i == selectedAction_) ? engine::Color::yellow() : engine::Color::white();
-        renderer.drawText(std::string((i == selectedAction_ ? "> " : "  ")) + actions[i],
-                          {35.0f, 435.0f + i * 24.0f}, 18, color);
+        renderer.drawText("Persona: " + persona->name() + " Lv" + std::to_string(persona->level()),
+                          {145, 353}, 15, engine::Color::cyan());
+        renderer.drawText("STR " + std::to_string(character.attack()) + "  MAG " + std::to_string(character.magic()) +
+                              "  SPD " + std::to_string(character.speed()),
+                          {145, 374}, 14, engine::Color::white());
+    }
+
+    // Menu panel
+    renderer.drawRect({20, 420, 260, 160}, engine::Color(0, 0, 0, 210));
+    if (menu_ == BattleMenu::Main)
+    {
+        const char *actions[] = {"Attack", "Skill", "Item", "Switch Persona", "Flee"};
+        for (int i = 0; i < 5; ++i)
+        {
+            engine::Color color = (i == selectedAction_) ? engine::Color::yellow() : engine::Color::white();
+            renderer.drawText(std::string((i == selectedAction_ ? "> " : "  ")) + actions[i],
+                              {35.0f, 435.0f + i * 24.0f}, 18, color);
+        }
+    }
+    else if (menu_ == BattleMenu::Skill)
+    {
+        renderer.drawText("Skills (Esc: back)", {35, 432}, 16, engine::Color::cyan());
+        if (!persona || persona->skills().empty())
+        {
+            renderer.drawText("No skills available.", {35, 460}, 15, engine::Color::gray());
+        }
+        else
+        {
+            const auto &skills = persona->skills();
+            for (size_t i = 0; i < skills.size() && i < 5; ++i)
+            {
+                if (!skills[i])
+                    continue;
+                bool selected = static_cast<int>(i) == selectedSkill_;
+                bool canUse = skills[i]->canUse(character);
+                engine::Color color = selected ? engine::Color::yellow() : (canUse ? engine::Color::white() : engine::Color::gray());
+                renderer.drawText(std::string(selected ? "> " : "  ") + skills[i]->name(),
+                                  {35.0f, 458.0f + static_cast<float>(i) * 22.0f}, 15, color);
+                renderer.drawText(costText(*skills[i]) + " " + shortElementName(skills[i]->element()) + " P" + std::to_string(skills[i]->power()),
+                                  {150.0f, 458.0f + static_cast<float>(i) * 22.0f}, 13, color);
+            }
+        }
+    }
+    else if (menu_ == BattleMenu::Item)
+    {
+        renderer.drawText("Items (Esc: back)", {35, 432}, 16, engine::Color::cyan());
+        auto usable = battleItemIndices(GameManager::instance().inventory());
+        if (usable.empty())
+        {
+            renderer.drawText("No usable battle items.", {35, 460}, 15, engine::Color::gray());
+        }
+        else
+        {
+            for (size_t row = 0; row < usable.size() && row < 5; ++row)
+            {
+                Item *item = GameManager::instance().inventory().itemAt(usable[row]);
+                if (!item)
+                    continue;
+                bool selected = static_cast<int>(row) == selectedItem_;
+                engine::Color color = selected ? engine::Color::yellow() : engine::Color::white();
+                renderer.drawText(std::string(selected ? "> " : "  ") + item->name(),
+                                  {35.0f, 458.0f + static_cast<float>(row) * 22.0f}, 15, color);
+                renderer.drawText(item->typeString(), {180.0f, 458.0f + static_cast<float>(row) * 22.0f}, 13, engine::Color::gray());
+            }
+        }
+    }
+    else if (menu_ == BattleMenu::Persona)
+    {
+        renderer.drawText("Persona (Esc: back)", {35, 432}, 16, engine::Color::cyan());
+        const auto &owned = character.ownedPersonas();
+        if (owned.empty())
+        {
+            renderer.drawText("No Personas owned.", {35, 460}, 15, engine::Color::gray());
+        }
+        else
+        {
+            for (size_t i = 0; i < owned.size() && i < 5; ++i)
+            {
+                if (!owned[i])
+                    continue;
+                bool selected = static_cast<int>(i) == selectedPersona_;
+                bool current = persona && owned[i]->id() == persona->id();
+                engine::Color color = selected ? engine::Color::yellow() : engine::Color::white();
+                std::string line = std::string(selected ? "> " : "  ") + owned[i]->name() + " Lv" + std::to_string(owned[i]->level());
+                if (current)
+                    line += " *";
+                renderer.drawText(line, {35.0f, 458.0f + static_cast<float>(i) * 22.0f}, 15, color);
+                renderer.drawText(std::to_string(owned[i]->strength()) + "/" + std::to_string(owned[i]->magic()) + "/" + std::to_string(owned[i]->speed()),
+                                  {185.0f, 458.0f + static_cast<float>(i) * 22.0f}, 13, engine::Color::gray());
+            }
+        }
     }
 
     // Battle log panel
-    renderer.drawRect({300, 420, 470, 160}, engine::Color(0, 0, 0, 200));
+    renderer.drawRect({300, 420, 470, 160}, engine::Color(0, 0, 0, 210));
     renderer.drawText("Log:", {315, 435}, 18, engine::Color::white());
     const auto &log = battle.log();
-    for (size_t i = 0; i < log.size() && i < 6; ++i)
+    size_t start = log.size() > 6 ? log.size() - 6 : 0;
+    for (size_t i = start; i < log.size(); ++i)
     {
-        renderer.drawText(log[log.size() - 1 - i], {315, 460.0f + static_cast<float>(i) * 19.0f}, 14, engine::Color::white());
+        renderer.drawText(log[i], {315, 460.0f + static_cast<float>(i - start) * 19.0f}, 14, engine::Color::white());
     }
+    if (!message_.empty())
+        renderer.drawText(message_, {315, 558}, 14, engine::Color::red());
 
     if (battle.isOver())
     {
-        std::string msg = battle.playerWon() ? "Victory! Press Enter." : "Defeat... Press Enter.";
+        std::string msg;
+        if (battle.playerWon())
+            msg = "Victory! Press Enter.";
+        else if (battle.playerFled())
+            msg = "Escaped! Press Enter.";
+        else
+            msg = "Defeat... Press Enter.";
         renderer.drawRect({200, 260, 400, 60}, engine::Color(0, 0, 0, 220));
         renderer.drawText(msg, {230, 280}, 24, engine::Color::yellow());
     }
@@ -170,31 +463,69 @@ void BattleScene::render(engine::IRenderer &renderer)
 bool BattleScene::processVictory()
 {
     auto &battle = GameManager::instance().battleSystem();
-    Enemy *enemy = battle.enemyAt(0);
-    if (!enemy)
-        return false;
-
     auto &character = GameManager::instance().character();
-    int prevLevel = character.level();
-    character.gainExp(enemy->rewardExp());
-    character.addGold(enemy->rewardGold());
+    int totalExp = 0;
+    int totalGold = 0;
 
-    // Direct Persona drops.
-    for (const auto &pid : enemy->dropPersonaIds())
+    for (const auto &enemyPtr : battle.enemies())
     {
-        auto dropped = GameManager::instance().findPersona(pid);
-        if (dropped)
+        if (!enemyPtr)
+            continue;
+        totalExp += enemyPtr->rewardExp();
+        totalGold += enemyPtr->rewardGold();
+        for (const auto &pid : enemyPtr->dropPersonaIds())
         {
-            GameManager::instance().addPersonaToPlayer(dropped);
-            battle.appendLog("Obtained Persona: " + dropped->name());
+            auto dropped = GameManager::instance().findPersona(pid);
+            if (dropped)
+            {
+                GameManager::instance().addPersonaToPlayer(dropped);
+                battle.appendLog("Obtained Persona: " + dropped->name());
+            }
         }
     }
 
-    // If a level-up occurred, the snapshot will be populated by Character::levelUp().
+    character.gainExp(totalExp);
+    character.addGold(totalGold);
     return character.hasLevelUpSnapshot();
 }
 
 void BattleScene::processDefeat()
 {
-    GameManager::instance().character().heal(GameManager::instance().character().maxHp());
+    auto &character = GameManager::instance().character();
+    character.heal(character.maxHp());
+    character.recoverSp(character.maxSp());
+}
+
+void BattleScene::returnAfterBattle()
+{
+    auto &gm = GameManager::instance();
+    auto &battle = gm.battleSystem();
+
+    if (battle.playerFled())
+    {
+        battle.recoverPlayerSp();
+        gm.enterScene(SceneType::Night);
+        return;
+    }
+
+    if (battle.playerWon())
+    {
+        bool leveledUp = processVictory();
+        battle.recoverPlayerSp();
+        if (leveledUp)
+        {
+            gm.setNight(false);
+            gm.advanceDay();
+            gm.enterScene(SceneType::LevelUp);
+            return;
+        }
+    }
+    else
+    {
+        processDefeat();
+    }
+
+    gm.setNight(false);
+    gm.advanceDay();
+    gm.enterScene(SceneType::Town);
 }

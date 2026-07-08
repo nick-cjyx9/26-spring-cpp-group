@@ -10,6 +10,14 @@ public:
     void render(engine::IRenderer &renderer) override;
 
 private:
+    enum class Mode
+    {
+        Buy,
+        Sell
+    };
+
+    Mode mode_ = Mode::Buy;
     int selectedIndex_ = 0;
+    int sellIndex_ = 0;
     std::string message_;
 };

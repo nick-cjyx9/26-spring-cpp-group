@@ -2,7 +2,9 @@
 #include "GameManager.h"
 #include "Inventory.h"
 #include "Item.h"
+#include "Persona.h"
 
+#include <algorithm>
 #include <string>
 
 namespace
@@ -59,8 +61,10 @@ void InventoryScene::handleInput(engine::IInput &input)
                        (s == EquipmentSlot::Relic && gear.relic);
             if (has)
             {
-                GameManager::instance().unequipItem(s);
-                message_ = std::string("Unequipped ") + slotName(s) + ".";
+                if (GameManager::instance().unequipToInventory(s))
+                    message_ = std::string("Unequipped ") + slotName(s) + ".";
+                else
+                    message_ = "Backpack full. Cannot unequip.";
                 messageTimer_ = 2.0f;
             }
             else
@@ -73,40 +77,46 @@ void InventoryScene::handleInput(engine::IInput &input)
 
     if ((input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E)) && count > 0)
     {
-        Item *raw = inventory.itemAt(static_cast<size_t>(selectedIndex_));
-        auto *eq = dynamic_cast<EquipmentItem *>(raw);
-        if (eq && eq->slot() != EquipmentSlot::None)
+        Item *item = inventory.itemAt(static_cast<size_t>(selectedIndex_));
+        if (!item)
         {
+            message_ = "Cannot use item.";
+        }
+        else if (item->type() == ItemType::Equipment)
+        {
+            std::string itemName = item->name();
             if (GameManager::instance().equipFromInventory(static_cast<size_t>(selectedIndex_)))
+                message_ = "Equipped: " + itemName;
+            else
+                message_ = "Cannot equip item.";
+        }
+        else if (item->type() == ItemType::Persona)
+        {
+            auto *personaItem = dynamic_cast<PersonaItem *>(item);
+            auto persona = personaItem ? GameManager::instance().findPersona(personaItem->personaId()) : nullptr;
+            if (persona)
             {
-                message_ = "Equipped: " + eq->name();
-                // Index may now be out of range after removal; clamp it.
-                if (selectedIndex_ >= static_cast<int>(inventory.size()))
-                    selectedIndex_ = std::max(0, static_cast<int>(inventory.size()) - 1);
-                messageTimer_ = 2.0f;
+                GameManager::instance().addPersonaToPlayer(persona);
+                inventory.removeItem(static_cast<size_t>(selectedIndex_));
+                message_ = "Obtained Persona: " + persona->name();
             }
             else
             {
-                message_ = "Cannot equip item.";
-                messageTimer_ = 2.0f;
+                message_ = "Unknown Persona.";
             }
+        }
+        else if (inventory.useItem(static_cast<size_t>(selectedIndex_), GameManager::instance().character()))
+        {
+            message_ = "Item used.";
         }
         else
         {
-            // Consumable: use the item.
-            if (inventory.useItem(static_cast<size_t>(selectedIndex_), GameManager::instance().character()))
-            {
-                message_ = "Item used.";
-                if (selectedIndex_ >= static_cast<int>(inventory.size()))
-                    selectedIndex_ = std::max(0, static_cast<int>(inventory.size()) - 1);
-                messageTimer_ = 2.0f;
-            }
-            else
-            {
-                message_ = "Cannot use item.";
-                messageTimer_ = 2.0f;
-            }
+            message_ = "Cannot use item.";
         }
+
+        if (selectedIndex_ >= static_cast<int>(inventory.size()))
+            selectedIndex_ = std::max(0, static_cast<int>(inventory.size()) - 1);
+        messageTimer_ = 2.0f;
     }
 
     if (input.wasKeyJustPressed(engine::Key::Escape))

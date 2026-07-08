@@ -39,7 +39,7 @@ void TitleScene::render(engine::IRenderer &renderer)
     renderer.drawRect({0, 0, 800, 600}, engine::Color(20, 20, 35));
 
     // Title
-    renderer.drawText("Persona 67 Garbage", {220, 180}, 42, engine::Color::white());
+    renderer.drawText("Campus RPG", {285, 180}, 42, engine::Color::white());
 
     const char *items[] = {"start game", "load game", "exit"};
     for (int i = 0; i < 3; ++i)

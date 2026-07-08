@@ -290,7 +290,12 @@ std::unique_ptr<Enemy> GameManager::createEnemyFromTemplate(const std::string &i
     for (const auto &enemy : enemyTemplates_)
     {
         if (enemy && enemy->id() == id)
-            return enemy->clone();
+        {
+            auto cloned = enemy->clone();
+            if (cloned)
+                cloned->scaleToLevel(character_.level());
+            return cloned;
+        }
     }
     return nullptr;
 }
@@ -320,6 +325,34 @@ void GameManager::setPlayerPersona(std::shared_ptr<Persona> persona)
         return;
     addPersonaToPlayer(persona);
     character_.setPersona(persona);
+}
+
+bool GameManager::unequipToInventory(EquipmentSlot slot)
+{
+    std::shared_ptr<EquipmentItem> item;
+    switch (slot)
+    {
+    case EquipmentSlot::Weapon:
+        item = equippedGear_.weapon;
+        break;
+    case EquipmentSlot::Armor:
+        item = equippedGear_.armor;
+        break;
+    case EquipmentSlot::Accessory:
+        item = equippedGear_.accessory;
+        break;
+    case EquipmentSlot::Relic:
+        item = equippedGear_.relic;
+        break;
+    default:
+        return false;
+    }
+
+    if (!item || inventory_.isFull())
+        return false;
+
+    unequipItem(slot);
+    return inventory_.addItem(item->clone());
 }
 
 void GameManager::initDefaultPersonas()
@@ -747,11 +780,6 @@ void GameManager::unequipItem(EquipmentSlot slot)
         character_.equipmentMagicBonus() - item->magicBonus(),
         character_.equipmentSpeedBonus() - item->speedBonus());
 
-    // Return the unequipped item to the inventory (clone back to a unique ptr;
-    // equipment slots hold shared copies). If the bag is full the item is lost,
-    // which is acceptable for a manual unequip from a full bag edge case.
-    if (!inventory_.isFull())
-        inventory_.addItem(item->clone());
 }
 
 bool GameManager::equipFromInventory(size_t index)
@@ -775,8 +803,28 @@ bool GameManager::equipFromInventory(size_t index)
     auto shared = std::shared_ptr<EquipmentItem>(
         static_cast<EquipmentItem *>(taken.release()));
 
-    // Unequip whatever was in that slot (returns it to the inventory).
+    // Unequip whatever was in that slot and put it back into the inventory.
+    std::shared_ptr<EquipmentItem> oldItem;
+    switch (slot)
+    {
+    case EquipmentSlot::Weapon:
+        oldItem = equippedGear_.weapon;
+        break;
+    case EquipmentSlot::Armor:
+        oldItem = equippedGear_.armor;
+        break;
+    case EquipmentSlot::Accessory:
+        oldItem = equippedGear_.accessory;
+        break;
+    case EquipmentSlot::Relic:
+        oldItem = equippedGear_.relic;
+        break;
+    default:
+        return false;
+    }
     unequipItem(slot);
+    if (oldItem)
+        inventory_.addItem(oldItem->clone());
 
     // Place the new item into the slot and apply its bonuses.
     switch (slot)

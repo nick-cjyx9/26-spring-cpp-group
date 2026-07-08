@@ -105,6 +105,13 @@ public:
     void addPersonaToPlayer(std::shared_ptr<Persona> persona);
     void setPlayerPersona(std::shared_ptr<Persona> persona);
 
+    // ---- Equipment helpers (used by StatusScene / InventoryScene) ----
+    // Equip an item from the inventory, removing it from the backpack and
+    // placing the previously-equipped item (if any) back into the backpack.
+    bool equipFromInventory(size_t inventoryIndex);
+    // Unequip the item in the given slot and return it to the backpack.
+    bool unequipToInventory(EquipmentSlot slot);
+
     bool isNight() const { return isNight_; }
     void setNight(bool night) { isNight_ = night; }
 
@@ -171,11 +178,6 @@ public:
     const EquippedGear &equippedGear() const { return equippedGear_; }
     void equipItem(std::shared_ptr<EquipmentItem> item);
     void unequipItem(EquipmentSlot slot);
-    // Equip the item at the given inventory index (must be an EquipmentItem
-    // with a valid slot). Takes it out of the inventory and places the
-    // previously-equipped item (if any) back into the inventory. Returns
-    // false on non-equipment item / full bag / out-of-range.
-    bool equipFromInventory(size_t index);
     const std::vector<std::shared_ptr<EquipmentItem>> &equipmentDatabase() const { return equipmentDatabase_; }
 
     // Hero selection (0..3), persisted in the current session.

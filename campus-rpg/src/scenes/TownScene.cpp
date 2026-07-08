@@ -169,7 +169,7 @@ void TownScene::render(engine::IRenderer &renderer)
                       {650, 22}, 20, engine::Color::cyan());
 
     // Interaction hint
-    renderer.drawText("E: talk  I: inv  C: char  N: night  F5: save  L: social  Space: armory",
+    renderer.drawText("E:Talk  I:Items  C:Status  L:Social  Space:Armory  N:Night  F5:Save",
                       {80, 570}, 14, engine::Color::white());
 
     // Save feedback overlay.

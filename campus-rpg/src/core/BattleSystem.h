@@ -32,6 +32,7 @@ public:
     bool isOver() const;
     bool playerWon() const;
     bool playerLost() const;
+    bool playerFled() const { return fled_; }
 
     Enemy *enemyAt(size_t index) const;
     const std::vector<std::unique_ptr<Enemy>> &enemies() const { return enemies_; }

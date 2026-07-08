@@ -27,6 +27,7 @@ void BattleSystem::startBattle(Character &player, Enemy &enemy)
 void BattleSystem::startBattle(Character &player, std::vector<std::unique_ptr<Enemy>> enemies)
 {
     player_ = &player;
+    player.recoverSp(player.maxSp());
     enemies_ = std::move(enemies);
     log_.clear();
     turnOrder_.clear();

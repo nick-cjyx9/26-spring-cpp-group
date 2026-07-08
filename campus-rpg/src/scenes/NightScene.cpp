@@ -117,7 +117,7 @@ void NightScene::render(engine::IRenderer &renderer)
 
     // HUD
     renderer.drawRect({620, 10, 170, 70}, engine::Color(0, 0, 0, 180));
-    renderer.drawText("bkpk", {635, 20}, 18, engine::Color::white());
+    renderer.drawText("Night", {635, 20}, 18, engine::Color::white());
     renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()),
                       {720, 20}, 18, engine::Color::yellow());
 
