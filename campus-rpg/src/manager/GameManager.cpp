@@ -18,6 +18,7 @@
 #include "HeroSelectScene.h"
 #include "StatusScene.h"
 #include "ArmoryScene.h"
+#include "LevelUpScene.h"
 
 #include <algorithm>
 #include <map>
@@ -242,6 +243,9 @@ void GameManager::enterScene(SceneType type)
         break;
     case SceneType::Armory:
         currentScene_ = std::make_unique<ArmoryScene>();
+        break;
+    case SceneType::LevelUp:
+        currentScene_ = std::make_unique<LevelUpScene>();
         break;
     }
 }

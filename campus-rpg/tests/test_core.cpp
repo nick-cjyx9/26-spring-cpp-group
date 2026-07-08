@@ -45,6 +45,23 @@ void testCharacterGainExpTriggersLevelUp()
     CHECK_EQ(hero.level(), 2);
 }
 
+void testCharacterLevelUpSnapshotPopulated()
+{
+    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    CHECK(!hero.hasLevelUpSnapshot());
+    hero.gainExp(100);
+    CHECK(hero.hasLevelUpSnapshot());
+    const auto &snap = hero.levelUpSnapshot();
+    CHECK_EQ(snap.oldLevel, 1);
+    CHECK_EQ(snap.newLevel, 2);
+    CHECK(snap.newMaxHp > snap.oldMaxHp);
+    CHECK(snap.newMaxSp > snap.oldMaxSp);
+    CHECK(snap.newStrength > snap.oldStrength);
+    CHECK_EQ(snap.newAttack, snap.newStrength); // no equipment bonuses
+    hero.clearLevelUpSnapshot();
+    CHECK(!hero.hasLevelUpSnapshot());
+}
+
 void testCharacterLevelUpIncreasesStats()
 {
     Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
@@ -260,9 +277,23 @@ void testTileMapWalkability()
     CHECK(map.isWalkable(2, 2));
 }
 
+void testPersonaSkillUnlockOnLevelUp()
+{
+    Persona p("p_test", "Test", "Fool", 1, 5, 5, 5, 5, 5);
+    auto skill = std::make_shared<Skill>("skill_test", "Test Skill", Element::Fire, 10, 5, SkillCostType::SP, false, 3);
+    p.addPotentialSkill(3, skill);
+    CHECK_EQ(p.skills().size(), static_cast<std::size_t>(0));
+    // Level up from 1 to at least 3 (gainExp(999) will level up multiple times).
+    p.gainExp(999);
+    CHECK(p.level() >= 3);
+    CHECK_EQ(p.skills().size(), static_cast<std::size_t>(1));
+    CHECK(p.findSkill("skill_test") != nullptr);
+}
+
 int main()
 {
     testCharacterGainExpTriggersLevelUp();
+    testCharacterLevelUpSnapshotPopulated();
     testCharacterLevelUpIncreasesStats();
     testCharacterTakeDamageAppliesDefense();
 
@@ -285,6 +316,7 @@ int main()
     testCharacterAppliesSocialLinkBonus();
     testEntityIntersection();
     testTileMapWalkability();
+    testPersonaSkillUnlockOnLevelUp();
 
     std::cout << "\n==== CampusRPG core tests ====\n";
     std::cout << "run: " << g_run << "  failed: " << g_failed << "\n";

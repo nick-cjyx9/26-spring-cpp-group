@@ -104,6 +104,7 @@ set(APP_LIB_SOURCES
     src/scenes/HeroSelectScene.cpp
     src/scenes/StatusScene.cpp
     src/scenes/ArmoryScene.cpp
+    src/scenes/LevelUpScene.cpp
 )
 
 add_library(CampusRPGAppLib STATIC ${APP_LIB_SOURCES})

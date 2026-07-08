@@ -18,13 +18,13 @@ namespace
 } // namespace
 
 Skill::Skill(std::string id, std::string name, Element element,
-             int power, int cost, SkillCostType costType, bool healing)
+             int power, int cost, SkillCostType costType, bool healing, int requiredLevel)
     : id_(std::move(id)), name_(std::move(name)), element_(element),
-      power_(power), cost_(cost), costType_(costType), healing_(healing) {}
+      power_(power), cost_(cost), costType_(costType), healing_(healing), requiredLevel_(requiredLevel) {}
 
 std::unique_ptr<Skill> Skill::clone() const
 {
-    return std::make_unique<Skill>(id_, name_, element_, power_, cost_, costType_, healing_);
+    return std::make_unique<Skill>(id_, name_, element_, power_, cost_, costType_, healing_, requiredLevel_);
 }
 
 bool Skill::canUse(const Character &caster) const

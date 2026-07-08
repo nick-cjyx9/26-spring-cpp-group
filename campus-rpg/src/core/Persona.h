@@ -68,6 +68,10 @@ public:
     const std::vector<std::shared_ptr<Skill>> &skills() const { return skills_; }
     Skill *findSkill(const std::string &id) const;
 
+    // Potential skills unlocked at specific levels.
+    void addPotentialSkill(int level, std::shared_ptr<Skill> skill);
+    std::vector<std::shared_ptr<Skill>> checkSkillUnlocks(int currentLevel);
+
     void gainExp(int amount);
 
 private:
@@ -82,4 +86,5 @@ private:
     std::map<PersonaStat, int> stats_;
     std::map<Element, Affinity> affinities_;
     std::vector<std::shared_ptr<Skill>> skills_;
+    std::vector<std::pair<int, std::shared_ptr<Skill>>> potentialSkills_;
 };
