@@ -32,6 +32,15 @@ void Inventory::clear()
     items_.clear();
 }
 
+std::unique_ptr<Item> Inventory::takeItem(size_t index)
+{
+    if (index >= items_.size())
+        return nullptr;
+    auto item = std::move(items_[index]);
+    items_.erase(items_.begin() + static_cast<std::ptrdiff_t>(index));
+    return item;
+}
+
 Item *Inventory::itemAt(size_t index) const
 {
     if (index >= items_.size())

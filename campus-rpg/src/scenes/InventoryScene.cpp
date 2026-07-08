@@ -3,6 +3,35 @@
 #include "Inventory.h"
 #include "Item.h"
 
+#include <string>
+
+namespace
+{
+    const char *slotName(EquipmentSlot s)
+    {
+        switch (s)
+        {
+        case EquipmentSlot::Weapon: return "Weapon";
+        case EquipmentSlot::Armor: return "Armor";
+        case EquipmentSlot::Accessory: return "Accessory";
+        case EquipmentSlot::Relic: return "Relic";
+        default: return "None";
+        }
+    }
+
+    EquipmentSlot digitToSlot(int key)
+    {
+        switch (key)
+        {
+        case 1: return EquipmentSlot::Weapon;
+        case 2: return EquipmentSlot::Armor;
+        case 3: return EquipmentSlot::Accessory;
+        case 4: return EquipmentSlot::Relic;
+        default: return EquipmentSlot::None;
+        }
+    }
+} // namespace
+
 void InventoryScene::handleInput(engine::IInput &input)
 {
     auto &inventory = GameManager::instance().inventory();
@@ -16,12 +45,68 @@ void InventoryScene::handleInput(engine::IInput &input)
             selectedIndex_ = (selectedIndex_ + 1) % static_cast<int>(count);
     }
 
+    // Unequip a gear slot directly with keys 1..4.
+    for (int d = 1; d <= 4; ++d)
+    {
+        engine::Key key = static_cast<engine::Key>(static_cast<int>(engine::Key::Num1) + (d - 1));
+        if (input.wasKeyJustPressed(key))
+        {
+            EquipmentSlot s = digitToSlot(d);
+            const auto &gear = GameManager::instance().equippedGear();
+            bool has = (s == EquipmentSlot::Weapon && gear.weapon) ||
+                       (s == EquipmentSlot::Armor && gear.armor) ||
+                       (s == EquipmentSlot::Accessory && gear.accessory) ||
+                       (s == EquipmentSlot::Relic && gear.relic);
+            if (has)
+            {
+                GameManager::instance().unequipItem(s);
+                message_ = std::string("Unequipped ") + slotName(s) + ".";
+                messageTimer_ = 2.0f;
+            }
+            else
+            {
+                message_ = std::string(slotName(s)) + " slot is empty.";
+                messageTimer_ = 2.0f;
+            }
+        }
+    }
+
     if ((input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E)) && count > 0)
     {
-        if (inventory.useItem(static_cast<size_t>(selectedIndex_), GameManager::instance().character()))
-            message_ = "Item used.";
+        Item *raw = inventory.itemAt(static_cast<size_t>(selectedIndex_));
+        auto *eq = dynamic_cast<EquipmentItem *>(raw);
+        if (eq && eq->slot() != EquipmentSlot::None)
+        {
+            if (GameManager::instance().equipFromInventory(static_cast<size_t>(selectedIndex_)))
+            {
+                message_ = "Equipped: " + eq->name();
+                // Index may now be out of range after removal; clamp it.
+                if (selectedIndex_ >= static_cast<int>(inventory.size()))
+                    selectedIndex_ = std::max(0, static_cast<int>(inventory.size()) - 1);
+                messageTimer_ = 2.0f;
+            }
+            else
+            {
+                message_ = "Cannot equip item.";
+                messageTimer_ = 2.0f;
+            }
+        }
         else
-            message_ = "Cannot use item.";
+        {
+            // Consumable: use the item.
+            if (inventory.useItem(static_cast<size_t>(selectedIndex_), GameManager::instance().character()))
+            {
+                message_ = "Item used.";
+                if (selectedIndex_ >= static_cast<int>(inventory.size()))
+                    selectedIndex_ = std::max(0, static_cast<int>(inventory.size()) - 1);
+                messageTimer_ = 2.0f;
+            }
+            else
+            {
+                message_ = "Cannot use item.";
+                messageTimer_ = 2.0f;
+            }
+        }
     }
 
     if (input.wasKeyJustPressed(engine::Key::Escape))
@@ -30,8 +115,17 @@ void InventoryScene::handleInput(engine::IInput &input)
     }
 }
 
-void InventoryScene::update(float /*deltaTime*/)
+void InventoryScene::update(float deltaTime)
 {
+    if (messageTimer_ > 0.0f)
+    {
+        messageTimer_ -= deltaTime;
+        if (messageTimer_ <= 0.0f)
+        {
+            messageTimer_ = 0.0f;
+            message_.clear();
+        }
+    }
 }
 
 void InventoryScene::render(engine::IRenderer &renderer)
@@ -44,19 +138,37 @@ void InventoryScene::render(engine::IRenderer &renderer)
     renderer.drawRect({150, 50, 500, 500}, engine::Color(30, 30, 50, 230));
     renderer.drawText("Inventory", {170, 70}, 28, engine::Color::white());
 
+    // ---- Equipment slots panel ----
+    const auto &gear = GameManager::instance().equippedGear();
+    renderer.drawText("Equipped (1-4 to unequip)", {170, 108}, 14, engine::Color(200, 200, 0));
+
+    auto drawSlot = [&](int idx, const std::shared_ptr<EquipmentItem> &g, float y) {
+        std::string label = std::to_string(idx) + ". " + std::string(slotName(static_cast<EquipmentSlot>(
+            static_cast<int>(EquipmentSlot::Weapon) + (idx - 1))));
+        std::string val = g ? g->name() : "(empty)";
+        renderer.drawText(label + ": " + val, {170, y}, 15,
+                          g ? engine::Color::green() : engine::Color(120, 120, 120));
+    };
+    drawSlot(1, gear.weapon, 128);
+    drawSlot(2, gear.armor, 148);
+    drawSlot(3, gear.accessory, 168);
+    drawSlot(4, gear.relic, 188);
+
+    // ---- Inventory list ----
     const auto &inventory = GameManager::instance().inventory();
     const auto &items = inventory.items();
     renderer.drawText("Capacity: " + std::to_string(items.size()) + "/" + std::to_string(inventory.capacity()),
-                      {170, 110}, 16, engine::Color::white());
+                      {170, 212}, 16, engine::Color::white());
 
     for (size_t i = 0; i < items.size(); ++i)
     {
         engine::Color color = (static_cast<int>(i) == selectedIndex_) ? engine::Color::yellow() : engine::Color::white();
         std::string prefix = (static_cast<int>(i) == selectedIndex_) ? "> " : "  ";
         renderer.drawText(prefix + items[i]->name() + " [" + items[i]->typeString() + "]",
-                          {170.0f, 145.0f + static_cast<float>(i) * 28.0f}, 20, color);
+                          {170.0f, 235.0f + static_cast<float>(i) * 24.0f}, 18, color);
     }
 
-    renderer.drawText(message_, {170, 480}, 16, engine::Color::red());
-    renderer.drawText("Enter: use, Esc: back", {170, 520}, 14, engine::Color::gray());
+    if (!message_.empty())
+        renderer.drawText(message_, {170, 475}, 16, engine::Color::green());
+    renderer.drawText("Enter: use/equip   1-4: unequip   Esc: back", {170, 520}, 14, engine::Color::gray());
 }

@@ -107,7 +107,11 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             pos_x REAL DEFAULT 0,
             pos_y REAL DEFAULT 0,
             is_night INTEGER DEFAULT 0,
-            current_persona_id TEXT
+            current_persona_id TEXT,
+            weapon_id TEXT,
+            armor_id TEXT,
+            accessory_id TEXT,
+            relic_id TEXT
         );
 
         CREATE TABLE IF NOT EXISTS persona (
@@ -200,6 +204,14 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
     };
     addColumnIfMissing("social_link", "name", "TEXT");
     addColumnIfMissing("social_link", "portrait", "TEXT");
+
+    // Schema v3: equipment slot persistence. The character row stores the id
+    // of the item currently equipped in each gear slot (empty = none). Legacy
+    // saves get NULL columns which loadEquipmentSlots treats as empty slots.
+    addColumnIfMissing("character", "weapon_id", "TEXT");
+    addColumnIfMissing("character", "armor_id", "TEXT");
+    addColumnIfMissing("character", "accessory_id", "TEXT");
+    addColumnIfMissing("character", "relic_id", "TEXT");
 
     if (version < 1)
     {

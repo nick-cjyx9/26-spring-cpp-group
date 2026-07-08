@@ -12,4 +12,5 @@ public:
 private:
     int selectedIndex_ = 0;
     std::string message_;
+    float messageTimer_ = 0.0f;
 };

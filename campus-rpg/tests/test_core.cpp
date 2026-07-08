@@ -91,9 +91,63 @@ void testEquipmentItemBoostsAttack()
 {
     Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
     int baseAttack = hero.attack();
+    // EquipmentItem::use delegates to Character::equip which adds the bonus.
     EquipmentItem sword("eq_sword", "Sword", "Sharp sword", 50, 5, 0);
     sword.use(hero);
     CHECK_EQ(hero.attack(), baseAttack + 5);
+}
+
+void testCharacterEquipAndUnequipRestoresStats()
+{
+    // Simulate the slot model at the Character level: equip adds bonuses,
+    // then setEquipmentBonuses(0,...) restores base stats (matches how
+    // GameManager recompute works on load).
+    Character hero("Hero", 100, 50, 10, 10, 10, 10, 10);
+    int baseAttack = hero.attack();
+    int baseDefense = hero.defense();
+
+    EquipmentItem sword("eq_sword", "Sword", "Sharp sword", 50, 5, 2);
+    hero.equip(std::make_shared<EquipmentItem>(sword));
+    CHECK_EQ(hero.attack(), baseAttack + 5);
+    CHECK_EQ(hero.defense(), baseDefense + 2);
+
+    // Unequip: clear the equipment bonuses back to zero.
+    hero.setEquipmentBonuses(0, 0, 0, 0, 0);
+    CHECK_EQ(hero.attack(), baseAttack);
+    CHECK_EQ(hero.defense(), baseDefense);
+}
+
+void testEquipmentItemClonePreservesAllFields()
+{
+    EquipmentItem original("eq_full", "Full Gear", "All stats", 100,
+                           3, 4, 5, 6, 7, EquipmentSlot::Weapon, "tile_00_00");
+    auto copy = original.clone();
+    auto *eq = dynamic_cast<EquipmentItem *>(copy.get());
+    CHECK(eq != nullptr);
+    CHECK_EQ(eq->id(), std::string("eq_full"));
+    CHECK_EQ(eq->attackBonus(), 3);
+    CHECK_EQ(eq->defenseBonus(), 4);
+    CHECK_EQ(eq->speedBonus(), 5);
+    CHECK_EQ(eq->hpBonus(), 6);
+    CHECK_EQ(eq->magicBonus(), 7);
+    CHECK_EQ(static_cast<int>(eq->slot()), static_cast<int>(EquipmentSlot::Weapon));
+    CHECK_EQ(eq->textureId(), std::string("tile_00_00"));
+}
+
+void testInventoryTakeItemDetachesAndShrinks()
+{
+    Inventory inv;
+    inv.addItem(std::make_unique<FoodItem>("food_bread", "Bread", "Bread", 10, 15));
+    inv.addItem(std::make_unique<PotionItem>("potion_hp", "HP Potion", "Heal", 30, 50));
+    CHECK_EQ(inv.size(), static_cast<std::size_t>(2));
+    auto taken = inv.takeItem(0);
+    CHECK(taken != nullptr);
+    CHECK_EQ(taken->id(), std::string("food_bread"));
+    CHECK_EQ(inv.size(), static_cast<std::size_t>(1));
+    CHECK_EQ(inv.itemAt(0)->id(), std::string("potion_hp"));
+    // Out-of-range take returns nullptr, size unchanged.
+    CHECK(inv.takeItem(99) == nullptr);
+    CHECK_EQ(inv.size(), static_cast<std::size_t>(1));
 }
 
 void testInventoryAddItemIncreasesSize()
@@ -299,6 +353,9 @@ int main()
 
     testFoodItemHealsCharacter();
     testEquipmentItemBoostsAttack();
+    testCharacterEquipAndUnequipRestoresStats();
+    testEquipmentItemClonePreservesAllFields();
+    testInventoryTakeItemDetachesAndShrinks();
 
     testInventoryAddItemIncreasesSize();
     testInventoryUseItemAppliesEffectAndRemovesIt();

@@ -87,6 +87,10 @@ enum class Key
     Space,
     F5,
     L,
+    Num1,
+    Num2,
+    Num3,
+    Num4,
     Count
 };
 
@@ -128,6 +132,14 @@ inline std::string keyName(Key key)
         return "F5";
     case Key::L:
         return "L";
+    case Key::Num1:
+        return "1";
+    case Key::Num2:
+        return "2";
+    case Key::Num3:
+        return "3";
+    case Key::Num4:
+        return "4";
     default:
         return "Unknown";
     }

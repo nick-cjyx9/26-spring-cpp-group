@@ -76,6 +76,18 @@ bool GameManager::saveToSlot(int slotId)
     bool ok = repo.saveAll(slotId, character_, inventory_, personas_,
                            socialLinkManager_, questManager_);
     if (ok)
+    {
+        // Persist the four gear slots (empty string for empty slots).
+        auto idOf = [](const std::shared_ptr<EquipmentItem> &g) -> std::string {
+            return g ? g->id() : std::string();
+        };
+        ok = repo.saveEquipmentSlots(slotId,
+                                     idOf(equippedGear_.weapon),
+                                     idOf(equippedGear_.armor),
+                                     idOf(equippedGear_.accessory),
+                                     idOf(equippedGear_.relic));
+    }
+    if (ok)
         currentSlotId_ = slotId;
     return ok;
 }
@@ -145,6 +157,40 @@ bool GameManager::loadFromSlot(int slotId)
     // dialogue so the embedded names match the loaded identity.
     applyNpcDialogueTemplates();
     recomputeSocialLinkBonuses();
+
+    // Restore equipment slots. The data layer only stores item ids; we look
+    // each one up in the (already-seeded) equipment database, clone it into
+    // the matching slot, and recompute the character's equipment bonuses from
+    // scratch so they stay consistent with the equipped items.
+    std::string wId, aId, acId, rId;
+    if (repo.loadEquipmentSlots(slotId, wId, aId, acId, rId))
+    {
+        auto findBySlot = [this](const std::string &id, EquipmentSlot want) -> std::shared_ptr<EquipmentItem> {
+            if (id.empty())
+                return nullptr;
+            for (const auto &e : equipmentDatabase_)
+                if (e && e->id() == id && e->slot() == want)
+                    return std::shared_ptr<EquipmentItem>(
+                        static_cast<EquipmentItem *>(e->clone().release()));
+            return nullptr;
+        };
+        equippedGear_.weapon = findBySlot(wId, EquipmentSlot::Weapon);
+        equippedGear_.armor = findBySlot(aId, EquipmentSlot::Armor);
+        equippedGear_.accessory = findBySlot(acId, EquipmentSlot::Accessory);
+        equippedGear_.relic = findBySlot(rId, EquipmentSlot::Relic);
+
+        // Recompute equipment bonuses from the restored gear (single source of
+        // truth), discarding the eq_atk/eq_def/eq_spd values loaded earlier.
+        character_.setEquipmentBonuses(0, 0, 0, 0, 0);
+        auto applyIfSet = [this](const std::shared_ptr<EquipmentItem> &g) {
+            if (g)
+                character_.equip(g);
+        };
+        applyIfSet(equippedGear_.weapon);
+        applyIfSet(equippedGear_.armor);
+        applyIfSet(equippedGear_.accessory);
+        applyIfSet(equippedGear_.relic);
+    }
     return true;
 }
 
@@ -713,4 +759,56 @@ void GameManager::unequipItem(EquipmentSlot slot)
         character_.equipmentSpeedBonus() - item->speedBonus(),
         character_.equipmentHpBonus() - item->hpBonus(),
         character_.equipmentMagicBonus() - item->magicBonus());
+
+    // Return the unequipped item to the inventory (clone back to a unique ptr;
+    // equipment slots hold shared copies). If the bag is full the item is lost,
+    // which is acceptable for a manual unequip from a full bag edge case.
+    if (!inventory_.isFull())
+        inventory_.addItem(item->clone());
+}
+
+bool GameManager::equipFromInventory(size_t index)
+{
+    Item *raw = inventory_.itemAt(index);
+    if (!raw)
+        return false;
+    auto *eq = dynamic_cast<EquipmentItem *>(raw);
+    if (!eq || eq->slot() == EquipmentSlot::None)
+        return false;
+
+    EquipmentSlot slot = eq->slot();
+
+    // Detach the item from the inventory first so the old equipped item has a
+    // place to land when unequipItem puts it back.
+    auto taken = inventory_.takeItem(index);
+    if (!taken)
+        return false;
+
+    // Convert the detached unique_ptr into the shared_ptr the gear slot holds.
+    auto shared = std::shared_ptr<EquipmentItem>(
+        static_cast<EquipmentItem *>(taken.release()));
+
+    // Unequip whatever was in that slot (returns it to the inventory).
+    unequipItem(slot);
+
+    // Place the new item into the slot and apply its bonuses.
+    switch (slot)
+    {
+    case EquipmentSlot::Weapon:
+        equippedGear_.weapon = shared;
+        break;
+    case EquipmentSlot::Armor:
+        equippedGear_.armor = shared;
+        break;
+    case EquipmentSlot::Accessory:
+        equippedGear_.accessory = shared;
+        break;
+    case EquipmentSlot::Relic:
+        equippedGear_.relic = shared;
+        break;
+    default:
+        return false;
+    }
+    character_.equip(shared);
+    return true;
 }

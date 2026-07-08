@@ -45,6 +45,20 @@ public:
     // Returns the current persona id stored on the character row (empty if none).
     std::string currentPersonaId(int slotId);
 
+    // ---- Equipment slot persistence (weapon/armor/accessory/relic) ----
+    // Persist the item id currently sitting in each gear slot. Empty string
+    // means the slot is empty. Stored on the character row.
+    bool saveEquipmentSlots(int slotId, const std::string &weaponId,
+                            const std::string &armorId,
+                            const std::string &accessoryId,
+                            const std::string &relicId);
+    // Read back the four slot item ids. Empty string = empty slot (also the
+    // fallback for legacy saves that predate these columns).
+    bool loadEquipmentSlots(int slotId, std::string &weaponId,
+                            std::string &armorId,
+                            std::string &accessoryId,
+                            std::string &relicId);
+
     // ---- Legacy single-slot API (delegates to slot 1, kept for compatibility) ----
     bool saveAll(const Character &character, const Inventory &inventory,
                  const std::vector<std::shared_ptr<Persona>> &personas,

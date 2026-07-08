@@ -36,7 +36,11 @@ namespace
             const auto &eq = static_cast<const EquipmentItem &>(item);
             oss << "attackBonus=" << eq.attackBonus()
                 << ",defenseBonus=" << eq.defenseBonus()
-                << ",speedBonus=" << eq.speedBonus();
+                << ",speedBonus=" << eq.speedBonus()
+                << ",hpBonus=" << eq.hpBonus()
+                << ",magicBonus=" << eq.magicBonus()
+                << ",slot=" << static_cast<int>(eq.slot())
+                << ",textureId=" << eq.textureId();
             break;
         }
         case ItemType::Persona:
@@ -72,10 +76,24 @@ namespace
         if (std::string(typeStr) == "SP")
             return std::make_unique<SpItem>(id, n, desc, value, getInt("spAmount"));
         if (std::string(typeStr) == "Equipment")
+        {
+            auto getString = [&extra](const std::string &key) -> std::string
+            {
+                std::string k = key + "=";
+                size_t pos = extra.find(k);
+                if (pos == std::string::npos)
+                    return "";
+                pos += k.length();
+                size_t end = extra.find(",", pos);
+                return extra.substr(pos, end - pos);
+            };
             return std::make_unique<EquipmentItem>(id, n, desc, value,
                                                    getInt("attackBonus"), getInt("defenseBonus"),
-                                                   getInt("speedBonus"));
-        if (std::string(typeStr) == "Persona")
+                                                   getInt("speedBonus"), getInt("hpBonus"),
+                                                   getInt("magicBonus"),
+                                                   static_cast<EquipmentSlot>(getInt("slot")),
+                                                   getString("textureId"));
+        }        if (std::string(typeStr) == "Persona")
         {
             size_t pos = extra.find("personaId=");
             std::string pid;
@@ -820,6 +838,74 @@ std::string SaveRepository::currentPersonaId(int slotId)
     }
     sqlite3_finalize(stmt);
     return id;
+}
+
+bool SaveRepository::saveEquipmentSlots(int slotId, const std::string &weaponId,
+                                        const std::string &armorId,
+                                        const std::string &accessoryId,
+                                        const std::string &relicId)
+{
+    sqlite3 *db = DatabaseManager::instance().database();
+    if (!db)
+        return false;
+
+    const char *sql = "UPDATE character SET weapon_id = ?, armor_id = ?, "
+                      "accessory_id = ?, relic_id = ? WHERE slot_id = ?";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_text(stmt, 1, weaponId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, armorId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, accessoryId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 4, relicId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 5, slotId);
+
+    bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+bool SaveRepository::loadEquipmentSlots(int slotId, std::string &weaponId,
+                                        std::string &armorId,
+                                        std::string &accessoryId,
+                                        std::string &relicId)
+{
+    weaponId.clear();
+    armorId.clear();
+    accessoryId.clear();
+    relicId.clear();
+
+    sqlite3 *db = DatabaseManager::instance().database();
+    if (!db)
+        return false;
+
+    // Use COALESCE so legacy saves (NULL columns) yield empty strings.
+    const char *sql = "SELECT COALESCE(weapon_id, ''), COALESCE(armor_id, ''), "
+                      "COALESCE(accessory_id, ''), COALESCE(relic_id, '') "
+                      "FROM character WHERE slot_id = ?";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_int(stmt, 1, slotId);
+
+    bool ok = false;
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        auto readText = [&stmt](int col) -> std::string
+        {
+            const char *t = reinterpret_cast<const char *>(sqlite3_column_text(stmt, col));
+            return t ? std::string(t) : std::string();
+        };
+        weaponId = readText(0);
+        armorId = readText(1);
+        accessoryId = readText(2);
+        relicId = readText(3);
+        ok = true;
+    }
+    sqlite3_finalize(stmt);
+    return ok;
 }
 
 // ---- Legacy single-slot API (delegates to slot 1) ----
