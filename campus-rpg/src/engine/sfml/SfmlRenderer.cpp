@@ -33,17 +33,30 @@ void SfmlRenderer::drawRect(const Rect &rect, Color color)
     window_.draw(rectShape_);
 }
 
+namespace
+{
+    bool tryLoadTextureWithFallback(engine::SfmlRenderer &renderer, const std::string &id, const std::string &relativePath)
+    {
+        // Try current directory first
+        if (renderer.loadTexture(id, relativePath))
+            return true;
+        // Fallback: try parent directory (common when running from build/)
+        std::string fallbackPath = "../" + relativePath;
+        return renderer.loadTexture(id, fallbackPath);
+    }
+} // namespace
+
 void SfmlRenderer::drawTexture(const std::string &textureId, const Vec2 &pos)
 {
     auto it = textures_.find(textureId);
     if (it == textures_.end() || !it->second)
     {
         std::string path = "resources/textures/" + textureId + ".png";
-        if (!loadTexture(textureId, path))
+        if (!tryLoadTextureWithFallback(*this, textureId, path))
         {
             // Fallback: try .jpg
             path = "resources/textures/" + textureId + ".jpg";
-            if (!loadTexture(textureId, path))
+            if (!tryLoadTextureWithFallback(*this, textureId, path))
                 return;
         }
         it = textures_.find(textureId);
@@ -61,11 +74,11 @@ void SfmlRenderer::drawTexture(const std::string &textureId, const Rect &dstRect
     if (it == textures_.end() || !it->second)
     {
         std::string path = "resources/textures/" + textureId + ".png";
-        if (!loadTexture(textureId, path))
+        if (!tryLoadTextureWithFallback(*this, textureId, path))
         {
             // Fallback: try .jpg
             path = "resources/textures/" + textureId + ".jpg";
-            if (!loadTexture(textureId, path))
+            if (!tryLoadTextureWithFallback(*this, textureId, path))
                 return;
         }
         it = textures_.find(textureId);
@@ -131,14 +144,20 @@ void SfmlRenderer::loadDefaultResources()
 
     if (std::filesystem::exists(texturesDir))
     {
-        for (const auto &entry : std::filesystem::directory_iterator(texturesDir))
+        for (const auto &entry : std::filesystem::recursive_directory_iterator(texturesDir))
         {
             if (entry.is_regular_file())
             {
                 auto ext = entry.path().extension().string();
                 if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
                 {
-                    std::string id = entry.path().stem().string();
+                    // Compute relative path from texturesDir as the texture id.
+                    std::filesystem::path relativePath = std::filesystem::relative(entry.path(), texturesDir);
+                    std::string id = relativePath.parent_path().string();
+                    if (!id.empty()) id += "/";
+                    id += relativePath.stem().string();
+                    // Normalize path separators to forward slashes.
+                    std::replace(id.begin(), id.end(), '\\', '/');
                     loadTexture(id, entry.path().string());
                 }
             }

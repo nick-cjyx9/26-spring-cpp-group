@@ -32,6 +32,13 @@ namespace
         default: return EquipmentSlot::None;
         }
     }
+
+    std::string truncateName(const std::string &name, size_t maxLen)
+    {
+        if (name.length() <= maxLen)
+            return name;
+        return name.substr(0, maxLen - 3) + "...";
+    }
 } // namespace
 
 void InventoryScene::handleInput(engine::IInput &input)
@@ -164,18 +171,65 @@ void InventoryScene::render(engine::IRenderer &renderer)
     drawSlot(3, gear.accessory, 168);
     drawSlot(4, gear.relic, 188);
 
-    // ---- Inventory list ----
+    // ---- Inventory grid ----
     const auto &inventory = GameManager::instance().inventory();
     const auto &items = inventory.items();
     renderer.drawText("Capacity: " + std::to_string(items.size()) + "/" + std::to_string(inventory.capacity()),
                       {170, 212}, 16, engine::Color::white());
 
-    for (size_t i = 0; i < items.size(); ++i)
+    // Grid: 4 columns, each cell 110x90
+    float cellW = 110.0f;
+    float cellH = 90.0f;
+    int cols = 4;
+    int rows = 3;
+    float gridX = 170.0f;
+    float gridY = 235.0f;
+
+    for (size_t i = 0; i < items.size() && i < static_cast<size_t>(cols * rows); ++i)
     {
-        engine::Color color = (static_cast<int>(i) == selectedIndex_) ? engine::Color::yellow() : engine::Color::white();
-        std::string prefix = (static_cast<int>(i) == selectedIndex_) ? "> " : "  ";
-        renderer.drawText(prefix + items[i]->name() + " [" + items[i]->typeString() + "]",
-                          {170.0f, 235.0f + static_cast<float>(i) * 24.0f}, 18, color);
+        int col = static_cast<int>(i) % cols;
+        int row = static_cast<int>(i) / cols;
+        float cx = gridX + col * cellW;
+        float cy = gridY + row * cellH;
+        bool selected = (static_cast<int>(i) == selectedIndex_);
+
+        // Cell border
+        engine::Color borderColor = selected ? engine::Color::yellow() : engine::Color(80, 80, 100);
+        renderer.drawRect({cx, cy, cellW - 4, cellH - 4}, engine::Color(20, 20, 40, 230));
+        renderer.drawRect({cx, cy, cellW - 4, 2}, borderColor);
+        renderer.drawRect({cx, cy + cellH - 6, cellW - 4, 2}, borderColor);
+        renderer.drawRect({cx, cy, 2, cellH - 6}, borderColor);
+        renderer.drawRect({cx + cellW - 6, cy, 2, cellH - 6}, borderColor);
+
+        // Item texture
+        auto *eq = dynamic_cast<EquipmentItem *>(items[i].get());
+        std::string texPath;
+        if (!items[i]->textureId().empty())
+        {
+            if (items[i]->textureId().find('/') != std::string::npos)
+            {
+                texPath = items[i]->textureId();
+            }
+            else
+            {
+                texPath = std::string("equipment/") + items[i]->textureId();
+            }
+            renderer.drawTexture(texPath, {cx + (cellW - 48) / 2, cy + 4, 48, 48});
+        }
+        else
+        {
+            // Placeholder for items without texture
+            renderer.drawRect({cx + (cellW - 48) / 2, cy + 4, 48, 48}, engine::Color(60, 60, 80));
+        }
+
+        // Name (truncated to fit cell)
+        std::string name = truncateName(items[i]->name(), 10);
+        renderer.drawText(name, {cx + 4, cy + 54}, 11,
+                          selected ? engine::Color::yellow() : engine::Color::white());
+
+        // Quantity (always show)
+        renderer.drawText("x" + std::to_string(items[i]->quantity()),
+                          {cx + 4, cy + 66}, 10, engine::Color(200, 200, 0));
     }
 
     if (!message_.empty())
