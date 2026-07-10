@@ -19,11 +19,13 @@ public:
     bool isKeyPressed(Key key) const override;
     bool wasKeyJustPressed(Key key) override;
     std::string consumeTypedText() override;
+    int consumeScrollDelta() override;
 
     // Called by SfmlWindow on each SFML event.
     void onSfmlKeyPressed(sf::Keyboard::Key key);
     void onSfmlKeyReleased(sf::Keyboard::Key key);
     void onSfmlTextEntered(std::uint32_t unicode);
+    void onSfmlMouseWheelScrolled(int delta);
     void endFrame();
 
 private:
@@ -33,6 +35,7 @@ private:
     std::array<bool, static_cast<size_t>(Key::Count)> previousStates_;
     std::array<bool, static_cast<size_t>(Key::Count)> justPressed_;
     std::string typedBuffer_;
+    int scrollDelta_ = 0;
 };
 
 } // namespace engine

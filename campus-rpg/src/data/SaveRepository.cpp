@@ -22,6 +22,8 @@ namespace
     std::string extraDataFromItem(const Item &item)
     {
         std::ostringstream oss;
+        if (!item.textureId().empty())
+            oss << "textureId=" << item.textureId() << ",";
         switch (item.type())
         {
         case ItemType::Food:
@@ -61,22 +63,32 @@ namespace
             std::string val = extra.substr(pos, end - pos);
             return std::stoi(val);
         };
+        auto getString = [&extra](const std::string &key) -> std::string
+        {
+            size_t pos = extra.find(key + "=");
+            if (pos == std::string::npos)
+                return "";
+            pos += key.length() + 1;
+            size_t end = extra.find(",", pos);
+            return extra.substr(pos, end - pos);
+        };
 
         std::string id = itemId ? itemId : "";
         std::string n = name ? name : "";
         std::string desc = description ? description : "";
+        std::string textureId = getString("textureId");
 
         if (std::string(typeStr) == "Food")
-            return std::make_unique<FoodItem>(id, n, desc, value, getInt("healAmount"));
+            return std::make_unique<FoodItem>(id, n, desc, value, getInt("healAmount"), textureId);
         if (std::string(typeStr) == "Potion")
-            return std::make_unique<PotionItem>(id, n, desc, value, getInt("healAmount"));
+            return std::make_unique<PotionItem>(id, n, desc, value, getInt("healAmount"), textureId);
         if (std::string(typeStr) == "SP")
-            return std::make_unique<SpItem>(id, n, desc, value, getInt("spAmount"));
+            return std::make_unique<SpItem>(id, n, desc, value, getInt("spAmount"), textureId);
         if (std::string(typeStr) == "Equipment")
             return std::make_unique<EquipmentItem>(id, n, desc, value,
                                                    getInt("strengthBonus"), getInt("magicBonus"),
                                                    getInt("speedBonus"),
-                                                   static_cast<EquipmentSlot>(getInt("slot")));
+                                                   static_cast<EquipmentSlot>(getInt("slot")), textureId);
         if (std::string(typeStr) == "Persona")
         {
             size_t pos = extra.find("personaId=");
@@ -87,7 +99,7 @@ namespace
                 size_t end = extra.find(",", pos);
                 pid = extra.substr(pos, end - pos);
             }
-            return std::make_unique<PersonaItem>(id, n, desc, value, pid);
+            return std::make_unique<PersonaItem>(id, n, desc, value, pid, textureId);
         }
         return nullptr;
     }

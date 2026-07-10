@@ -45,6 +45,19 @@ void InventoryScene::handleInput(engine::IInput &input)
 {
     auto &inventory = GameManager::instance().inventory();
     size_t count = inventory.size();
+    int cols = 4;
+    int rows = static_cast<int>((count + cols - 1) / cols);
+
+    // Scroll with mouse wheel
+    int scrollDelta = input.consumeScrollDelta();
+    if (scrollDelta != 0 && count > 0)
+    {
+        int visibleRows = 3;
+        if (scrollDelta > 0)
+            gridScrollOffset_ = std::max(0, gridScrollOffset_ - 1);
+        else
+            gridScrollOffset_ = std::min(std::max(0, rows - visibleRows), gridScrollOffset_ + 1);
+    }
 
     if (count > 0)
     {
@@ -181,17 +194,33 @@ void InventoryScene::render(engine::IRenderer &renderer)
     float cellW = 110.0f;
     float cellH = 90.0f;
     int cols = 4;
-    int rows = 3;
+    int visibleRows = 3;
     float gridX = 170.0f;
     float gridY = 235.0f;
 
-    for (size_t i = 0; i < items.size() && i < static_cast<size_t>(cols * rows); ++i)
+    int totalRows = static_cast<int>((items.size() + cols - 1) / cols);
+    if (totalRows == 0) totalRows = 1;
+
+    // Auto-scroll to keep selected index in view
+    int selectedRow = selectedIndex_ / cols;
+    if (selectedRow < gridScrollOffset_)
+        gridScrollOffset_ = selectedRow;
+    if (selectedRow >= gridScrollOffset_ + visibleRows)
+        gridScrollOffset_ = selectedRow - visibleRows + 1;
+    if (gridScrollOffset_ < 0) gridScrollOffset_ = 0;
+    if (gridScrollOffset_ > totalRows - visibleRows)
+        gridScrollOffset_ = std::max(0, totalRows - visibleRows);
+
+    int startIdx = gridScrollOffset_ * cols;
+    int endIdx = std::min(static_cast<int>(items.size()), (gridScrollOffset_ + visibleRows) * cols);
+
+    for (int i = startIdx; i < endIdx; ++i)
     {
-        int col = static_cast<int>(i) % cols;
-        int row = static_cast<int>(i) / cols;
+        int col = i % cols;
+        int row = i / cols - gridScrollOffset_;
         float cx = gridX + col * cellW;
         float cy = gridY + row * cellH;
-        bool selected = (static_cast<int>(i) == selectedIndex_);
+        bool selected = (i == selectedIndex_);
 
         // Cell border
         engine::Color borderColor = selected ? engine::Color::yellow() : engine::Color(80, 80, 100);
@@ -202,10 +231,9 @@ void InventoryScene::render(engine::IRenderer &renderer)
         renderer.drawRect({cx + cellW - 6, cy, 2, cellH - 6}, borderColor);
 
         // Item texture
-        auto *eq = dynamic_cast<EquipmentItem *>(items[i].get());
-        std::string texPath;
         if (!items[i]->textureId().empty())
         {
+            std::string texPath;
             if (items[i]->textureId().find('/') != std::string::npos)
             {
                 texPath = items[i]->textureId();
@@ -230,6 +258,18 @@ void InventoryScene::render(engine::IRenderer &renderer)
         // Quantity (always show)
         renderer.drawText("x" + std::to_string(items[i]->quantity()),
                           {cx + 4, cy + 66}, 10, engine::Color(200, 200, 0));
+    }
+
+    // Scrollbar indicator on the right edge
+    if (totalRows > visibleRows)
+    {
+        float barX = gridX + cols * cellW + 5.0f;
+        float barY = gridY;
+        float barH = visibleRows * cellH;
+        float thumbH = barH * static_cast<float>(visibleRows) / static_cast<float>(totalRows);
+        float thumbY = barY + static_cast<float>(gridScrollOffset_) / static_cast<float>(totalRows) * barH;
+        renderer.drawRect({barX, barY, 4, barH}, engine::Color(60, 60, 80));
+        renderer.drawRect({barX, thumbY, 4, thumbH}, engine::Color(200, 200, 200));
     }
 
     if (!message_.empty())

@@ -41,8 +41,10 @@ namespace
         if (renderer.loadTexture(id, relativePath))
             return true;
         // Fallback: try parent directory (common when running from build/)
-        std::string fallbackPath = "../" + relativePath;
-        return renderer.loadTexture(id, fallbackPath);
+        if (renderer.loadTexture(id, "../" + relativePath))
+            return true;
+        // Fallback: try grandparent directory (common when running from build/<preset>/)
+        return renderer.loadTexture(id, "../../" + relativePath);
     }
 } // namespace
 
@@ -139,6 +141,10 @@ void SfmlRenderer::loadDefaultResources()
         texturesDir = exeDir / ".." / "resources" / "textures";
     if (!std::filesystem::exists(fontsDir))
         fontsDir = exeDir / ".." / "resources" / "fonts";
+    if (!std::filesystem::exists(texturesDir))
+        texturesDir = exeDir / ".." / ".." / "resources" / "textures";
+    if (!std::filesystem::exists(fontsDir))
+        fontsDir = exeDir / ".." / ".." / "resources" / "fonts";
 
     loadFont("default", (fontsDir / "default.ttf").string());
 

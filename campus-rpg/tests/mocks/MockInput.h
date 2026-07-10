@@ -47,6 +47,13 @@ public:
         return text;
     }
 
+    int consumeScrollDelta() override
+    {
+        int d = scrollDelta_;
+        scrollDelta_ = 0;
+        return d;
+    }
+
     // Test helper: inject text as if the user typed it.
     void typeText(const std::string &text) { typedBuffer_ += text; }
 
@@ -59,6 +66,7 @@ private:
     std::array<bool, static_cast<size_t>(engine::Key::Count)> currentStates_;
     std::array<bool, static_cast<size_t>(engine::Key::Count)> previousStates_;
     std::string typedBuffer_;
+    int scrollDelta_ = 0;
 };
 
 } // namespace tests
