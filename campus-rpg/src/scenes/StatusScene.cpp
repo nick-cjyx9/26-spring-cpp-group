@@ -6,6 +6,7 @@
 #include "Persona.h"
 
 #include <algorithm>
+#include <cmath>
 #include <sstream>
 
 namespace
@@ -14,10 +15,14 @@ namespace
     {
         switch (idx)
         {
-        case 0: return "Weapon";
-        case 1: return "Armor";
-        case 2: return "Accessory";
-        case 3: return "Relic";
+        case 0:
+            return "Weapon";
+        case 1:
+            return "Armor";
+        case 2:
+            return "Accessory";
+        case 3:
+            return "Relic";
         }
         return "";
     }
@@ -26,10 +31,14 @@ namespace
     {
         switch (idx)
         {
-        case 0: return EquipmentSlot::Weapon;
-        case 1: return EquipmentSlot::Armor;
-        case 2: return EquipmentSlot::Accessory;
-        case 3: return EquipmentSlot::Relic;
+        case 0:
+            return EquipmentSlot::Weapon;
+        case 1:
+            return EquipmentSlot::Armor;
+        case 2:
+            return EquipmentSlot::Accessory;
+        case 3:
+            return EquipmentSlot::Relic;
         }
         return EquipmentSlot::None;
     }
@@ -38,10 +47,14 @@ namespace
     {
         switch (idx)
         {
-        case 0: return gear.weapon;
-        case 1: return gear.armor;
-        case 2: return gear.accessory;
-        case 3: return gear.relic;
+        case 0:
+            return gear.weapon;
+        case 1:
+            return gear.armor;
+        case 2:
+            return gear.accessory;
+        case 3:
+            return gear.relic;
         }
         return nullptr;
     }
@@ -49,9 +62,12 @@ namespace
     std::string statsLine(const EquipmentItem &item)
     {
         std::string stats;
-        if (item.strengthBonus() > 0) stats += "STR+" + std::to_string(item.strengthBonus()) + " ";
-        if (item.magicBonus() > 0) stats += "MAG+" + std::to_string(item.magicBonus()) + " ";
-        if (item.speedBonus() > 0) stats += "SPD+" + std::to_string(item.speedBonus()) + " ";
+        if (item.strengthBonus() > 0)
+            stats += "STR+" + std::to_string(item.strengthBonus()) + " ";
+        if (item.magicBonus() > 0)
+            stats += "MAG+" + std::to_string(item.magicBonus()) + " ";
+        if (item.speedBonus() > 0)
+            stats += "SPD+" + std::to_string(item.speedBonus()) + " ";
         return stats.empty() ? "No bonus" : stats;
     }
 
@@ -83,6 +99,35 @@ namespace
         renderer.drawRect({x, y, 3, h}, border);
         renderer.drawRect({x + w - 3, y, 3, h}, border);
         renderer.drawRect({x + 8, y + 34, w - 16, 1}, engine::Color(95, 105, 150, 190));
+    }
+
+    std::string arcanaTextureId(std::string arcana)
+    {
+        std::transform(arcana.begin(), arcana.end(), arcana.begin(), [](unsigned char c)
+                       { return static_cast<char>(std::tolower(c)); });
+        std::replace(arcana.begin(), arcana.end(), ' ', '_');
+        return "arcana_" + arcana;
+    }
+
+    void drawNeonFrame(engine::IRenderer &renderer, const engine::Rect &rect, engine::Color color)
+    {
+        renderer.drawRect({rect.x - 8, rect.y - 8, rect.width + 16, rect.height + 16}, engine::Color(color.r, color.g, color.b, 26));
+        renderer.drawRect({rect.x - 4, rect.y - 4, rect.width + 8, rect.height + 8}, engine::Color(color.r, color.g, color.b, 42));
+        renderer.drawRect({rect.x - 2, rect.y - 2, rect.width + 4, 3}, color);
+        renderer.drawRect({rect.x - 2, rect.y + rect.height - 1, rect.width + 4, 3}, color);
+        renderer.drawRect({rect.x - 2, rect.y - 2, 3, rect.height + 4}, color);
+        renderer.drawRect({rect.x + rect.width - 1, rect.y - 2, 3, rect.height + 4}, color);
+    }
+
+    void drawScrollbar(engine::IRenderer &renderer, float x, float y, float h, int first, int visible, int total)
+    {
+        if (total <= visible)
+            return;
+        renderer.drawRect({x, y, 5.0f, h}, engine::Color(50, 55, 85, 230));
+        float thumbH = std::max(24.0f, h * static_cast<float>(visible) / static_cast<float>(total));
+        float maxY = y + h - thumbH;
+        float t = total <= visible ? 0.0f : static_cast<float>(first) / static_cast<float>(total - visible);
+        renderer.drawRect({x, y + (maxY - y) * t, 5.0f, thumbH}, engine::Color(220, 210, 100, 240));
     }
 
     std::vector<std::string> wrapText(const std::string &text, size_t width)
@@ -144,16 +189,31 @@ void StatusScene::handleInput(engine::IInput &input)
 
     if (input.wasKeyJustPressed(engine::Key::Left) || input.wasKeyJustPressed(engine::Key::A))
     {
-        section_ = Section::Persona;
+        if (section_ == Section::Equipment)
+            section_ = Section::Persona;
+        else if (section_ == Section::Persona)
+            section_ = Section::Profile;
         return;
     }
     if (input.wasKeyJustPressed(engine::Key::Right) || input.wasKeyJustPressed(engine::Key::D))
     {
-        section_ = Section::Equipment;
+        if (section_ == Section::Profile)
+            section_ = Section::Persona;
+        else if (section_ == Section::Persona)
+            section_ = Section::Equipment;
         return;
     }
 
-    if (section_ == Section::Persona)
+    if (section_ == Section::Profile)
+    {
+        if (input.wasKeyJustPressed(engine::Key::Up) || input.wasKeyJustPressed(engine::Key::W) ||
+            input.wasKeyJustPressed(engine::Key::Down) || input.wasKeyJustPressed(engine::Key::S) ||
+            input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
+        {
+            profilePage_ = 1 - profilePage_;
+        }
+    }
+    else if (section_ == Section::Persona)
         handlePersonaInput(input);
     else
         handleEquipmentInput(input);
@@ -195,7 +255,8 @@ void StatusScene::handlePersonaInput(engine::IInput &input)
         {
             message_ = "Destroyed Persona: " + name;
             personaIndex_ = std::min(personaIndex_, static_cast<int>(gm.character().ownedPersonas().size()) - 1);
-            if (personaIndex_ < 0) personaIndex_ = 0;
+            if (personaIndex_ < 0)
+                personaIndex_ = 0;
         }
         else
         {
@@ -253,6 +314,7 @@ void StatusScene::handleEquipmentInput(engine::IInput &input)
 
 void StatusScene::update(float deltaTime)
 {
+    animationTime_ += deltaTime;
     if (messageTimer_ > 0.0f)
     {
         messageTimer_ -= deltaTime;
@@ -277,7 +339,7 @@ void StatusScene::render(engine::IRenderer &renderer)
     renderPersonaPanel(renderer);
     renderEquipmentPanel(renderer);
 
-    renderer.drawText("A/D: switch panel   Persona Enter: switch   N: skill details   Persona Space: destroy   Equipment Enter: equip/unequip   Esc: back",
+    renderer.drawText("A/D: switch panel   Profile Up/Down: scroll   Persona Enter: switch   N: skills   Equipment Enter: equip   Esc: back",
                       {20, 570}, 12, engine::Color::gray());
 
     if (!message_.empty())
@@ -293,40 +355,89 @@ void StatusScene::render(engine::IRenderer &renderer)
 void StatusScene::renderProfilePanel(engine::IRenderer &renderer)
 {
     float x = 20.0f, y = 105.0f, w = 220.0f, h = 445.0f;
-    drawPanel(renderer, x, y, w, h, engine::Color(80, 170, 255));
+    engine::Color border = (section_ == Section::Profile) ? engine::Color::yellow() : engine::Color(80, 170, 255);
+    drawPanel(renderer, x, y, w, h, border);
 
     auto &character = GameManager::instance().character();
     Persona *persona = character.currentPersona();
-    renderer.drawText("Profile", {x + 14, y + 10}, 19, engine::Color::white());
 
-    renderer.drawRect({x + 45, y + 50, 130, 165}, engine::Color(10, 10, 24, 230));
-    renderer.drawTexture("hero_" + std::to_string(GameManager::instance().selectedHeroIndex()),
-                         {x + 52, y + 56, 116, 145});
-    renderer.drawRect({x + 45, y + 50, 130, 3}, engine::Color(220, 190, 80));
-    renderer.drawRect({x + 45, y + 212, 130, 3}, engine::Color(220, 190, 80));
+    renderer.drawText(profilePage_ == 0 ? "Arcana Card" : "Profile Stats", {x + 14, y + 10}, 18,
+                      section_ == Section::Profile ? engine::Color::yellow() : engine::Color::white());
+    renderer.drawText("Page " + std::to_string(profilePage_ + 1) + "/2", {x + 156, y + 13}, 12, engine::Color::gray());
 
-    renderer.drawText(character.name(), {x + 18, y + 228}, 22, engine::Color(245, 245, 255));
-    renderer.drawText("Lv." + std::to_string(character.level()) + "   Gold " + std::to_string(character.gold()),
-                      {x + 18, y + 255}, 14, engine::Color::yellow());
-    renderer.drawText("HP " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()),
-                      {x + 18, y + 283}, 15, engine::Color(110, 255, 130));
-    renderer.drawText("SP " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()),
-                      {x + 118, y + 283}, 15, engine::Color(100, 190, 255));
+    float pulse = (std::sin(animationTime_ * 3.0f) + 1.0f) * 0.5f;
+    auto cyanGlow = engine::Color(70, 225, 255, static_cast<unsigned char>(115 + pulse * 80));
+    auto goldGlow = engine::Color(255, 220, 90, static_cast<unsigned char>(125 + pulse * 80));
 
-    renderer.drawText("Current Persona", {x + 18, y + 320}, 16, engine::Color::cyan());
-    if (persona)
+    // Page 1: large contained Arcana card. Nothing is drawn outside the panel.
+    if (profilePage_ == 0)
     {
-        renderer.drawText(persona->name() + " / " + persona->arcana(), {x + 18, y + 344}, 14, engine::Color::white());
-        renderer.drawText("Base  STR " + std::to_string(persona->strength()) +
-                              "  MAG " + std::to_string(persona->magic()) +
-                              "  SPD " + std::to_string(persona->speed()),
-                          {x + 18, y + 370}, 12, engine::Color(170, 170, 190));
-    }
-    renderer.drawText("Final STR " + std::to_string(character.attack()), {x + 18, y + 402}, 14, engine::Color(255, 150, 150));
-    renderer.drawText("MAG " + std::to_string(character.magic()), {x + 104, y + 402}, 14, engine::Color(150, 190, 255));
-    renderer.drawText("SPD " + std::to_string(character.speed()), {x + 164, y + 402}, 14, engine::Color(255, 230, 120));
-}
+        engine::Rect card{x + 37, y + 58, 146, 218};
+        renderer.drawRect({card.x - 6, card.y - 6, card.width + 12, card.height + 12}, engine::Color(40, 190, 255, 32));
+        renderer.drawRect({card.x - 2, card.y - 2, card.width + 4, card.height + 4}, engine::Color(8, 8, 24, 235));
+        renderer.drawRect({card.x - 2, card.y - 2, card.width + 4, 2}, cyanGlow);
+        renderer.drawRect({card.x - 2, card.y + card.height, card.width + 4, 2}, cyanGlow);
+        renderer.drawRect({card.x - 2, card.y - 2, 2, card.height + 4}, cyanGlow);
+        renderer.drawRect({card.x + card.width, card.y - 2, 2, card.height + 4}, cyanGlow);
 
+        if (persona)
+        {
+            renderer.drawTexture(arcanaTextureId(persona->arcana()), {card.x + 10, card.y + 12, card.width - 20, card.height - 24});
+            renderer.drawText(persona->arcana(), {x + 24, y + 296}, 18, goldGlow);
+            std::string personaName = persona->name();
+            if (personaName.size() > 18)
+                personaName = personaName.substr(0, 17) + ".";
+            renderer.drawText(personaName, {x + 24, y + 326}, 16, engine::Color::cyan());
+            renderer.drawText("Lv" + std::to_string(persona->level()) + "  " + persona->arcana(), {x + 24, y + 354}, 13, engine::Color::gray());
+        }
+        else
+        {
+            renderer.drawText("No Persona", {card.x + 28, card.y + 98}, 15, engine::Color::gray());
+        }
+
+        for (int i = 0; i < 4; ++i)
+        {
+            float sy = card.y + 8.0f + std::fmod(animationTime_ * 30.0f + i * 42.0f, card.height - 16.0f);
+            renderer.drawRect({card.x + 8, sy, card.width - 16, 1.0f}, engine::Color(100, 230, 255, 110));
+        }
+
+        renderer.drawText("Use Up/Down to view stats", {x + 24, y + 406}, 12, engine::Color::gray());
+    }
+    // Page 2: compact character/persona stats.
+    else
+    {
+        float infoY = y + 58.0f;
+        renderer.drawRect({x + 14, infoY - 10, w - 34, 350}, engine::Color(10, 12, 28, 165));
+        renderer.drawText(character.name(), {x + 24, infoY}, 19, engine::Color(245, 245, 255));
+        renderer.drawText("Lv." + std::to_string(character.level()), {x + 24, infoY + 34}, 15, engine::Color::yellow());
+        renderer.drawText("Gold " + std::to_string(character.gold()), {x + 100, infoY + 34}, 15, engine::Color::yellow());
+        renderer.drawText("HP " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()),
+                          {x + 24, infoY + 72}, 15, engine::Color(110, 255, 130));
+        renderer.drawText("SP " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()),
+                          {x + 24, infoY + 104}, 15, engine::Color(100, 190, 255));
+        renderer.drawText("EXP " + std::to_string(character.exp()) + "/" + std::to_string(character.expToNextLevel()),
+                          {x + 24, infoY + 136}, 14, engine::Color::white());
+
+        renderer.drawText("Current Persona", {x + 24, infoY + 182}, 15, engine::Color::cyan());
+        if (persona)
+        {
+            std::string personaName = persona->name();
+            if (personaName.size() > 18)
+                personaName = personaName.substr(0, 17) + ".";
+            renderer.drawText(personaName, {x + 24, infoY + 208}, 14, engine::Color::white());
+            renderer.drawText("Base " + std::to_string(persona->strength()) + "/" +
+                                  std::to_string(persona->magic()) + "/" + std::to_string(persona->speed()),
+                              {x + 24, infoY + 232}, 12, engine::Color(170, 170, 190));
+        }
+
+        renderer.drawText("Final Stats", {x + 24, infoY + 274}, 14, engine::Color::gray());
+        renderer.drawText("STR " + std::to_string(character.attack()), {x + 24, infoY + 302}, 14, engine::Color(255, 150, 150));
+        renderer.drawText("MAG " + std::to_string(character.magic()), {x + 88, infoY + 302}, 14, engine::Color(150, 190, 255));
+        renderer.drawText("SPD " + std::to_string(character.speed()), {x + 150, infoY + 302}, 14, engine::Color(255, 230, 120));
+    }
+
+    drawScrollbar(renderer, x + w - 12, y + 48, h - 88, profilePage_, 1, 2);
+}
 void StatusScene::renderPersonaPanel(engine::IRenderer &renderer)
 {
     float x = 260.0f, y = 105.0f, w = 240.0f, h = 445.0f;
@@ -338,9 +449,15 @@ void StatusScene::renderPersonaPanel(engine::IRenderer &renderer)
     renderer.drawText("Persona Deck " + std::to_string(owned.size()) + "/" + std::to_string(Character::kMaxOwnedPersonas),
                       {x + 12, y + 10}, 18, engine::Color::white());
 
+    int visibleRows = 6;
+    int start = std::max(0, personaIndex_ - visibleRows / 2);
+    if (start + visibleRows > static_cast<int>(owned.size()))
+        start = std::max(0, static_cast<int>(owned.size()) - visibleRows);
+
     float rowY = y + 48.0f;
-    for (int i = 0; i < static_cast<int>(Character::kMaxOwnedPersonas); ++i)
+    for (int row = 0; row < visibleRows; ++row)
     {
+        int i = start + row;
         bool selected = section_ == Section::Persona && i == personaIndex_;
         engine::Color boxBorder = selected ? engine::Color::yellow() : engine::Color(80, 80, 100);
         renderer.drawRect({x + 10, rowY, w - 20, 44}, engine::Color(20, 20, 42, 235));
@@ -365,8 +482,13 @@ void StatusScene::renderPersonaPanel(engine::IRenderer &renderer)
         }
         rowY += 49.0f;
     }
+    drawScrollbar(renderer, x + w - 9, y + 48, visibleRows * 49.0f - 5.0f, start, visibleRows, static_cast<int>(owned.size()));
+    if (static_cast<int>(owned.size()) > visibleRows)
+        renderer.drawText("Showing " + std::to_string(start + 1) + "-" + std::to_string(std::min(start + visibleRows, static_cast<int>(owned.size()))) +
+                              " / " + std::to_string(owned.size()),
+                          {x + 28, y + 342}, 12, engine::Color::gray());
 
-    renderSelectedPersonaDetail(renderer, x + 10, y + 350);
+    renderSelectedPersonaDetail(renderer, x + 10, y + 365);
 }
 
 void StatusScene::renderSelectedPersonaDetail(engine::IRenderer &renderer, float x, float y)
@@ -381,7 +503,8 @@ void StatusScene::renderSelectedPersonaDetail(engine::IRenderer &renderer, float
     int shown = 0;
     for (const auto &skill : p->skills())
     {
-        if (!skill || shown >= 4) continue;
+        if (!skill || shown >= 4)
+            continue;
         renderer.drawText("- " + skill->name() + " (" + skillCostText(*skill) + ")",
                           {x, sy}, 12, engine::Color(200, 200, 200));
         sy += 18.0f;
@@ -475,7 +598,8 @@ void StatusScene::renderEquipmentPanel(engine::IRenderer &renderer)
     {
         Item *raw = GameManager::instance().inventory().itemAt(eqIndices[static_cast<size_t>(i)]);
         auto *item = dynamic_cast<EquipmentItem *>(raw);
-        if (!item) continue;
+        if (!item)
+            continue;
         bool selected = section_ == Section::Equipment && equipmentIndex_ == i + 4;
         engine::Color color = selected ? engine::Color::yellow() : engine::Color::white();
         drawEquipmentIcon(renderer, item, x + 14, rowY, 36.0f);

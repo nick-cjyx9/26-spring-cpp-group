@@ -443,8 +443,12 @@ void BattleScene::render(engine::IRenderer &renderer)
         }
         else
         {
-            for (size_t i = 0; i < owned.size() && i < 5; ++i)
+            int start = std::max(0, selectedPersona_ - 2);
+            if (start + 5 > static_cast<int>(owned.size()))
+                start = std::max(0, static_cast<int>(owned.size()) - 5);
+            for (int row = 0; row < 5 && start + row < static_cast<int>(owned.size()); ++row)
             {
+                size_t i = static_cast<size_t>(start + row);
                 if (!owned[i])
                     continue;
                 bool selected = static_cast<int>(i) == selectedPersona_;
@@ -453,9 +457,9 @@ void BattleScene::render(engine::IRenderer &renderer)
                 std::string line = std::string(selected ? "> " : "  ") + owned[i]->name() + " Lv" + std::to_string(owned[i]->level());
                 if (current)
                     line += " *";
-                renderer.drawText(line, {35.0f, 458.0f + static_cast<float>(i) * 22.0f}, 15, color);
+                renderer.drawText(line, {35.0f, 458.0f + static_cast<float>(row) * 22.0f}, 15, color);
                 renderer.drawText(std::to_string(owned[i]->strength()) + "/" + std::to_string(owned[i]->magic()) + "/" + std::to_string(owned[i]->speed()),
-                                  {185.0f, 458.0f + static_cast<float>(i) * 22.0f}, 13, engine::Color::gray());
+                                  {185.0f, 458.0f + static_cast<float>(row) * 22.0f}, 13, engine::Color::gray());
             }
         }
     }
@@ -498,8 +502,8 @@ bool BattleScene::processVictory()
             auto dropped = GameManager::instance().findPersona(pid);
             if (dropped)
             {
-                GameManager::instance().addPersonaToPlayer(dropped);
-                battle.appendLog("Obtained Persona: " + dropped->name());
+                if (GameManager::instance().addPersonaToPlayer(dropped))
+                    battle.appendLog("Obtained Persona: " + dropped->name());
             }
         }
     }
