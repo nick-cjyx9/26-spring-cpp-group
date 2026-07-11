@@ -22,32 +22,44 @@ namespace
     std::string extraDataFromItem(const Item &item)
     {
         std::ostringstream oss;
+        bool wroteField = false;
+        auto appendField = [&oss, &wroteField](const std::string &key, const std::string &value)
+        {
+            if (wroteField)
+                oss << ",";
+            oss << key << "=" << value;
+            wroteField = true;
+        };
+        auto appendInt = [&appendField](const std::string &key, int value)
+        {
+            appendField(key, std::to_string(value));
+        };
+
         if (!item.textureId().empty())
-            oss << "textureId=" << item.textureId();
+            appendField("textureId", item.textureId());
+
         switch (item.type())
         {
         case ItemType::Food:
+            appendInt("healAmount", static_cast<const FoodItem &>(item).healAmount());
+            break;
         case ItemType::Potion:
-            if (oss.tellp() > 0) oss << ",";
-            oss << "healAmount=" << static_cast<const FoodItem &>(item).healAmount();
+            appendInt("healAmount", static_cast<const PotionItem &>(item).healAmount());
             break;
         case ItemType::SpRecovery:
-            if (oss.tellp() > 0) oss << ",";
-            oss << "spAmount=" << static_cast<const SpItem &>(item).spAmount();
+            appendInt("spAmount", static_cast<const SpItem &>(item).spAmount());
             break;
         case ItemType::Equipment:
         {
             const auto &eq = static_cast<const EquipmentItem &>(item);
-            if (oss.tellp() > 0) oss << ",";
-            oss << "strengthBonus=" << eq.strengthBonus()
-                << ",magicBonus=" << eq.magicBonus()
-                << ",speedBonus=" << eq.speedBonus()
-                << ",slot=" << static_cast<int>(eq.slot());
+            appendInt("strengthBonus", eq.strengthBonus());
+            appendInt("magicBonus", eq.magicBonus());
+            appendInt("speedBonus", eq.speedBonus());
+            appendInt("slot", static_cast<int>(eq.slot()));
             break;
         }
         case ItemType::Persona:
-            if (oss.tellp() > 0) oss << ",";
-            oss << "personaId=" << static_cast<const PersonaItem &>(item).personaId();
+            appendField("personaId", static_cast<const PersonaItem &>(item).personaId());
             break;
         }
         return oss.str();
@@ -57,17 +69,7 @@ namespace
                                          int value, const char *typeStr, const char *extraData)
     {
         std::string extra = extraData ? extraData : "";
-        auto getInt = [&extra](const std::string &key) -> int
-        {
-            size_t pos = extra.find(key + "=");
-            if (pos == std::string::npos)
-                return 0;
-            pos += key.length() + 1;
-            size_t end = extra.find(",", pos);
-            std::string val = extra.substr(pos, end - pos);
-            return std::stoi(val);
-        };
-        auto getStr = [&extra](const std::string &key) -> std::string
+        auto getString = [&extra](const std::string &key) -> std::string
         {
             size_t pos = extra.find(key + "=");
             if (pos == std::string::npos)
@@ -76,29 +78,32 @@ namespace
             size_t end = extra.find(",", pos);
             return extra.substr(pos, end - pos);
         };
-
+        auto getInt = [&getString](const std::string &key) -> int
+        {
+            std::string val = getString(key);
+            if (val.empty())
+                return 0;
+            return std::stoi(val);
+        };
         std::string id = itemId ? itemId : "";
         std::string n = name ? name : "";
         std::string desc = description ? description : "";
-        std::string tex = getStr("textureId");
+        std::string textureId = getString("textureId");
 
         if (std::string(typeStr) == "Food")
-            return std::make_unique<FoodItem>(id, n, desc, value, getInt("healAmount"), tex);
+            return std::make_unique<FoodItem>(id, n, desc, value, getInt("healAmount"), textureId);
         if (std::string(typeStr) == "Potion")
-            return std::make_unique<PotionItem>(id, n, desc, value, getInt("healAmount"), tex);
+            return std::make_unique<PotionItem>(id, n, desc, value, getInt("healAmount"), textureId);
         if (std::string(typeStr) == "SP")
-            return std::make_unique<SpItem>(id, n, desc, value, getInt("spAmount"), tex);
+            return std::make_unique<SpItem>(id, n, desc, value, getInt("spAmount"), textureId);
         if (std::string(typeStr) == "Equipment")
             return std::make_unique<EquipmentItem>(id, n, desc, value,
                                                    getInt("strengthBonus"), getInt("magicBonus"),
                                                    getInt("speedBonus"),
                                                    static_cast<EquipmentSlot>(getInt("slot")),
-                                                   tex);
+                                                   textureId);
         if (std::string(typeStr) == "Persona")
-        {
-            std::string pid = getStr("personaId");
-            return std::make_unique<PersonaItem>(id, n, desc, value, pid, tex);
-        }
+            return std::make_unique<PersonaItem>(id, n, desc, value, getString("personaId"), textureId);
         return nullptr;
     }
 
@@ -163,7 +168,8 @@ namespace
     }
 } // namespace
 
-bool SaveRepository::saveCharacter_(int slotId, const Character &character)
+bool SaveRepository::saveCharacter_(int slotId, const Character &character,
+                                   float posX, float posY, bool isNight)
 {
     sqlite3 *db = DatabaseManager::instance().database();
     if (!db)
@@ -173,7 +179,7 @@ bool SaveRepository::saveCharacter_(int slotId, const Character &character)
         REPLACE INTO character (slot_id, name, level, hp, max_hp, sp, max_sp, exp, exp_to_next, gold,
                                 eq_str, eq_mag, eq_spd,
                                 pos_x, pos_y, is_night, current_persona_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )";
 
     sqlite3_stmt *stmt = nullptr;
@@ -193,23 +199,27 @@ bool SaveRepository::saveCharacter_(int slotId, const Character &character)
     sqlite3_bind_int(stmt, 11, character.equipmentStrengthBonus());
     sqlite3_bind_int(stmt, 12, character.equipmentMagicBonus());
     sqlite3_bind_int(stmt, 13, character.equipmentSpeedBonus());
+    sqlite3_bind_double(stmt, 14, static_cast<double>(posX));
+    sqlite3_bind_double(stmt, 15, static_cast<double>(posY));
+    sqlite3_bind_int(stmt, 16, isNight ? 1 : 0);
 
     std::string personaId = character.currentPersona() ? character.currentPersona()->id() : "";
-    sqlite3_bind_text(stmt, 14, personaId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 17, personaId.c_str(), -1, SQLITE_TRANSIENT);
 
     bool ok = sqlite3_step(stmt) == SQLITE_DONE;
     sqlite3_finalize(stmt);
     return ok;
 }
 
-bool SaveRepository::loadCharacter_(int slotId, Character &character)
+bool SaveRepository::loadCharacter_(int slotId, Character &character,
+                                   float &posX, float &posY, bool &isNight)
 {
     sqlite3 *db = DatabaseManager::instance().database();
     if (!db)
         return false;
 
     const char *sql = "SELECT name, level, hp, max_hp, sp, max_sp, exp, exp_to_next, gold, "
-                      "eq_str, eq_mag, eq_spd, current_persona_id "
+                      "eq_str, eq_mag, eq_spd, pos_x, pos_y, is_night, current_persona_id "
                       "FROM character WHERE slot_id = ?";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -232,9 +242,10 @@ bool SaveRepository::loadCharacter_(int slotId, Character &character)
         int eqStr = sqlite3_column_int(stmt, 9);
         int eqMag = sqlite3_column_int(stmt, 10);
         int eqSpd = sqlite3_column_int(stmt, 11);
-        const char *personaIdText = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 12));
+        posX = static_cast<float>(sqlite3_column_double(stmt, 12));
+        posY = static_cast<float>(sqlite3_column_double(stmt, 13));
+        isNight = sqlite3_column_int(stmt, 14) != 0;
 
-        // Reconstruct the character with base vitals, then restore all fields.
         character = Character(name, maxHp, maxSp);
         character.setLevel(level);
         character.setHp(hp);
@@ -243,9 +254,6 @@ bool SaveRepository::loadCharacter_(int slotId, Character &character)
         character.setExpToNextLevel(expToNext);
         character.setGold(gold);
         character.setEquipmentBonuses(eqStr, eqMag, eqSpd);
-        // current_persona_id is resolved by the caller (GameManager::loadFromSlot)
-        // via findPersona(); store nothing here beyond what Character exposes.
-        (void)personaIdText;
         ok = true;
     }
 
@@ -339,6 +347,80 @@ bool SaveRepository::loadInventory_(int slotId, Inventory &inventory)
     return true;
 }
 
+bool SaveRepository::saveEquippedGear_(int slotId, const std::vector<std::shared_ptr<EquipmentItem>> &equippedGear)
+{
+    sqlite3 *db = DatabaseManager::instance().database();
+    if (!db)
+        return false;
+
+    sqlite3_stmt *delStmt = nullptr;
+    if (sqlite3_prepare_v2(db, "DELETE FROM equipped_gear WHERE slot_id = ?", -1, &delStmt, nullptr) != SQLITE_OK)
+        return false;
+    sqlite3_bind_int(delStmt, 1, slotId);
+    sqlite3_step(delStmt);
+    sqlite3_finalize(delStmt);
+
+    const char *sql = R"(
+        INSERT INTO equipped_gear (slot_id, gear_slot, item_id, item_type, name, description, value, extra_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    )";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    for (const auto &item : equippedGear)
+    {
+        if (!item)
+            continue;
+        sqlite3_reset(stmt);
+        sqlite3_bind_int(stmt, 1, slotId);
+        sqlite3_bind_int(stmt, 2, static_cast<int>(item->slot()));
+        sqlite3_bind_text(stmt, 3, item->id().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, item->typeString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 5, item->name().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 6, item->description().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 7, item->value());
+        std::string extra = extraDataFromItem(*item);
+        sqlite3_bind_text(stmt, 8, extra.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt);
+    }
+
+    sqlite3_finalize(stmt);
+    return true;
+}
+
+bool SaveRepository::loadEquippedGear_(int slotId, std::vector<std::unique_ptr<Item>> &equippedGear)
+{
+    sqlite3 *db = DatabaseManager::instance().database();
+    if (!db)
+        return false;
+
+    equippedGear.clear();
+    const char *sql = "SELECT item_id, item_type, name, description, value, extra_data "
+                      "FROM equipped_gear WHERE slot_id = ? ORDER BY gear_slot";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_int(stmt, 1, slotId);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        auto item = itemFromRecord(
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0)),
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)),
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)),
+            sqlite3_column_int(stmt, 4),
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1)),
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5)));
+        if (item)
+            equippedGear.push_back(std::move(item));
+    }
+
+    sqlite3_finalize(stmt);
+    return true;
+}
+
 bool SaveRepository::savePersonas_(int slotId, const std::vector<std::shared_ptr<Persona>> &personas)
 {
     sqlite3 *db = DatabaseManager::instance().database();
@@ -353,8 +435,9 @@ bool SaveRepository::savePersonas_(int slotId, const std::vector<std::shared_ptr
     sqlite3_finalize(delStmt);
 
     const char *sql = R"(
-        INSERT INTO persona (slot_id, id, name, arcana, level, strength, magic, speed, affinities, skills, owner)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO persona (slot_id, id, name, arcana, level, strength, magic, speed,
+                             affinities, skills, owner, persona_exp, persona_exp_to_next)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )";
 
     sqlite3_stmt *stmt = nullptr;
@@ -379,6 +462,8 @@ bool SaveRepository::savePersonas_(int slotId, const std::vector<std::shared_ptr
         std::string skills = skillsToString(*p);
         sqlite3_bind_text(stmt, 10, skills.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 11, "player", -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 12, p->exp());
+        sqlite3_bind_int(stmt, 13, p->expToNextLevel());
         sqlite3_step(stmt);
     }
 
@@ -394,7 +479,8 @@ bool SaveRepository::loadPersonas_(int slotId, std::vector<std::shared_ptr<Perso
         return false;
 
     personas.clear();
-    const char *sql = "SELECT id, name, arcana, level, strength, magic, speed, affinities, skills "
+    const char *sql = "SELECT id, name, arcana, level, strength, magic, speed, affinities, skills, "
+                      "persona_exp, persona_exp_to_next "
                       "FROM persona WHERE slot_id = ? AND owner = 'player'";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -413,12 +499,12 @@ bool SaveRepository::loadPersonas_(int slotId, std::vector<std::shared_ptr<Perso
         int sp = sqlite3_column_int(stmt, 6);
 
         auto p = std::make_shared<Persona>(id, name, arcana, level, st, ma, sp);
-        const char *affs = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 9));
+        const char *affs = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 7));
         if (affs)
             applyAffinitiesFromString(*p, affs);
-        // Skills are persisted as a comma-separated id list; reconstructing Skill
-        // objects requires a shared skill registry (not yet available). The id list
-        // is stored so future skill restoration can be added without a schema change.
+        // Restore persona exp progress toward next level.
+        p->setExp(sqlite3_column_int(stmt, 9));
+        p->setExpToNextLevel(sqlite3_column_int(stmt, 10));
         personas.push_back(p);
     }
 
@@ -625,9 +711,62 @@ bool SaveRepository::deleteMeta_(int slotId)
     return true;
 }
 
+bool SaveRepository::saveDay_(int slotId, int day, bool onSecondMap)
+{
+    sqlite3 *db = DatabaseManager::instance().database();
+    if (!db)
+        return false;
+
+    if (day < 1)
+        day = 1;
+
+    const char *sql = "REPLACE INTO game_state (slot_id, day, on_second_map) VALUES (?, ?, ?)";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_int(stmt, 1, slotId);
+    sqlite3_bind_int(stmt, 2, day);
+    sqlite3_bind_int(stmt, 3, onSecondMap ? 1 : 0);
+
+    bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+bool SaveRepository::loadDay_(int slotId, int &day, bool &onSecondMap)
+{
+    sqlite3 *db = DatabaseManager::instance().database();
+    if (!db)
+        return false;
+
+    const char *sql = "SELECT day, on_second_map FROM game_state WHERE slot_id = ?";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_int(stmt, 1, slotId);
+
+    bool ok = false;
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        day = sqlite3_column_int(stmt, 0);
+        if (day < 1)
+            day = 1;
+        onSecondMap = sqlite3_column_int(stmt, 1) != 0;
+        ok = true;
+    }
+
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
 bool SaveRepository::saveAll(int slotId, const Character &character, const Inventory &inventory,
                              const std::vector<std::shared_ptr<Persona>> &personas,
-                             const SocialLinkManager &socialLinks, const QuestManager &quests)
+                             const SocialLinkManager &socialLinks, const QuestManager &quests,
+                             int day, float posX, float posY,
+                             bool isNight, bool onSecondMap,
+                             const std::vector<std::shared_ptr<EquipmentItem>> &equippedGear)
 {
     if (!DatabaseManager::instance().isOpen())
         return false;
@@ -636,15 +775,15 @@ bool SaveRepository::saveAll(int slotId, const Character &character, const Inven
     if (!db)
         return false;
 
-    // Wrap the whole slot write in a transaction so a partial failure leaves
-    // the previous slot state intact.
     sqlite3_exec(db, "BEGIN", nullptr, nullptr, nullptr);
 
-    bool ok = saveCharacter_(slotId, character) &&
+    bool ok = saveCharacter_(slotId, character, posX, posY, isNight) &&
               saveInventory_(slotId, inventory) &&
+              saveEquippedGear_(slotId, equippedGear) &&
               savePersonas_(slotId, personas) &&
               saveSocialLinks_(slotId, socialLinks) &&
               saveQuests_(slotId, quests) &&
+              saveDay_(slotId, day, onSecondMap) &&
               saveMeta_(slotId, character);
 
     if (ok)
@@ -656,7 +795,10 @@ bool SaveRepository::saveAll(int slotId, const Character &character, const Inven
 
 bool SaveRepository::loadAll(int slotId, Character &character, Inventory &inventory,
                              std::vector<std::shared_ptr<Persona>> &personas,
-                             SocialLinkManager &socialLinks, QuestManager &quests)
+                             SocialLinkManager &socialLinks, QuestManager &quests,
+                             int *day, float *posX, float *posY,
+                             bool *isNight, bool *onSecondMap,
+                             std::vector<std::unique_ptr<Item>> *equippedGear)
 {
     if (!DatabaseManager::instance().isOpen())
         return false;
@@ -664,10 +806,36 @@ bool SaveRepository::loadAll(int slotId, Character &character, Inventory &invent
     if (!slotExists(slotId))
         return false;
 
+    float loadedPosX = 0.0f;
+    float loadedPosY = 0.0f;
+    bool loadedIsNight = false;
+    bool loadedOnSecondMap = false;
+
     std::string currentPersonaId;
-    return loadCharacter_(slotId, character) && loadInventory_(slotId, inventory) &&
-           loadPersonas_(slotId, personas, currentPersonaId) && loadSocialLinks_(slotId, socialLinks) &&
-           loadQuests_(slotId, quests);
+    bool ok = loadCharacter_(slotId, character, loadedPosX, loadedPosY, loadedIsNight) &&
+              loadInventory_(slotId, inventory) &&
+              loadPersonas_(slotId, personas, currentPersonaId) &&
+              loadSocialLinks_(slotId, socialLinks) &&
+              loadQuests_(slotId, quests);
+
+    if (ok)
+    {
+        int loadedDay = 1;
+        loadDay_(slotId, loadedDay, loadedOnSecondMap);
+        if (day)
+            *day = loadedDay;
+        if (posX)
+            *posX = loadedPosX;
+        if (posY)
+            *posY = loadedPosY;
+        if (isNight)
+            *isNight = loadedIsNight;
+        if (onSecondMap)
+            *onSecondMap = loadedOnSecondMap;
+        if (equippedGear)
+            loadEquippedGear_(slotId, *equippedGear);
+    }
+    return ok;
 }
 
 bool SaveRepository::deleteSlot(int slotId)
@@ -681,7 +849,7 @@ bool SaveRepository::deleteSlot(int slotId)
 
     sqlite3_exec(db, "BEGIN", nullptr, nullptr, nullptr);
 
-    const char *tables[] = {"character", "persona", "inventory", "social_link", "quest_progress", "save_meta"};
+    const char *tables[] = {"character", "persona", "inventory", "equipped_gear", "social_link", "quest_progress", "game_state", "save_meta"};
     bool ok = true;
     for (const char *t : tables)
     {
@@ -836,12 +1004,13 @@ bool SaveRepository::saveAll(const Character &character, const Inventory &invent
                              const std::vector<std::shared_ptr<Persona>> &personas,
                              const SocialLinkManager &socialLinks, const QuestManager &quests)
 {
-    return saveAll(1, character, inventory, personas, socialLinks, quests);
+    return saveAll(1, character, inventory, personas, socialLinks, quests, 1, 0, 0, false, false, {});
 }
 
 bool SaveRepository::loadAll(Character &character, Inventory &inventory,
                              std::vector<std::shared_ptr<Persona>> &personas,
                              SocialLinkManager &socialLinks, QuestManager &quests)
 {
-    return loadAll(1, character, inventory, personas, socialLinks, quests);
+    return loadAll(1, character, inventory, personas, socialLinks, quests,
+                   nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
 }

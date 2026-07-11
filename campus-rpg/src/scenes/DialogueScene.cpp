@@ -69,7 +69,7 @@ void DialogueScene::handleInput(engine::IInput &input)
     if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E) ||
         input.wasKeyJustPressed(engine::Key::Escape))
     {
-        GameManager::instance().enterScene(SceneType::Town);
+        GameManager::instance().enterScene(GameManager::instance().isNight() ? SceneType::Night : SceneType::Town);
     }
 }
 
@@ -152,8 +152,8 @@ void DialogueScene::render(engine::IRenderer &renderer)
     std::string npcName = link ? link->name() : "???";
     int rank = link ? link->rank() : 0;
 
-    // ---- Background: town_bg scaled to fill ----
-    renderer.drawTexture("town_bg", {0, 0, 800, 600});
+    // ---- Background: keep the active map backdrop while talking ----
+    renderer.drawTexture(GameManager::instance().onSecondMap() ? "town_bg2" : "town_bg", {0, 0, 800, 600});
 
     // Subtle dark overlay so UI panels pop
     renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 0, 50));

@@ -7,6 +7,8 @@
 #include "Persona.h"
 #include "Element.h"
 #include "Affinity.h"
+#include "TileMap.h"
+#include "Entity.h"
 
 #include <algorithm>
 #include <string>
@@ -103,6 +105,9 @@ namespace
 
 void BattleScene::handleInput(engine::IInput &input)
 {
+    if (sleepTransition_)
+        return;
+
     auto &battle = GameManager::instance().battleSystem();
 
     if (battle.isOver())
@@ -304,16 +309,37 @@ void BattleScene::handlePersonaMenu(engine::IInput &input)
     }
 }
 
-void BattleScene::update(float /*deltaTime*/)
+void BattleScene::update(float deltaTime)
 {
+    if (!sleepTransition_)
+        return;
+
+    sleepTimer_ += deltaTime;
+    if (sleepTimer_ >= 2.2f)
+        finishSleepTransition();
 }
 
 void BattleScene::render(engine::IRenderer &renderer)
 {
     renderer.clear();
 
-    renderer.drawTexture("town_bg", {0, 0, 800, 600});
+    bool backgroundSecondMap = sleepTransition_ ? sleepStartedOnSecondMap_ : GameManager::instance().onSecondMap();
+    renderer.drawTexture(backgroundSecondMap ? "town_bg2" : "town_bg", {0, 0, 800, 600});
     renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 20, 200));
+
+    if (sleepTransition_)
+    {
+        float alpha = 255.0f;
+        if (sleepTimer_ < 0.45f)
+            alpha = sleepTimer_ / 0.45f * 255.0f;
+        else if (sleepTimer_ > 1.35f)
+            alpha = std::max(0.0f, (2.2f - sleepTimer_) / 0.85f * 255.0f);
+
+        renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 0, static_cast<unsigned char>(alpha)));
+        if (sleepTimer_ >= 0.45f && sleepTimer_ <= 1.55f)
+            renderer.drawText("Returning home... Resting until morning...", {210, 285}, 20, engine::Color::white());
+        return;
+    }
 
     auto &battle = GameManager::instance().battleSystem();
     auto &character = GameManager::instance().character();
@@ -423,8 +449,12 @@ void BattleScene::render(engine::IRenderer &renderer)
         }
         else
         {
-            for (size_t i = 0; i < owned.size() && i < 5; ++i)
+            int start = std::max(0, selectedPersona_ - 2);
+            if (start + 5 > static_cast<int>(owned.size()))
+                start = std::max(0, static_cast<int>(owned.size()) - 5);
+            for (int row = 0; row < 5 && start + row < static_cast<int>(owned.size()); ++row)
             {
+                size_t i = static_cast<size_t>(start + row);
                 if (!owned[i])
                     continue;
                 bool selected = static_cast<int>(i) == selectedPersona_;
@@ -433,9 +463,9 @@ void BattleScene::render(engine::IRenderer &renderer)
                 std::string line = std::string(selected ? "> " : "  ") + owned[i]->name() + " Lv" + std::to_string(owned[i]->level());
                 if (current)
                     line += " *";
-                renderer.drawText(line, {35.0f, 458.0f + static_cast<float>(i) * 22.0f}, 15, color);
+                renderer.drawText(line, {35.0f, 458.0f + static_cast<float>(row) * 22.0f}, 15, color);
                 renderer.drawText(std::to_string(owned[i]->strength()) + "/" + std::to_string(owned[i]->magic()) + "/" + std::to_string(owned[i]->speed()),
-                                  {185.0f, 458.0f + static_cast<float>(i) * 22.0f}, 13, engine::Color::gray());
+                                  {185.0f, 458.0f + static_cast<float>(row) * 22.0f}, 13, engine::Color::gray());
             }
         }
     }
@@ -454,15 +484,9 @@ void BattleScene::render(engine::IRenderer &renderer)
 
     if (battle.isOver())
     {
-        std::string msg;
-        if (battle.playerWon())
-            msg = "Victory! Press Enter.";
-        else if (battle.playerFled())
-            msg = "Escaped! Press Enter.";
-        else
-            msg = "Defeat... Press Enter.";
-        renderer.drawRect({200, 260, 400, 60}, engine::Color(0, 0, 0, 220));
-        renderer.drawText(msg, {230, 280}, 24, engine::Color::yellow());
+        if (!postBattleHandled_)
+            returnAfterBattle();
+        return;
     }
 }
 
@@ -484,8 +508,8 @@ bool BattleScene::processVictory()
             auto dropped = GameManager::instance().findPersona(pid);
             if (dropped)
             {
-                GameManager::instance().addPersonaToPlayer(dropped);
-                battle.appendLog("Obtained Persona: " + dropped->name());
+                if (GameManager::instance().addPersonaToPlayer(dropped))
+                    battle.appendLog("Obtained Persona: " + dropped->name());
             }
         }
     }
@@ -507,31 +531,53 @@ void BattleScene::returnAfterBattle()
     auto &gm = GameManager::instance();
     auto &battle = gm.battleSystem();
 
-    if (battle.playerFled())
-    {
-        battle.recoverPlayerSp();
-        gm.enterScene(SceneType::Night);
-        return;
-    }
-
+    sleepLeveledUp_ = false;
     if (battle.playerWon())
-    {
-        bool leveledUp = processVictory();
-        battle.recoverPlayerSp();
-        if (leveledUp)
-        {
-            gm.setNight(false);
-            gm.advanceDay();
-            gm.enterScene(SceneType::LevelUp);
-            return;
-        }
-    }
-    else
-    {
-        processDefeat();
-    }
+        sleepLeveledUp_ = processVictory();
+
+    postBattleHandled_ = true;
+    beginSleepTransition();
+}
+
+void BattleScene::beginSleepTransition()
+{
+    auto &gm = GameManager::instance();
+    auto &character = gm.character();
+
+    sleepStartedOnSecondMap_ = gm.onSecondMap();
+
+    character.heal(character.maxHp());
+    character.recoverSp(character.maxSp());
 
     gm.setNight(false);
+    gm.setOnSecondMap(false);
     gm.advanceDay();
-    gm.enterScene(SceneType::Town);
+
+    TileMap &town = gm.townMap();
+    const engine::Vec2 homePos{610.0f, 105.0f};
+    bool movedPlayer = false;
+    for (const auto &e : town.entities())
+    {
+        if (e && e->type() == "player")
+        {
+            static_cast<PlayerEntity *>(e.get())->setPosition(homePos);
+            movedPlayer = true;
+            break;
+        }
+    }
+    if (!movedPlayer)
+        town.addEntity(std::make_unique<PlayerEntity>(homePos));
+
+    sleepTransition_ = true;
+    sleepTimer_ = 0.0f;
+}
+
+void BattleScene::finishSleepTransition()
+{
+    sleepTransition_ = false;
+    auto &gm = GameManager::instance();
+    if (sleepLeveledUp_)
+        gm.enterScene(SceneType::LevelUp);
+    else
+        gm.enterScene(SceneType::Town);
 }

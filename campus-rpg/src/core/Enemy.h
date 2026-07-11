@@ -79,7 +79,7 @@ class Slime : public Enemy
 public:
     Slime();
     std::string battleCry() const override { return "Bloop bloop!"; }
-    std::unique_ptr<Enemy> clone() const override { return std::make_unique<Slime>(); }
+    std::unique_ptr<Enemy> clone() const override { return std::make_unique<Slime>(*this); }
 };
 
 class Goblin : public Enemy
@@ -87,7 +87,7 @@ class Goblin : public Enemy
 public:
     Goblin();
     std::string battleCry() const override { return "Grrr, shiny things!"; }
-    std::unique_ptr<Enemy> clone() const override { return std::make_unique<Goblin>(); }
+    std::unique_ptr<Enemy> clone() const override { return std::make_unique<Goblin>(*this); }
 };
 
 class Boss : public Enemy
@@ -95,5 +95,5 @@ class Boss : public Enemy
 public:
     Boss();
     std::string battleCry() const override { return "You dare challenge me?"; }
-    std::unique_ptr<Enemy> clone() const override { return std::make_unique<Boss>(); }
+    std::unique_ptr<Enemy> clone() const override { return std::make_unique<Boss>(*this); }
 };

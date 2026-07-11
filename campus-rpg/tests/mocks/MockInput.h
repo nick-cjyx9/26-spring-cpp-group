@@ -55,6 +55,8 @@ public:
         previousStates_ = currentStates_;
     }
 
+    engine::Vec2 mousePosition() const override { return {0.0f, 0.0f}; }
+
 private:
     std::array<bool, static_cast<size_t>(engine::Key::Count)> currentStates_;
     std::array<bool, static_cast<size_t>(engine::Key::Count)> previousStates_;

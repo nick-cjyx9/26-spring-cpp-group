@@ -70,6 +70,8 @@ public:
     void gainExp(int amount);
     int exp() const { return exp_; }
     int expToNextLevel() const { return expToNextLevel_; }
+    void setExp(int v) { exp_ = v; }
+    void setExpToNextLevel(int v) { expToNextLevel_ = v; }
 
     // Apply a fixed-ratio growth to all stats. Called on level up.
     void growBaseStats(double multiplier = 1.05);

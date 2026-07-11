@@ -130,11 +130,29 @@ void Character::setPersona(std::shared_ptr<Persona> persona)
     persona_ = std::move(persona);
 }
 
-void Character::addPersona(std::shared_ptr<Persona> persona)
+bool Character::addPersona(std::shared_ptr<Persona> persona)
 {
     if (!persona || ownsPersona(persona->id()))
-        return;
+        return false;
+    if (ownedPersonas_.size() >= kMaxOwnedPersonas)
+        return false;
     ownedPersonas_.push_back(std::move(persona));
+    return true;
+}
+
+bool Character::removePersona(const std::string &id)
+{
+    for (auto it = ownedPersonas_.begin(); it != ownedPersonas_.end(); ++it)
+    {
+        if (*it && (*it)->id() == id)
+        {
+            ownedPersonas_.erase(it);
+            if (persona_ && persona_->id() == id)
+                persona_ = ownedPersonas_.empty() ? nullptr : ownedPersonas_.front();
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Character::ownsPersona(const std::string &id) const
