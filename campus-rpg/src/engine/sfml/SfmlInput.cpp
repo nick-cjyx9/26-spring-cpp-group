@@ -35,6 +35,12 @@ std::string SfmlInput::consumeTypedText()
     return text;
 }
 
+engine::Vec2 SfmlInput::mousePosition() const
+{
+    sf::Vector2i pos = sf::Mouse::getPosition();
+    return {static_cast<float>(pos.x), static_cast<float>(pos.y)};
+}
+
 void SfmlInput::onSfmlKeyPressed(sf::Keyboard::Key key)
 {
     for (size_t i = 1; i < static_cast<size_t>(Key::Count); ++i)

@@ -170,7 +170,8 @@ public:
     // Today's talk count for a given NPC id (capped at kMaxTalksPerNpc).
     int talkCountToday(const std::string &npcId) const;
     static constexpr int kNpcPoolSize = 10;
-    static constexpr int kNpcsPerDay = 2;
+    static constexpr int kTownNpcsPerDay = 2;
+    static constexpr int kSchoolNpcsPerDay = 1;
     static constexpr int kMaxTalksPerNpc = 2;
 
     // ---- Equipment system ----

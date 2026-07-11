@@ -3,6 +3,7 @@
 #include "IInput.h"
 
 #include <SFML/Window/Keyboard.hpp>
+#include <SFML/Window/Mouse.hpp>
 
 #include <array>
 #include <cstdint>
@@ -19,6 +20,7 @@ public:
     bool isKeyPressed(Key key) const override;
     bool wasKeyJustPressed(Key key) override;
     std::string consumeTypedText() override;
+    engine::Vec2 mousePosition() const override;
 
     // Called by SfmlWindow on each SFML event.
     void onSfmlKeyPressed(sf::Keyboard::Key key);

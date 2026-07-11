@@ -4,6 +4,7 @@
 #include "Persona.h"
 #include "SaveRepository.h"
 #include "DatabaseManager.h"
+#include "TownMapData.h"
 
 #include "TitleScene.h"
 #include "TownScene.h"
@@ -24,6 +25,20 @@
 #include <algorithm>
 #include <map>
 #include <random>
+
+namespace
+{
+    engine::Vec2 randomSpawnInZones(const std::vector<engine::Rect> &zones, std::mt19937 &rng)
+    {
+        if (zones.empty())
+            return {400.0f, 300.0f};
+        std::uniform_int_distribution<size_t> zoneDist(0, zones.size() - 1);
+        const auto &z = zones[zoneDist(rng)];
+        std::uniform_real_distribution<float> xDist(z.x + 16.0f, z.x + z.width - 16.0f);
+        std::uniform_real_distribution<float> yDist(z.y + 16.0f, z.y + z.height - 16.0f);
+        return {xDist(rng), yDist(rng)};
+    }
+} // namespace
 
 GameManager &GameManager::instance()
 {
@@ -88,9 +103,24 @@ void GameManager::newGame(const std::string &playerName)
 
 bool GameManager::saveToSlot(int slotId)
 {
+    // Find player position from the current map.
+    float posX = 0.0f;
+    float posY = 0.0f;
+    TileMap &map = currentMap();
+    for (const auto &e : map.entities())
+    {
+        if (e && e->type() == "player")
+        {
+            posX = e->position().x;
+            posY = e->position().y;
+            break;
+        }
+    }
+
     SaveRepository repo;
     bool ok = repo.saveAll(slotId, character_, inventory_, personas_,
-                           socialLinkManager_, questManager_, day_);
+                           socialLinkManager_, questManager_, day_,
+                           posX, posY, isNight_, onSecondMap_);
     if (ok)
         currentSlotId_ = slotId;
     return ok;
@@ -126,8 +156,13 @@ bool GameManager::loadFromSlot(int slotId)
     }
 
     int loadedDay = 1;
+    float loadedPosX = 0.0f;
+    float loadedPosY = 0.0f;
+    bool loadedIsNight = false;
+    bool loadedOnSecondMap = false;
     if (!repo.loadAll(slotId, character_, inventory_, personas_,
-                      socialLinkManager_, questManager_, &loadedDay))
+                      socialLinkManager_, questManager_, &loadedDay,
+                      &loadedPosX, &loadedPosY, &loadedIsNight, &loadedOnSecondMap))
     {
         // Load failed: leave the seeded default state intact so the game is
         // still in a runnable state.
@@ -149,6 +184,19 @@ bool GameManager::loadFromSlot(int slotId)
 
     currentSlotId_ = slotId;
     day_ = loadedDay;
+    isNight_ = loadedIsNight;
+    onSecondMap_ = loadedOnSecondMap;
+
+    // Restore player position on the current map.
+    TileMap &map = currentMap();
+    for (const auto &e : map.entities())
+    {
+        if (e && e->type() == "player")
+        {
+            static_cast<PlayerEntity *>(e.get())->setPosition({loadedPosX, loadedPosY});
+            break;
+        }
+    }
 
     // Restore the currently-equipped persona from the save.
     std::string currentId = repo.currentPersonaId(slotId);
@@ -521,12 +569,11 @@ void GameManager::refreshDailyNpcs()
 
     std::mt19937 rng(std::random_device{}());
     std::shuffle(ids.begin(), ids.end(), rng);
-    // Pick kNpcsPerDay for town and kNpcsPerDay different ones for school,
-    // so within a day both maps show distinct NPCs.
-    int totalNeeded = kNpcsPerDay * 2;
+
+    int totalNeeded = kTownNpcsPerDay + kSchoolNpcsPerDay;
     for (int i = 0; i < totalNeeded && i < static_cast<int>(ids.size()); ++i)
     {
-        if (i < kNpcsPerDay)
+        if (i < kTownNpcsPerDay)
             todayNpcIds_.push_back(ids[i]);
         else
             todaySchoolNpcIds_.push_back(ids[i]);
@@ -535,11 +582,13 @@ void GameManager::refreshDailyNpcs()
 
 void GameManager::rebuildMapNpcs()
 {
+    std::mt19937 rng(std::random_device{}());
+
     // Town map
     if (currentMap_)
     {
         TileMap &map = *currentMap_;
-        engine::Vec2 playerPos{100.0f, 100.0f};
+        engine::Vec2 playerPos = townDefaultSpawn();
         for (const auto &e : map.entities())
         {
             if (e && e->type() == "player")
@@ -548,17 +597,18 @@ void GameManager::rebuildMapNpcs()
         map.clearEntities();
         map.addEntity(std::make_unique<PlayerEntity>(playerPos));
 
-        static const engine::Vec2 kSpots[kNpcsPerDay] = {
-            engine::Vec2{200.0f, 150.0f}, engine::Vec2{300.0f, 200.0f}};
-        for (size_t i = 0; i < todayNpcIds_.size() && i < kNpcsPerDay; ++i)
-            map.addEntity(std::make_unique<NpcEntity>(kSpots[i], todayNpcIds_[i]));
+        for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
+        {
+            engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
+            map.addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i]));
+        }
     }
 
     // School map (second map)
     if (secondMap_)
     {
         TileMap &map = *secondMap_;
-        engine::Vec2 playerPos{100.0f, 100.0f};
+        engine::Vec2 playerPos = schoolDefaultSpawn();
         for (const auto &e : map.entities())
         {
             if (e && e->type() == "player")
@@ -567,10 +617,11 @@ void GameManager::rebuildMapNpcs()
         map.clearEntities();
         map.addEntity(std::make_unique<PlayerEntity>(playerPos));
 
-        static const engine::Vec2 kSpots[kNpcsPerDay] = {
-            engine::Vec2{250.0f, 180.0f}, engine::Vec2{400.0f, 230.0f}};
-        for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kNpcsPerDay; ++i)
-            map.addEntity(std::make_unique<NpcEntity>(kSpots[i], todaySchoolNpcIds_[i]));
+        for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
+        {
+            engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
+            map.addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i]));
+        }
     }
 }
 
@@ -654,33 +705,30 @@ void GameManager::recomputeSocialLinkBonuses()
 
 void GameManager::initDefaultMap()
 {
-    // 25x19 tiles * 32px = 800x600, matching the full window. No walls: the
-    // player can walk anywhere on the background image.
     currentMap_ = std::make_unique<TileMap>(25, 19);
 
-    // Player start.
-    currentMap_->addEntity(std::make_unique<PlayerEntity>(engine::Vec2{100.0f, 100.0f}));
+    currentMap_->addEntity(std::make_unique<PlayerEntity>(townDefaultSpawn()));
 
-    // Today's NPCs (kNpcsPerDay of them, picked by refreshDailyNpcs()).
-    static const engine::Vec2 kNpcSpots[kNpcsPerDay] = {
-        engine::Vec2{200.0f, 150.0f}, engine::Vec2{300.0f, 200.0f}};
-    for (size_t i = 0; i < todayNpcIds_.size() && i < kNpcsPerDay; ++i)
-        currentMap_->addEntity(std::make_unique<NpcEntity>(kNpcSpots[i], todayNpcIds_[i]));
+    std::mt19937 rng(std::random_device{}());
+    for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
+    {
+        engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
+        currentMap_->addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i]));
+    }
 }
 
 void GameManager::initSecondMap()
 {
-    // Full 800x600 walkable area, no walls.
     secondMap_ = std::make_unique<TileMap>(25, 19);
 
-    // Player start.
-    secondMap_->addEntity(std::make_unique<PlayerEntity>(engine::Vec2{100.0f, 100.0f}));
+    secondMap_->addEntity(std::make_unique<PlayerEntity>(schoolDefaultSpawn()));
 
-    // Today's school NPCs.
-    static const engine::Vec2 kNpcSpots[kNpcsPerDay] = {
-        engine::Vec2{250.0f, 180.0f}, engine::Vec2{400.0f, 230.0f}};
-    for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kNpcsPerDay; ++i)
-        secondMap_->addEntity(std::make_unique<NpcEntity>(kNpcSpots[i], todaySchoolNpcIds_[i]));
+    std::mt19937 rng(std::random_device{}());
+    for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
+    {
+        engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
+        secondMap_->addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i]));
+    }
 }
 
 // ---- Equipment system ----

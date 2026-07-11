@@ -228,6 +228,11 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
     addColumnIfMissing("social_link", "name", "TEXT");
     addColumnIfMissing("social_link", "portrait", "TEXT");
 
+    // Schema v3: persona exp persistence and on_second_map game state.
+    addColumnIfMissing("persona", "persona_exp", "INTEGER DEFAULT 0");
+    addColumnIfMissing("persona", "persona_exp_to_next", "INTEGER DEFAULT 100");
+    addColumnIfMissing("game_state", "on_second_map", "INTEGER DEFAULT 0");
+
     sqlite3_exec(db_, "CREATE TABLE IF NOT EXISTS game_state (slot_id INTEGER PRIMARY KEY, day INTEGER DEFAULT 1);",
                  nullptr, nullptr, nullptr);
 

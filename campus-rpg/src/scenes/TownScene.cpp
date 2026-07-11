@@ -2,6 +2,7 @@
 #include "GameManager.h"
 #include "TileMap.h"
 #include "Entity.h"
+#include "TownMapData.h"
 
 #include <cmath>
 
@@ -10,13 +11,21 @@ namespace
     engine::Rect interactionArea(const Entity &player)
     {
         engine::Vec2 pos = player.position();
-        return {pos.x - 28.0f, pos.y - 28.0f, 56.0f, 56.0f};
+        return {pos.x - 5.0f, pos.y - 5.0f, 10.0f, 10.0f};
     }
 
     bool canMoveTo(engine::Vec2 pos, const TileMap & /*map*/)
     {
-        // No tile collision: allow movement anywhere within the 800x600 window.
-        return pos.x >= 0.0f && pos.x <= 800.0f && pos.y >= 0.0f && pos.y <= 600.0f;
+        if (pos.x < 0.0f || pos.y < 0.0f || pos.x > 800.0f || pos.y > 600.0f)
+            return false;
+        engine::Rect playerBox{pos.x, pos.y, 1.0f, 1.0f};
+        bool isSecond = GameManager::instance().onSecondMap();
+        for (const auto &wall : mapCollisionZones(isSecond))
+        {
+            if (playerBox.intersects(wall))
+                return false;
+        }
+        return true;
     }
 
     PlayerEntity *findPlayer(TileMap &map)
@@ -96,6 +105,11 @@ void TownScene::update(float deltaTime)
     if (!player)
         return;
 
+    // Auto-rescue: if player is stuck inside a collision zone, teleport to default spawn.
+    bool isSecond = GameManager::instance().onSecondMap();
+    if (isInCollisionZone(player->position(), isSecond))
+        player->setPosition(mapDefaultSpawn(isSecond));
+
     engine::Vec2 newPos = player->position();
     newPos.x += moveX_ * moveSpeed_ * deltaTime;
     if (canMoveTo(newPos, map))
@@ -158,11 +172,17 @@ void TownScene::render(engine::IRenderer &renderer)
 
     TileMap &map = GameManager::instance().currentMap();
 
+    // Debug: draw red rectangles around collision zones (both maps).
+    {
+        for (const auto &wall : mapCollisionZones(onSecond))
+            renderer.drawRect(wall, engine::Color(255, 0, 0, 100));
+    }
+
     if (!onSecond)
     {
-        // Shop & home: no overlay, just labels to hint location.
-        renderer.drawText("shop", {45, 55}, 20, engine::Color(255, 255, 255, 200));
-        renderer.drawText("home", {578, 35}, 18, engine::Color(255, 255, 255, 200));
+        // Labels at building centers.
+        renderer.drawText("home", {500, 20}, 18, engine::Color(255, 255, 255, 200));
+        renderer.drawText("shop", {500, 140}, 18, engine::Color(255, 255, 255, 200));
 
         // School arrow (right-pointing) at bottom-right crossroad.
         renderer.drawText(">", {740, 520}, 48, engine::Color(255, 255, 255, 230));
@@ -227,6 +247,16 @@ void TownScene::render(engine::IRenderer &renderer)
         renderer.drawRect({260, 510, 280, 36}, engine::Color(0, 0, 0, 200));
         renderer.drawText(saveMessage_, {280, 519}, 18, engine::Color::green());
     }
+
+    // Character coordinate debug.
+    PlayerEntity *debugPlayer = findPlayer(map);
+    if (debugPlayer)
+    {
+        engine::Vec2 pp = debugPlayer->position();
+        renderer.drawText("(" + std::to_string(static_cast<int>(pp.x)) +
+                              ", " + std::to_string(static_cast<int>(pp.y)) + ")",
+                          {10, 555}, 14, engine::Color(255, 255, 0, 180));
+    }
 }
 
 void TownScene::tryInteract()
@@ -245,19 +275,18 @@ void TownScene::tryInteract()
 
     if (!GameManager::instance().onSecondMap())
     {
-        // Home area: rest until night.
-        if (player->position().x > 550.0f && player->position().x < 650.0f &&
-            player->position().y <= 90.0f)
+        engine::Rect playerBox{player->position().x - 5.0f, player->position().y - 5.0f,
+                               10.0f, 10.0f};
+        for (const auto &zone : townInteractionZones())
         {
-            GameManager::instance().enterScene(SceneType::RestConfirm);
-            return;
-        }
-
-        // Shop area: enter shop (requires E/Enter, not auto).
-        if (player->position().x < 150.0f && player->position().y < 150.0f)
-        {
-            GameManager::instance().enterScene(SceneType::Shop);
-            return;
+            if (playerBox.intersects(zone.area))
+            {
+                if (zone.type == InteractionType::Home)
+                    GameManager::instance().enterScene(SceneType::RestConfirm);
+                else if (zone.type == InteractionType::Shop)
+                    GameManager::instance().enterScene(SceneType::Shop);
+                return;
+            }
         }
     }
 }

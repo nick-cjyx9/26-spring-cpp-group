@@ -153,7 +153,8 @@ namespace
     }
 } // namespace
 
-bool SaveRepository::saveCharacter_(int slotId, const Character &character)
+bool SaveRepository::saveCharacter_(int slotId, const Character &character,
+                                   float posX, float posY, bool isNight)
 {
     sqlite3 *db = DatabaseManager::instance().database();
     if (!db)
@@ -163,7 +164,7 @@ bool SaveRepository::saveCharacter_(int slotId, const Character &character)
         REPLACE INTO character (slot_id, name, level, hp, max_hp, sp, max_sp, exp, exp_to_next, gold,
                                 eq_str, eq_mag, eq_spd,
                                 pos_x, pos_y, is_night, current_persona_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )";
 
     sqlite3_stmt *stmt = nullptr;
@@ -183,23 +184,27 @@ bool SaveRepository::saveCharacter_(int slotId, const Character &character)
     sqlite3_bind_int(stmt, 11, character.equipmentStrengthBonus());
     sqlite3_bind_int(stmt, 12, character.equipmentMagicBonus());
     sqlite3_bind_int(stmt, 13, character.equipmentSpeedBonus());
+    sqlite3_bind_double(stmt, 14, static_cast<double>(posX));
+    sqlite3_bind_double(stmt, 15, static_cast<double>(posY));
+    sqlite3_bind_int(stmt, 16, isNight ? 1 : 0);
 
     std::string personaId = character.currentPersona() ? character.currentPersona()->id() : "";
-    sqlite3_bind_text(stmt, 14, personaId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 17, personaId.c_str(), -1, SQLITE_TRANSIENT);
 
     bool ok = sqlite3_step(stmt) == SQLITE_DONE;
     sqlite3_finalize(stmt);
     return ok;
 }
 
-bool SaveRepository::loadCharacter_(int slotId, Character &character)
+bool SaveRepository::loadCharacter_(int slotId, Character &character,
+                                   float &posX, float &posY, bool &isNight)
 {
     sqlite3 *db = DatabaseManager::instance().database();
     if (!db)
         return false;
 
     const char *sql = "SELECT name, level, hp, max_hp, sp, max_sp, exp, exp_to_next, gold, "
-                      "eq_str, eq_mag, eq_spd, current_persona_id "
+                      "eq_str, eq_mag, eq_spd, pos_x, pos_y, is_night, current_persona_id "
                       "FROM character WHERE slot_id = ?";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -222,9 +227,10 @@ bool SaveRepository::loadCharacter_(int slotId, Character &character)
         int eqStr = sqlite3_column_int(stmt, 9);
         int eqMag = sqlite3_column_int(stmt, 10);
         int eqSpd = sqlite3_column_int(stmt, 11);
-        const char *personaIdText = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 12));
+        posX = static_cast<float>(sqlite3_column_double(stmt, 12));
+        posY = static_cast<float>(sqlite3_column_double(stmt, 13));
+        isNight = sqlite3_column_int(stmt, 14) != 0;
 
-        // Reconstruct the character with base vitals, then restore all fields.
         character = Character(name, maxHp, maxSp);
         character.setLevel(level);
         character.setHp(hp);
@@ -233,9 +239,6 @@ bool SaveRepository::loadCharacter_(int slotId, Character &character)
         character.setExpToNextLevel(expToNext);
         character.setGold(gold);
         character.setEquipmentBonuses(eqStr, eqMag, eqSpd);
-        // current_persona_id is resolved by the caller (GameManager::loadFromSlot)
-        // via findPersona(); store nothing here beyond what Character exposes.
-        (void)personaIdText;
         ok = true;
     }
 
@@ -333,8 +336,9 @@ bool SaveRepository::savePersonas_(int slotId, const std::vector<std::shared_ptr
     sqlite3_finalize(delStmt);
 
     const char *sql = R"(
-        INSERT INTO persona (slot_id, id, name, arcana, level, strength, magic, speed, affinities, skills, owner)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO persona (slot_id, id, name, arcana, level, strength, magic, speed,
+                             affinities, skills, owner, persona_exp, persona_exp_to_next)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )";
 
     sqlite3_stmt *stmt = nullptr;
@@ -359,6 +363,8 @@ bool SaveRepository::savePersonas_(int slotId, const std::vector<std::shared_ptr
         std::string skills = skillsToString(*p);
         sqlite3_bind_text(stmt, 10, skills.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 11, "player", -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 12, p->exp());
+        sqlite3_bind_int(stmt, 13, p->expToNextLevel());
         sqlite3_step(stmt);
     }
 
@@ -374,7 +380,8 @@ bool SaveRepository::loadPersonas_(int slotId, std::vector<std::shared_ptr<Perso
         return false;
 
     personas.clear();
-    const char *sql = "SELECT id, name, arcana, level, strength, magic, speed, affinities, skills "
+    const char *sql = "SELECT id, name, arcana, level, strength, magic, speed, affinities, skills, "
+                      "persona_exp, persona_exp_to_next "
                       "FROM persona WHERE slot_id = ? AND owner = 'player'";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -393,12 +400,12 @@ bool SaveRepository::loadPersonas_(int slotId, std::vector<std::shared_ptr<Perso
         int sp = sqlite3_column_int(stmt, 6);
 
         auto p = std::make_shared<Persona>(id, name, arcana, level, st, ma, sp);
-        const char *affs = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 9));
+        const char *affs = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 7));
         if (affs)
             applyAffinitiesFromString(*p, affs);
-        // Skills are persisted as a comma-separated id list; reconstructing Skill
-        // objects requires a shared skill registry (not yet available). The id list
-        // is stored so future skill restoration can be added without a schema change.
+        // Restore persona exp progress toward next level.
+        p->setExp(sqlite3_column_int(stmt, 9));
+        p->setExpToNextLevel(sqlite3_column_int(stmt, 10));
         personas.push_back(p);
     }
 
@@ -605,7 +612,7 @@ bool SaveRepository::deleteMeta_(int slotId)
     return true;
 }
 
-bool SaveRepository::saveDay_(int slotId, int day)
+bool SaveRepository::saveDay_(int slotId, int day, bool onSecondMap)
 {
     sqlite3 *db = DatabaseManager::instance().database();
     if (!db)
@@ -614,26 +621,27 @@ bool SaveRepository::saveDay_(int slotId, int day)
     if (day < 1)
         day = 1;
 
-    const char *sql = "REPLACE INTO game_state (slot_id, day) VALUES (?, ?)";
+    const char *sql = "REPLACE INTO game_state (slot_id, day, on_second_map) VALUES (?, ?, ?)";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return false;
 
     sqlite3_bind_int(stmt, 1, slotId);
     sqlite3_bind_int(stmt, 2, day);
+    sqlite3_bind_int(stmt, 3, onSecondMap ? 1 : 0);
 
     bool ok = sqlite3_step(stmt) == SQLITE_DONE;
     sqlite3_finalize(stmt);
     return ok;
 }
 
-bool SaveRepository::loadDay_(int slotId, int &day)
+bool SaveRepository::loadDay_(int slotId, int &day, bool &onSecondMap)
 {
     sqlite3 *db = DatabaseManager::instance().database();
     if (!db)
         return false;
 
-    const char *sql = "SELECT day FROM game_state WHERE slot_id = ?";
+    const char *sql = "SELECT day, on_second_map FROM game_state WHERE slot_id = ?";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return false;
@@ -646,6 +654,7 @@ bool SaveRepository::loadDay_(int slotId, int &day)
         day = sqlite3_column_int(stmt, 0);
         if (day < 1)
             day = 1;
+        onSecondMap = sqlite3_column_int(stmt, 1) != 0;
         ok = true;
     }
 
@@ -656,7 +665,8 @@ bool SaveRepository::loadDay_(int slotId, int &day)
 bool SaveRepository::saveAll(int slotId, const Character &character, const Inventory &inventory,
                              const std::vector<std::shared_ptr<Persona>> &personas,
                              const SocialLinkManager &socialLinks, const QuestManager &quests,
-                             int day)
+                             int day, float posX, float posY,
+                             bool isNight, bool onSecondMap)
 {
     if (!DatabaseManager::instance().isOpen())
         return false;
@@ -665,16 +675,14 @@ bool SaveRepository::saveAll(int slotId, const Character &character, const Inven
     if (!db)
         return false;
 
-    // Wrap the whole slot write in a transaction so a partial failure leaves
-    // the previous slot state intact.
     sqlite3_exec(db, "BEGIN", nullptr, nullptr, nullptr);
 
-    bool ok = saveCharacter_(slotId, character) &&
+    bool ok = saveCharacter_(slotId, character, posX, posY, isNight) &&
               saveInventory_(slotId, inventory) &&
               savePersonas_(slotId, personas) &&
               saveSocialLinks_(slotId, socialLinks) &&
               saveQuests_(slotId, quests) &&
-              saveDay_(slotId, day) &&
+              saveDay_(slotId, day, onSecondMap) &&
               saveMeta_(slotId, character);
 
     if (ok)
@@ -687,7 +695,8 @@ bool SaveRepository::saveAll(int slotId, const Character &character, const Inven
 bool SaveRepository::loadAll(int slotId, Character &character, Inventory &inventory,
                              std::vector<std::shared_ptr<Persona>> &personas,
                              SocialLinkManager &socialLinks, QuestManager &quests,
-                             int *day)
+                             int *day, float *posX, float *posY,
+                             bool *isNight, bool *onSecondMap)
 {
     if (!DatabaseManager::instance().isOpen())
         return false;
@@ -695,17 +704,32 @@ bool SaveRepository::loadAll(int slotId, Character &character, Inventory &invent
     if (!slotExists(slotId))
         return false;
 
+    float loadedPosX = 0.0f;
+    float loadedPosY = 0.0f;
+    bool loadedIsNight = false;
+    bool loadedOnSecondMap = false;
+
     std::string currentPersonaId;
-    bool ok = loadCharacter_(slotId, character) && loadInventory_(slotId, inventory) &&
-              loadPersonas_(slotId, personas, currentPersonaId) && loadSocialLinks_(slotId, socialLinks) &&
+    bool ok = loadCharacter_(slotId, character, loadedPosX, loadedPosY, loadedIsNight) &&
+              loadInventory_(slotId, inventory) &&
+              loadPersonas_(slotId, personas, currentPersonaId) &&
+              loadSocialLinks_(slotId, socialLinks) &&
               loadQuests_(slotId, quests);
-    if (ok && day)
+
+    if (ok)
     {
         int loadedDay = 1;
-        if (loadDay_(slotId, loadedDay))
+        loadDay_(slotId, loadedDay, loadedOnSecondMap);
+        if (day)
             *day = loadedDay;
-        else
-            *day = 1;
+        if (posX)
+            *posX = loadedPosX;
+        if (posY)
+            *posY = loadedPosY;
+        if (isNight)
+            *isNight = loadedIsNight;
+        if (onSecondMap)
+            *onSecondMap = loadedOnSecondMap;
     }
     return ok;
 }
@@ -876,12 +900,13 @@ bool SaveRepository::saveAll(const Character &character, const Inventory &invent
                              const std::vector<std::shared_ptr<Persona>> &personas,
                              const SocialLinkManager &socialLinks, const QuestManager &quests)
 {
-    return saveAll(1, character, inventory, personas, socialLinks, quests, 1);
+    return saveAll(1, character, inventory, personas, socialLinks, quests, 1, 0, 0, false, false);
 }
 
 bool SaveRepository::loadAll(Character &character, Inventory &inventory,
                              std::vector<std::shared_ptr<Persona>> &personas,
                              SocialLinkManager &socialLinks, QuestManager &quests)
 {
-    return loadAll(1, character, inventory, personas, socialLinks, quests, nullptr);
+    return loadAll(1, character, inventory, personas, socialLinks, quests,
+                   nullptr, nullptr, nullptr, nullptr, nullptr);
 }

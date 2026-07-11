@@ -2,13 +2,22 @@
 #include "GameManager.h"
 #include "TileMap.h"
 #include "Entity.h"
+#include "TownMapData.h"
 
 namespace
 {
     bool canMoveTo(engine::Vec2 pos, const TileMap & /*map*/)
     {
-        // No tile collision: allow movement anywhere within the 800x600 window.
-        return pos.x >= 0.0f && pos.x <= 800.0f && pos.y >= 0.0f && pos.y <= 600.0f;
+        if (pos.x < 0.0f || pos.y < 0.0f || pos.x > 800.0f || pos.y > 600.0f)
+            return false;
+        engine::Rect playerBox{pos.x, pos.y, 1.0f, 1.0f};
+        bool isSecond = GameManager::instance().onSecondMap();
+        for (const auto &wall : mapCollisionZones(isSecond))
+        {
+            if (playerBox.intersects(wall))
+                return false;
+        }
+        return true;
     }
 
     PlayerEntity *findPlayer(TileMap &map)
@@ -46,11 +55,18 @@ void NightScene::handleInput(engine::IInput &input)
     if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
     {
         PlayerEntity *p = findPlayer(GameManager::instance().currentMap());
-        if (p && !GameManager::instance().onSecondMap() &&
-            p->position().x > 550.0f && p->position().x < 650.0f && p->position().y <= 90.0f)
+        if (p && !GameManager::instance().onSecondMap())
         {
-            GameManager::instance().enterScene(SceneType::RestConfirm);
-            return;
+            engine::Rect playerBox{p->position().x - 5.0f, p->position().y - 5.0f,
+                                   10.0f, 10.0f};
+            for (const auto &zone : townInteractionZones())
+            {
+                if (zone.type == InteractionType::Home && playerBox.intersects(zone.area))
+                {
+                    GameManager::instance().enterScene(SceneType::RestConfirm);
+                    return;
+                }
+            }
         }
     }
 
@@ -69,6 +85,11 @@ void NightScene::update(float deltaTime)
     PlayerEntity *player = findPlayer(map);
     if (!player)
         return;
+
+    // Auto-rescue: if player is stuck inside a collision zone, teleport to default spawn.
+    bool isSecond = GameManager::instance().onSecondMap();
+    if (isInCollisionZone(player->position(), isSecond))
+        player->setPosition(mapDefaultSpawn(isSecond));
 
     engine::Vec2 newPos = player->position();
     newPos.x += moveX_ * moveSpeed_ * deltaTime;
@@ -104,12 +125,12 @@ void NightScene::update(float deltaTime)
         // Travel to school map at night.
         GameManager::instance().setOnSecondMap(true);
         TileMap &school = GameManager::instance().schoolMap();
-        engine::Vec2 spawnPos = {80.0f, 220.0f};
+        engine::Vec2 spawnPos = schoolDefaultSpawn();
         school.clearEntities();
         school.addEntity(std::make_unique<PlayerEntity>(spawnPos));
-        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime"));
-        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin"));
-        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss"));
+        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 230}, "enemy_slime"));
+        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{160, 400}, "enemy_goblin"));
+        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{350, 230}, "enemy_boss"));
     }
     else if (onSecond && pp.x <= 50.0f)
     {
@@ -119,7 +140,7 @@ void NightScene::update(float deltaTime)
         engine::Vec2 spawnPos = {640.0f, 430.0f};
         town.clearEntities();
         town.addEntity(std::make_unique<PlayerEntity>(spawnPos));
-        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime"));
+        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 240}, "enemy_slime"));
         town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin"));
         town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss"));
     }
