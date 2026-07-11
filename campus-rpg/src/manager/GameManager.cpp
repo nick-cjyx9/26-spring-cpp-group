@@ -21,6 +21,7 @@
 #include "ArmoryScene.h"
 #include "LevelUpScene.h"
 #include "RestConfirmScene.h"
+#include "DebugCheatScene.h"
 
 #include <algorithm>
 #include <map>
@@ -56,6 +57,7 @@ void GameManager::seedDefaultState(const std::string &playerName)
     enemyTemplates_.clear();
     personas_.clear();
     isNight_ = false;
+    infiniteGoldEnabled_ = false;
 
     // Reset day & NPC pool system
     day_ = 1;
@@ -325,7 +327,17 @@ void GameManager::enterScene(SceneType type)
     case SceneType::RestConfirm:
         currentScene_ = std::make_unique<RestConfirmScene>(isNight_);
         break;
+    case SceneType::DebugCheat:
+        currentScene_ = std::make_unique<DebugCheatScene>();
+        break;
     }
+}
+
+void GameManager::setInfiniteGoldEnabled(bool enabled)
+{
+    infiniteGoldEnabled_ = enabled;
+    if (infiniteGoldEnabled_ && character_.gold() < 999999)
+        character_.setGold(999999);
 }
 
 void GameManager::openSaveSlots(bool create)
@@ -371,21 +383,34 @@ std::shared_ptr<Persona> GameManager::findPersona(const std::string &id) const
     return nullptr;
 }
 
-void GameManager::addPersonaToPlayer(std::shared_ptr<Persona> persona)
+bool GameManager::addPersonaToPlayer(std::shared_ptr<Persona> persona)
 {
     if (!persona)
-        return;
-    if (!findPersona(persona->id()))
+        return false;
+    bool added = character_.addPersona(persona);
+    if (added && !findPersona(persona->id()))
         personas_.push_back(persona);
-    character_.addPersona(persona);
+    return added;
 }
 
 void GameManager::setPlayerPersona(std::shared_ptr<Persona> persona)
 {
     if (!persona)
         return;
-    addPersonaToPlayer(persona);
-    character_.setPersona(persona);
+    if (!character_.ownsPersona(persona->id()))
+        addPersonaToPlayer(persona);
+    if (character_.ownsPersona(persona->id()))
+        character_.setPersona(persona);
+}
+
+bool GameManager::destroyPlayerPersona(const std::string &id)
+{
+    if (character_.ownedPersonas().size() <= 1)
+        return false;
+    Persona *current = character_.currentPersona();
+    if (current && current->id() == id)
+        return false;
+    return character_.removePersona(id);
 }
 
 bool GameManager::unequipToInventory(EquipmentSlot slot)
@@ -455,12 +480,6 @@ void GameManager::initDefaultShop()
     shop_.addItem(std::make_unique<FoodItem>("food_bread", "Bread", "A loaf of campus bread.", 10, 20, "items/bread"));
     shop_.addItem(std::make_unique<PotionItem>("potion_hp", "HP Potion", "Restores a lot of HP.", 30, 50, "items/potion_red"));
     shop_.addItem(std::make_unique<SpItem>("item_coffee", "Coffee", "Restores a little SP.", 20, 15, "items/coffee"));
-    shop_.addItem(std::make_unique<EquipmentItem>("eq_wooden_sword", "Wooden Sword",
-                                                  "A training sword.", 80, 5, 0, 0,
-                                                  EquipmentSlot::Weapon, "tile_00_00"));
-    shop_.addItem(std::make_unique<EquipmentItem>("eq_leather_armor", "Leather Armor",
-                                                  "Basic protection.", 60, 0, 4, 0,
-                                                  EquipmentSlot::Armor, "tile_15_24"));
     shop_.addItem(std::make_unique<PersonaItem>("item_pixie_contract", "Pixie Contract",
                                                 "Summons Pixie.", 150, "persona_pixie"));
 }

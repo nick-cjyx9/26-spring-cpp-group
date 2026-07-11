@@ -42,7 +42,9 @@ public:
 
     const std::vector<std::shared_ptr<Persona>> &ownedPersonas() const { return ownedPersonas_; }
     std::vector<std::shared_ptr<Persona>> &ownedPersonas() { return ownedPersonas_; }
-    void addPersona(std::shared_ptr<Persona> persona);
+    static constexpr size_t kMaxOwnedPersonas = 6;
+    bool addPersona(std::shared_ptr<Persona> persona);
+    bool removePersona(const std::string &id);
     void clearOwnedPersonas() { ownedPersonas_.clear(); }
     bool ownsPersona(const std::string &id) const;
 
@@ -65,6 +67,7 @@ public:
     void consumeSp(int amount);
     void recoverSp(int amount);
     void addGold(int amount) { gold_ += amount; }
+    void setGold(int v) { gold_ = v; }
     bool spendGold(int amount);
     void gainExp(int amount);
 
@@ -76,7 +79,6 @@ public:
     void setMaxSp(int v) { maxSp_ = v; }
     void setExp(int v) { exp_ = v; }
     void setExpToNextLevel(int v) { expToNextLevel_ = v; }
-    void setGold(int v) { gold_ = v; }
 
     void setEquipmentBonuses(int strength, int magic, int speed);
     void equip(std::shared_ptr<EquipmentItem> equipment);

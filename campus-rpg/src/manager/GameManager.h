@@ -33,7 +33,8 @@ enum class SceneType
     Status,
     Armory,
     LevelUp,
-    RestConfirm
+    RestConfirm,
+    DebugCheat
 };
 
 // Fired whenever a Social Link ranks up. The UI layer registers a callback
@@ -107,8 +108,9 @@ public:
     std::shared_ptr<Persona> findPersona(const std::string &id) const;
 
     // Persona ownership helpers.
-    void addPersonaToPlayer(std::shared_ptr<Persona> persona);
+    bool addPersonaToPlayer(std::shared_ptr<Persona> persona);
     void setPlayerPersona(std::shared_ptr<Persona> persona);
+    bool destroyPlayerPersona(const std::string &id);
 
     // ---- Equipment helpers (used by StatusScene / InventoryScene) ----
     // Equip an item from the inventory, removing it from the backpack and
@@ -122,6 +124,10 @@ public:
 
     bool shouldQuit() const { return shouldQuit_; }
     void quit() { shouldQuit_ = true; }
+
+    bool infiniteGoldEnabled() const { return infiniteGoldEnabled_; }
+    void setInfiniteGoldEnabled(bool enabled);
+    void toggleInfiniteGold() { setInfiniteGoldEnabled(!infiniteGoldEnabled_); }
 
     // ---- Social Link integration ----
     // Called by DialogueScene when the player talks to an NPC.
@@ -225,6 +231,7 @@ private:
     bool isNight_ = false;
     bool onSecondMap_ = false;
     bool shouldQuit_ = false;
+    bool infiniteGoldEnabled_ = false;
     int currentSlotId_ = 1;
     int selectedHeroIndex_ = 0;
 

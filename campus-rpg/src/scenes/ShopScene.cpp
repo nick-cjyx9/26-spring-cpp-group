@@ -52,9 +52,15 @@ void ShopScene::handleInput(engine::IInput &input)
                     }
                     else
                     {
-                        gm.character().spendGold(item->value());
-                        gm.addPersonaToPlayer(persona);
-                        message_ = "Obtained Persona: " + persona->name();
+                        if (gm.addPersonaToPlayer(persona))
+                        {
+                            gm.character().spendGold(item->value());
+                            message_ = "Obtained Persona: " + persona->name();
+                        }
+                        else
+                        {
+                            message_ = "Persona slots full or already owned.";
+                        }
                     }
                 }
             }

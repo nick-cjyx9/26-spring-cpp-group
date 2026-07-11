@@ -2,6 +2,7 @@
 #include "GameManager.h"
 #include "Character.h"
 #include "Item.h"
+#include "Inventory.h"
 
 namespace
 {
@@ -9,10 +10,14 @@ namespace
     {
         switch (idx)
         {
-        case 0: return "Weapon";
-        case 1: return "Armor";
-        case 2: return "Accessory";
-        case 3: return "Relic";
+        case 0:
+            return "Weapon";
+        case 1:
+            return "Armor";
+        case 2:
+            return "Accessory";
+        case 3:
+            return "Relic";
         }
         return "";
     }
@@ -21,10 +26,14 @@ namespace
     {
         switch (idx)
         {
-        case 0: return engine::Color(255, 80, 80);
-        case 1: return engine::Color(80, 80, 255);
-        case 2: return engine::Color(255, 200, 0);
-        case 3: return engine::Color(180, 80, 255);
+        case 0:
+            return engine::Color(255, 80, 80);
+        case 1:
+            return engine::Color(80, 80, 255);
+        case 2:
+            return engine::Color(255, 200, 0);
+        case 3:
+            return engine::Color(180, 80, 255);
         }
         return engine::Color::white();
     }
@@ -33,10 +42,14 @@ namespace
     {
         switch (idx)
         {
-        case 0: return EquipmentSlot::Weapon;
-        case 1: return EquipmentSlot::Armor;
-        case 2: return EquipmentSlot::Accessory;
-        case 3: return EquipmentSlot::Relic;
+        case 0:
+            return EquipmentSlot::Weapon;
+        case 1:
+            return EquipmentSlot::Armor;
+        case 2:
+            return EquipmentSlot::Accessory;
+        case 3:
+            return EquipmentSlot::Relic;
         }
         return EquipmentSlot::None;
     }
@@ -53,14 +66,23 @@ namespace
         return result;
     }
 
+    int equipmentPrice(const EquipmentItem &item)
+    {
+        return (item.strengthBonus() + item.magicBonus() + item.speedBonus()) * 10;
+    }
+
     void drawStatsLine(engine::IRenderer &r, const std::shared_ptr<EquipmentItem> &item,
                        float x, float y, int size, engine::Color color)
     {
-        if (!item) return;
+        if (!item)
+            return;
         std::string stats;
-        if (item->strengthBonus() > 0) stats += "STR+" + std::to_string(item->strengthBonus()) + " ";
-        if (item->magicBonus()    > 0) stats += "MAG+" + std::to_string(item->magicBonus()) + " ";
-        if (item->speedBonus()    > 0) stats += "SPD+" + std::to_string(item->speedBonus()) + " ";
+        if (item->strengthBonus() > 0)
+            stats += "STR+" + std::to_string(item->strengthBonus()) + " ";
+        if (item->magicBonus() > 0)
+            stats += "MAG+" + std::to_string(item->magicBonus()) + " ";
+        if (item->speedBonus() > 0)
+            stats += "SPD+" + std::to_string(item->speedBonus()) + " ";
         if (!stats.empty())
             r.drawText(stats, {x, y}, size, color);
     }
@@ -100,7 +122,8 @@ void ArmoryScene::handleRightPanelInput(engine::IInput &input)
     auto slot = indexToSlot(categoryIndex_);
     auto items = filterBySlot(GameManager::instance().equipmentDatabase(), slot);
     int count = static_cast<int>(items.size());
-    if (count == 0) return;
+    if (count == 0)
+        return;
 
     int cols = 3;
     int rows = (count + cols - 1) / cols;
@@ -109,15 +132,18 @@ void ArmoryScene::handleRightPanelInput(engine::IInput &input)
 
     if (input.wasKeyJustPressed(engine::Key::Up) || input.wasKeyJustPressed(engine::Key::W))
     {
-        if (row > 0) selectedIndex_ -= cols;
-        else selectedIndex_ = std::max(0, selectedIndex_);
+        if (row > 0)
+            selectedIndex_ -= cols;
+        else
+            selectedIndex_ = std::max(0, selectedIndex_);
     }
     if (input.wasKeyJustPressed(engine::Key::Down) || input.wasKeyJustPressed(engine::Key::S))
     {
         if (row + 1 < rows)
         {
             int newIdx = selectedIndex_ + cols;
-            if (newIdx < count) selectedIndex_ = newIdx;
+            if (newIdx < count)
+                selectedIndex_ = newIdx;
         }
     }
     if (input.wasKeyJustPressed(engine::Key::Left) || input.wasKeyJustPressed(engine::Key::A))
@@ -137,7 +163,26 @@ void ArmoryScene::handleRightPanelInput(engine::IInput &input)
     {
         if (selectedIndex_ >= 0 && selectedIndex_ < count && items[selectedIndex_])
         {
-            message_ = "Display only: " + items[selectedIndex_]->name();
+            auto &gm = GameManager::instance();
+            const auto &item = items[selectedIndex_];
+            int price = equipmentPrice(*item);
+            if (gm.character().gold() < price)
+            {
+                message_ = "Not enough gold.";
+            }
+            else if (gm.inventory().isFull())
+            {
+                message_ = "Backpack is full.";
+            }
+            else if (gm.inventory().addItem(item->clone()))
+            {
+                gm.character().spendGold(price);
+                message_ = "Purchased: " + item->name();
+            }
+            else
+            {
+                message_ = "Cannot buy item.";
+            }
             messageTimer_ = 2.0f;
         }
     }
@@ -164,8 +209,11 @@ void ArmoryScene::render(engine::IRenderer &renderer)
     renderLeftPanel(renderer);
     renderRightPanel(renderer);
 
+    renderer.drawText("Weapon Shop   Gold: " + std::to_string(GameManager::instance().character().gold()),
+                      {310, 8}, 18, engine::Color::yellow());
+
     // Hint.
-    renderer.drawText("W/S: select   A/D: switch panel   Display only   Esc: back",
+    renderer.drawText("W/S: category   A/D: switch panel   Enter/E: buy equipment   Esc: back",
                       {100, 570}, 14, engine::Color::gray());
 
     // Feedback.
@@ -186,7 +234,7 @@ void ArmoryScene::renderLeftPanel(engine::IRenderer &renderer)
     renderer.drawRect({x, y, 2, h}, border);
     renderer.drawRect({x + w - 2, y, 2, h}, border);
 
-    renderer.drawText("Categories", {x + 10, y + 10}, 18, engine::Color::white());
+    renderer.drawText("Weapon Shop", {x + 10, y + 10}, 18, engine::Color::white());
 
     float catH = 110.0f;
     for (int i = 0; i < 4; ++i)
@@ -228,12 +276,12 @@ void ArmoryScene::renderItemDetail(engine::IRenderer &renderer)
     auto slot = indexToSlot(categoryIndex_);
     auto items = filterBySlot(GameManager::instance().equipmentDatabase(), slot);
 
-    renderer.drawText("Show Item", {x, y}, 20, engine::Color::white());
+    renderer.drawText("Buy Equipment", {x, y}, 20, engine::Color::white());
 
     if (!items.empty() && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(items.size()) && items[selectedIndex_])
     {
         const auto &item = items[selectedIndex_];
-        renderer.drawText(item->name(), {x + 150, y}, 20, engine::Color::yellow());
+        renderer.drawText(item->name() + "  " + std::to_string(equipmentPrice(*item)) + "G", {x + 150, y}, 20, engine::Color::yellow());
         drawStatsLine(renderer, item, x + 150, y + 25, 14, engine::Color(200, 200, 200));
     }
     else
@@ -269,7 +317,8 @@ void ArmoryScene::renderItemGrid(engine::IRenderer &renderer)
     if (selectedRow >= gridScrollOffset_ + visibleRows)
         gridScrollOffset_ = selectedRow - visibleRows + 1;
     // Clamp scroll.
-    if (gridScrollOffset_ < 0) gridScrollOffset_ = 0;
+    if (gridScrollOffset_ < 0)
+        gridScrollOffset_ = 0;
     if (gridScrollOffset_ > rows - visibleRows)
         gridScrollOffset_ = std::max(0, rows - visibleRows);
 
@@ -278,7 +327,8 @@ void ArmoryScene::renderItemGrid(engine::IRenderer &renderer)
 
     for (int i = startIdx; i < endIdx; ++i)
     {
-        if (!items[i]) continue;
+        if (!items[i])
+            continue;
         int col = i % cols;
         int row = i / cols - gridScrollOffset_; // relative row for rendering
         float cx = x + col * (cellW + gapX);
@@ -296,11 +346,12 @@ void ArmoryScene::renderItemGrid(engine::IRenderer &renderer)
         std::string texPath = std::string("equipment/") + items[i]->textureId();
         renderer.drawTexture(texPath, {cx + (cellW - 48) / 2, cy + 8, 48, 48});
 
-        // Name.
+        // Name / price.
         renderer.drawText(items[i]->name(), {cx + 8, cy + 62}, 13, engine::Color::white());
+        renderer.drawText(std::to_string(equipmentPrice(*items[i])) + "G", {cx + 8, cy + 78}, 12, engine::Color::yellow());
 
         // Stats.
-        drawStatsLine(renderer, items[i], cx + 8, cy + 82, 11, engine::Color::gray());
+        drawStatsLine(renderer, items[i], cx + 8, cy + 96, 11, engine::Color::gray());
     }
 
     // Scrollbar indicator on the right edge.

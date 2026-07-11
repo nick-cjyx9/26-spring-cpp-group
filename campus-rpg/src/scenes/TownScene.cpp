@@ -65,6 +65,11 @@ void TownScene::handleInput(engine::IInput &input)
     {
         GameManager::instance().enterScene(SceneType::Status);
     }
+    if (input.wasKeyJustPressed(engine::Key::F5) && input.isKeyPressed(engine::Key::D))
+    {
+        GameManager::instance().enterScene(SceneType::DebugCheat);
+        return;
+    }
     if (input.wasKeyJustPressed(engine::Key::F5))
     {
         if (GameManager::instance().saveCurrentSlot())
@@ -81,10 +86,6 @@ void TownScene::handleInput(engine::IInput &input)
     if (input.wasKeyJustPressed(engine::Key::L))
     {
         GameManager::instance().enterScene(SceneType::SocialLink);
-    }
-    if (input.wasKeyJustPressed(engine::Key::Space))
-    {
-        GameManager::instance().enterScene(SceneType::Armory);
     }
 }
 
@@ -183,6 +184,7 @@ void TownScene::render(engine::IRenderer &renderer)
         // Labels at building centers.
         renderer.drawText("home", {500, 20}, 18, engine::Color(255, 255, 255, 200));
         renderer.drawText("shop", {500, 140}, 18, engine::Color(255, 255, 255, 200));
+        renderer.drawText("weapon shop", {348, 430}, 18, engine::Color(255, 220, 120, 220));
 
         // School arrow (right-pointing) at bottom-right crossroad.
         renderer.drawText(">", {740, 520}, 48, engine::Color(255, 255, 255, 230));
@@ -232,12 +234,12 @@ void TownScene::render(engine::IRenderer &renderer)
     // Interaction hint
     if (onSecond)
     {
-        renderer.drawText("E:Talk/Exit  I:Items  C:Status  L:Social  Space:Armory  F5:Save  [School]",
+        renderer.drawText("E:Talk/Exit  I:Items  C:Status  L:Social  F5:Save  [School]",
                           {40, 570}, 14, engine::Color::white());
     }
     else
     {
-        renderer.drawText("E:Talk/Shop/Home  I:Items  C:Status  L:Social  Space:Armory  F5:Save",
+        renderer.drawText("E:Talk/Shop/Home/WeaponShop  I:Items  C:Status  L:Social  F5:Save",
                           {50, 570}, 14, engine::Color::white());
     }
 
@@ -285,6 +287,8 @@ void TownScene::tryInteract()
                     GameManager::instance().enterScene(SceneType::RestConfirm);
                 else if (zone.type == InteractionType::Shop)
                     GameManager::instance().enterScene(SceneType::Shop);
+                else if (zone.type == InteractionType::WeaponShop)
+                    GameManager::instance().enterScene(SceneType::Armory);
                 return;
             }
         }

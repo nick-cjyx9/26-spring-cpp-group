@@ -16,7 +16,7 @@ inline const std::vector<engine::Rect> &townCollisionZones()
         {124, 180, 167, 152}, // Swimming pool
         {436, 124, 217, 86},  // Shop
         {436, 0, 191, 90},    // Home
-        {344, 279, 115, 199}, // Church
+        {344, 279, 115, 199}, // equipments store
     };
     return zones;
 }
@@ -100,7 +100,8 @@ inline engine::Vec2 mapDefaultSpawn(bool onSecondMap)
 enum class InteractionType
 {
     Home,
-    Shop
+    Shop,
+    WeaponShop
 };
 
 struct InteractionZone
@@ -114,6 +115,7 @@ inline const std::vector<InteractionZone> &townInteractionZones()
     static const std::vector<InteractionZone> zones = {
         {{436, 90, 191, 60}, InteractionType::Home},
         {{436, 210, 217, 60}, InteractionType::Shop},
+        {{344, 478, 115, 60}, InteractionType::WeaponShop},
     };
     return zones;
 }

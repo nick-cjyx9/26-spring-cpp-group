@@ -1,8 +1,11 @@
 #include "StatusScene.h"
 #include "GameManager.h"
 #include "Character.h"
-#include "Item.h"
 #include "Inventory.h"
+#include "Item.h"
+#include "Persona.h"
+
+#include <algorithm>
 
 namespace
 {
@@ -10,175 +13,167 @@ namespace
     {
         switch (idx)
         {
-        case 0:
-            return "Weapon";
-        case 1:
-            return "Armor";
-        case 2:
-            return "Accessory";
-        case 3:
-            return "Relic";
+        case 0: return "Weapon";
+        case 1: return "Armor";
+        case 2: return "Accessory";
+        case 3: return "Relic";
         }
         return "";
     }
 
-    engine::Color slotColor(int idx)
+    EquipmentSlot indexToSlot(int idx)
     {
         switch (idx)
         {
-        case 0:
-            return engine::Color(255, 80, 80); // Weapon - red
-        case 1:
-            return engine::Color(80, 80, 255); // Armor - blue
-        case 2:
-            return engine::Color(255, 200, 0); // Accessory - gold
-        case 3:
-            return engine::Color(180, 80, 255); // Relic - purple
+        case 0: return EquipmentSlot::Weapon;
+        case 1: return EquipmentSlot::Armor;
+        case 2: return EquipmentSlot::Accessory;
+        case 3: return EquipmentSlot::Relic;
         }
-        return engine::Color::white();
+        return EquipmentSlot::None;
     }
-} // namespace
+
+    std::shared_ptr<EquipmentItem> equippedAt(const GameManager::EquippedGear &gear, int idx)
+    {
+        switch (idx)
+        {
+        case 0: return gear.weapon;
+        case 1: return gear.armor;
+        case 2: return gear.accessory;
+        case 3: return gear.relic;
+        }
+        return nullptr;
+    }
+
+    std::string statsLine(const EquipmentItem &item)
+    {
+        std::string stats;
+        if (item.strengthBonus() > 0) stats += "STR+" + std::to_string(item.strengthBonus()) + " ";
+        if (item.magicBonus() > 0) stats += "MAG+" + std::to_string(item.magicBonus()) + " ";
+        if (item.speedBonus() > 0) stats += "SPD+" + std::to_string(item.speedBonus()) + " ";
+        return stats.empty() ? "No bonus" : stats;
+    }
+
+    std::string skillCostText(const Skill &skill)
+    {
+        if (skill.cost() <= 0)
+            return "Free";
+        return std::to_string(skill.cost()) + (skill.costType() == SkillCostType::HP ? " HP" : " SP");
+    }
+}
 
 void StatusScene::handleInput(engine::IInput &input)
 {
     if (input.wasKeyJustPressed(engine::Key::Escape))
     {
-        GameManager::instance().enterScene(SceneType::Town);
+        GameManager::instance().enterScene(GameManager::instance().isNight() ? SceneType::Night : SceneType::Town);
         return;
     }
 
-    // Switch section with Left/Right or A/D.
-    bool goLeft = input.wasKeyJustPressed(engine::Key::Left) || input.wasKeyJustPressed(engine::Key::A);
-    bool goRight = input.wasKeyJustPressed(engine::Key::Right) || input.wasKeyJustPressed(engine::Key::D);
-
-    if (goLeft)
+    if (input.wasKeyJustPressed(engine::Key::Left) || input.wasKeyJustPressed(engine::Key::A))
     {
-        if (section_ == Section::Gear)
-            section_ = Section::Stats;
-        else if (section_ == Section::Backpack)
-            section_ = Section::Gear;
+        section_ = Section::Persona;
         return;
     }
-    if (goRight)
+    if (input.wasKeyJustPressed(engine::Key::Right) || input.wasKeyJustPressed(engine::Key::D))
     {
-        if (section_ == Section::Stats)
-            section_ = Section::Gear;
-        else if (section_ == Section::Gear)
-            section_ = Section::Backpack;
+        section_ = Section::Equipment;
         return;
     }
 
-    switch (section_)
-    {
-    case Section::Stats:
-        handleStatsInput(input);
-        break;
-    case Section::Gear:
-        handleGearInput(input);
-        break;
-    case Section::Backpack:
-        handleBackpackInput(input);
-        break;
-    }
+    if (section_ == Section::Persona)
+        handlePersonaInput(input);
+    else
+        handleEquipmentInput(input);
 }
 
-void StatusScene::handleStatsInput(engine::IInput &input)
+void StatusScene::handlePersonaInput(engine::IInput &input)
 {
-    (void)input;
-}
+    auto &gm = GameManager::instance();
+    auto &owned = gm.character().ownedPersonas();
+    int count = static_cast<int>(owned.size());
+    if (count <= 0)
+    {
+        personaIndex_ = 0;
+        return;
+    }
 
-void StatusScene::handleGearInput(engine::IInput &input)
-{
     if (input.wasKeyJustPressed(engine::Key::Up) || input.wasKeyJustPressed(engine::Key::W))
-        gearSlotIndex_ = (gearSlotIndex_ - 1 + 4) % 4;
+        personaIndex_ = (personaIndex_ - 1 + count) % count;
     if (input.wasKeyJustPressed(engine::Key::Down) || input.wasKeyJustPressed(engine::Key::S))
-        gearSlotIndex_ = (gearSlotIndex_ + 1) % 4;
+        personaIndex_ = (personaIndex_ + 1) % count;
 
-    if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
+    if ((input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E)) &&
+        personaIndex_ >= 0 && personaIndex_ < count && owned[personaIndex_])
     {
-        auto &gm = GameManager::instance();
-        auto slot = static_cast<EquipmentSlot>(gearSlotIndex_ + 1);
-        std::shared_ptr<EquipmentItem> item;
-        switch (slot)
+        gm.setPlayerPersona(owned[personaIndex_]);
+        message_ = "Persona equipped: " + owned[personaIndex_]->name();
+        messageTimer_ = 2.0f;
+    }
+
+    if (input.wasKeyJustPressed(engine::Key::Space) &&
+        personaIndex_ >= 0 && personaIndex_ < count && owned[personaIndex_])
+    {
+        std::string id = owned[personaIndex_]->id();
+        std::string name = owned[personaIndex_]->name();
+        if (gm.destroyPlayerPersona(id))
         {
-        case EquipmentSlot::Weapon:
-            item = gm.equippedGear().weapon;
-            break;
-        case EquipmentSlot::Armor:
-            item = gm.equippedGear().armor;
-            break;
-        case EquipmentSlot::Accessory:
-            item = gm.equippedGear().accessory;
-            break;
-        case EquipmentSlot::Relic:
-            item = gm.equippedGear().relic;
-            break;
-        default:
-            break;
-        }
-        if (item)
-        {
-            std::string itemName = item->name();
-            if (gm.unequipToInventory(slot))
-                message_ = "Unequipped: " + itemName;
-            else
-                message_ = "Backpack full. Cannot unequip.";
-            messageTimer_ = 2.0f;
+            message_ = "Destroyed Persona: " + name;
+            personaIndex_ = std::min(personaIndex_, static_cast<int>(gm.character().ownedPersonas().size()) - 1);
+            if (personaIndex_ < 0) personaIndex_ = 0;
         }
         else
         {
-            message_ = "No item to unequip.";
-            messageTimer_ = 2.0f;
+            message_ = "Cannot destroy current/last Persona.";
         }
+        messageTimer_ = 2.0f;
     }
 }
 
-void StatusScene::handleBackpackInput(engine::IInput &input)
+void StatusScene::handleEquipmentInput(engine::IInput &input)
 {
-    const auto &items = GameManager::instance().inventory().items();
-    int count = static_cast<int>(items.size());
-
-    if (count == 0)
+    auto eqIndices = equipmentInventoryIndices();
+    int count = 4 + static_cast<int>(eqIndices.size());
+    if (count <= 0)
         return;
 
     if (input.wasKeyJustPressed(engine::Key::Up) || input.wasKeyJustPressed(engine::Key::W))
-    {
-        if (backpackIndex_ > 0)
-            --backpackIndex_;
-    }
+        equipmentIndex_ = (equipmentIndex_ - 1 + count) % count;
     if (input.wasKeyJustPressed(engine::Key::Down) || input.wasKeyJustPressed(engine::Key::S))
-    {
-        if (backpackIndex_ < count - 1)
-            ++backpackIndex_;
-    }
+        equipmentIndex_ = (equipmentIndex_ + 1) % count;
 
-    if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
+    if (!(input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E)))
+        return;
+
+    auto &gm = GameManager::instance();
+    if (equipmentIndex_ < 4)
     {
-        if (backpackIndex_ >= 0 && backpackIndex_ < count && items[backpackIndex_])
+        EquipmentSlot slot = indexToSlot(equipmentIndex_);
+        auto item = equippedAt(gm.equippedGear(), equipmentIndex_);
+        if (!item)
+            message_ = "That equipment slot is empty.";
+        else if (gm.unequipToInventory(slot))
+            message_ = "Unequipped: " + item->name();
+        else
+            message_ = "Backpack full. Cannot unequip.";
+    }
+    else
+    {
+        size_t inventoryIndex = eqIndices[static_cast<size_t>(equipmentIndex_ - 4)];
+        Item *item = gm.inventory().itemAt(inventoryIndex);
+        std::string name = item ? item->name() : "";
+        if (gm.equipFromInventory(inventoryIndex))
         {
-            Item *item = items[backpackIndex_].get();
-            if (dynamic_cast<EquipmentItem *>(item))
-            {
-                std::string itemName = item->name();
-                if (GameManager::instance().equipFromInventory(static_cast<size_t>(backpackIndex_)))
-                {
-                    message_ = "Equipped: " + itemName;
-                    if (backpackIndex_ >= static_cast<int>(GameManager::instance().inventory().size()))
-                        backpackIndex_ = std::max(0, static_cast<int>(GameManager::instance().inventory().size()) - 1);
-                }
-                else
-                {
-                    message_ = "Cannot equip item.";
-                }
-                messageTimer_ = 2.0f;
-            }
-            else
-            {
-                message_ = "Select equipment to equip here.";
-                messageTimer_ = 2.0f;
-            }
+            message_ = "Equipped: " + name;
+            auto refreshed = equipmentInventoryIndices();
+            equipmentIndex_ = std::min(equipmentIndex_, 4 + static_cast<int>(refreshed.size()) - 1);
+        }
+        else
+        {
+            message_ = "Cannot equip item.";
         }
     }
+    messageTimer_ = 2.0f;
 }
 
 void StatusScene::update(float deltaTime)
@@ -199,230 +194,156 @@ void StatusScene::render(engine::IRenderer &renderer)
     renderer.clear();
     renderer.drawRect({0, 0, 800, 600}, engine::Color(15, 15, 30));
 
-    renderStats(renderer);
-    renderGear(renderer);
-    renderBackpack(renderer);
+    renderPersonaPanel(renderer);
+    renderEquipmentPanel(renderer);
 
-    // Section tabs.
-    engine::Color statsColor = (section_ == Section::Stats) ? engine::Color::yellow() : engine::Color::gray();
-    engine::Color gearColor = (section_ == Section::Gear) ? engine::Color::yellow() : engine::Color::gray();
-    engine::Color bpColor = (section_ == Section::Backpack) ? engine::Color::yellow() : engine::Color::gray();
-    renderer.drawText("Stats", {60, 570}, 18, statsColor);
-    renderer.drawText("Gear", {360, 570}, 18, gearColor);
-    renderer.drawText("Backpack", {660, 570}, 18, bpColor);
-    renderer.drawText("Esc: back", {720, 570}, 14, engine::Color::gray());
+    renderer.drawText("A/D: switch panel   Persona Enter: switch   Persona Space: destroy   Equipment Enter: equip/unequip   Esc: back",
+                      {30, 570}, 13, engine::Color::gray());
 
-    // Feedback.
     if (!message_.empty())
     {
-        renderer.drawRect({250, 280, 300, 36}, engine::Color(0, 0, 0, 200));
-        renderer.drawText(message_, {260, 291}, 18, engine::Color::green());
+        renderer.drawRect({230, 282, 340, 36}, engine::Color(0, 0, 0, 220));
+        renderer.drawText(message_, {242, 293}, 16, engine::Color::green());
     }
 }
 
-void StatusScene::renderStats(engine::IRenderer &renderer)
+void StatusScene::renderPersonaPanel(engine::IRenderer &renderer)
 {
-    float x = 20.0f, y = 20.0f, w = 260.0f, h = 530.0f;
-    engine::Color border = (section_ == Section::Stats) ? engine::Color::yellow() : engine::Color(80, 80, 100);
+    float x = 20.0f, y = 20.0f, w = 280.0f, h = 530.0f;
+    engine::Color border = (section_ == Section::Persona) ? engine::Color::yellow() : engine::Color(80, 80, 100);
     renderer.drawRect({x, y, w, h}, engine::Color(25, 25, 50, 230));
     renderer.drawRect({x, y, w, 2}, border);
     renderer.drawRect({x, y + h - 2, w, 2}, border);
     renderer.drawRect({x, y, 2, h}, border);
     renderer.drawRect({x + w - 2, y, 2, h}, border);
 
-    renderer.drawText("Status", {x + 10, y + 10}, 20, engine::Color::white());
+    auto &character = GameManager::instance().character();
+    const auto &owned = character.ownedPersonas();
+    renderer.drawText("Persona Slots " + std::to_string(owned.size()) + "/" + std::to_string(Character::kMaxOwnedPersonas),
+                      {x + 10, y + 10}, 18, engine::Color::white());
+    renderer.drawText(character.name() + "  Lv." + std::to_string(character.level()) +
+                          "  HP " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()) +
+                          "  SP " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()),
+                      {x + 10, y + 36}, 12, engine::Color(200, 200, 220));
 
-    const auto &character = GameManager::instance().character();
-    const Persona *persona = character.currentPersona();
-    float textY = y + 45;
-    int step = 26;
-    auto white = engine::Color::white();
-
-    // ---- Character vitals ----
-    renderer.drawText("Name: " + character.name(), {x + 10, textY}, 16, white);
-    textY += step;
-    renderer.drawText("Level: " + std::to_string(character.level()), {x + 10, textY}, 16, white);
-    textY += step;
-    renderer.drawText("HP:  " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()), {x + 10, textY}, 16, engine::Color(100, 255, 100));
-    textY += step;
-    renderer.drawText("SP:  " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()), {x + 10, textY}, 16, engine::Color(100, 200, 255));
-    textY += step;
-    renderer.drawText("Gold: " + std::to_string(character.gold()), {x + 10, textY}, 16, engine::Color::yellow());
-    textY += step + 10;
-
-    // ---- Current Persona (the real source of combat stats) ----
-    renderer.drawRect({x + 8, textY - 4, w - 16, 2}, engine::Color(120, 130, 180, 200));
-    textY += 10;
-    renderer.drawText("Current Persona", {x + 10, textY}, 18, engine::Color::cyan());
-    textY += step;
-
-    if (persona)
+    float rowY = y + 65.0f;
+    for (int i = 0; i < static_cast<int>(Character::kMaxOwnedPersonas); ++i)
     {
-        renderer.drawText(persona->name() + " (" + persona->arcana() + ")", {x + 10, textY}, 16, white);
-        textY += step;
-        renderer.drawText("Lv: " + std::to_string(persona->level()) +
-                              "  Exp: " + std::to_string(persona->exp()) + "/" + std::to_string(persona->expToNextLevel()),
-                          {x + 10, textY}, 14, engine::Color(200, 200, 200));
-        textY += step;
+        bool selected = section_ == Section::Persona && i == personaIndex_;
+        engine::Color boxBorder = selected ? engine::Color::yellow() : engine::Color(80, 80, 100);
+        renderer.drawRect({x + 10, rowY, w - 20, 48}, engine::Color(20, 20, 40, 230));
+        renderer.drawRect({x + 10, rowY, w - 20, 2}, boxBorder);
+        renderer.drawRect({x + 10, rowY + 46, w - 20, 2}, boxBorder);
+        renderer.drawRect({x + 10, rowY, 2, 48}, boxBorder);
+        renderer.drawRect({x + w - 12, rowY, 2, 48}, boxBorder);
 
-        int baseStr = persona->strength();
-        int baseMag = persona->magic();
-        int baseSpd = persona->speed();
-        int eqStr = character.equipmentStrengthBonus();
-        int eqMag = character.equipmentMagicBonus();
-        int eqSpd = character.equipmentSpeedBonus();
-        int finalStr = character.attack();
-        int finalMag = character.magic();
-        int finalSpd = character.speed();
-
-        renderer.drawText("Base STR/MAG/SPD", {x + 10, textY}, 14, engine::Color(180, 180, 180));
-        textY += step - 4;
-        renderer.drawText(std::to_string(baseStr) + " / " + std::to_string(baseMag) + " / " + std::to_string(baseSpd),
-                          {x + 10, textY}, 16, white);
-        textY += step;
-
-        renderer.drawText("Equip +STR/+MAG/+SPD", {x + 10, textY}, 14, engine::Color(180, 180, 180));
-        textY += step - 4;
-        renderer.drawText("+" + std::to_string(eqStr) + " / +" + std::to_string(eqMag) + " / +" + std::to_string(eqSpd),
-                          {x + 10, textY}, 16, engine::Color(255, 220, 100));
-        textY += step;
-
-        renderer.drawText("Final STR/MAG/SPD", {x + 10, textY}, 14, engine::Color(180, 180, 180));
-        textY += step - 4;
-        renderer.drawText(std::to_string(finalStr) + " / " + std::to_string(finalMag) + " / " + std::to_string(finalSpd),
-                          {x + 10, textY}, 16, engine::Color(100, 255, 100));
-        textY += step + 4;
-
-        // Skills
-        renderer.drawText("Skills:", {x + 10, textY}, 16, engine::Color::cyan());
-        textY += step - 4;
-        const auto &skills = persona->skills();
-        if (skills.empty())
+        if (i < static_cast<int>(owned.size()) && owned[i])
         {
-            renderer.drawText("(none)", {x + 10, textY}, 14, engine::Color(100, 100, 100));
+            bool current = character.currentPersona() && character.currentPersona()->id() == owned[i]->id();
+            renderer.drawText(std::string(selected ? "> " : "  ") + owned[i]->name() + (current ? " *" : ""),
+                              {x + 18, rowY + 7}, 15, selected ? engine::Color::yellow() : engine::Color::white());
+            renderer.drawText(owned[i]->arcana() + " Lv" + std::to_string(owned[i]->level()) +
+                                  "  " + std::to_string(owned[i]->strength()) + "/" +
+                                  std::to_string(owned[i]->magic()) + "/" + std::to_string(owned[i]->speed()),
+                              {x + 28, rowY + 28}, 12, engine::Color::gray());
         }
         else
         {
-            for (const auto &skill : skills)
-            {
-                if (!skill)
-                    continue;
-                std::string line = skill->name();
-                if (skill->cost() > 0)
-                    line += " (" + std::to_string(skill->cost()) + (skill->costType() == SkillCostType::HP ? " HP" : " SP") + ")";
-                renderer.drawText("- " + line, {x + 10, textY}, 13, engine::Color(200, 200, 200));
-                textY += 20;
-                if (textY > y + h - 20)
-                    break;
-            }
+            renderer.drawText("(empty)", {x + 28, rowY + 16}, 14, engine::Color(100, 100, 100));
         }
+        rowY += 56.0f;
     }
-    else
+
+    renderSelectedPersonaDetail(renderer, x + 10, y + 410);
+}
+
+void StatusScene::renderSelectedPersonaDetail(engine::IRenderer &renderer, float x, float y)
+{
+    const auto &owned = GameManager::instance().character().ownedPersonas();
+    if (personaIndex_ < 0 || personaIndex_ >= static_cast<int>(owned.size()) || !owned[personaIndex_])
+        return;
+
+    const auto &p = owned[personaIndex_];
+    renderer.drawText("Skills:", {x, y}, 14, engine::Color::cyan());
+    float sy = y + 20.0f;
+    int shown = 0;
+    for (const auto &skill : p->skills())
     {
-        renderer.drawText("(no Persona equipped)", {x + 10, textY}, 14, engine::Color(100, 100, 100));
+        if (!skill || shown >= 4) continue;
+        renderer.drawText("- " + skill->name() + " (" + skillCostText(*skill) + ")",
+                          {x, sy}, 12, engine::Color(200, 200, 200));
+        sy += 18.0f;
+        ++shown;
     }
 }
 
-void StatusScene::renderGear(engine::IRenderer &renderer)
+void StatusScene::renderEquipmentPanel(engine::IRenderer &renderer)
 {
-    float x = 300.0f, y = 20.0f, w = 260.0f, h = 530.0f;
-    engine::Color border = (section_ == Section::Gear) ? engine::Color::yellow() : engine::Color(80, 80, 100);
+    float x = 320.0f, y = 20.0f, w = 460.0f, h = 530.0f;
+    engine::Color border = (section_ == Section::Equipment) ? engine::Color::yellow() : engine::Color(80, 80, 100);
     renderer.drawRect({x, y, w, h}, engine::Color(25, 25, 50, 230));
     renderer.drawRect({x, y, w, 2}, border);
     renderer.drawRect({x, y + h - 2, w, 2}, border);
     renderer.drawRect({x, y, 2, h}, border);
     renderer.drawRect({x + w - 2, y, 2, h}, border);
 
-    renderer.drawText("Equipped Gear", {x + 10, y + 10}, 20, engine::Color::white());
+    renderer.drawText("Equipment", {x + 10, y + 10}, 20, engine::Color::white());
+    renderer.drawText("Equipped slots + backpack equipment only", {x + 140, y + 15}, 13, engine::Color::gray());
 
     const auto &gear = GameManager::instance().equippedGear();
-    float slotH = 100.0f;
-    float startY = y + 50;
-
+    float rowY = y + 50.0f;
     for (int i = 0; i < 4; ++i)
     {
-        float sy = startY + i * (slotH + 10);
-        bool selected = (section_ == Section::Gear && i == gearSlotIndex_);
-        engine::Color boxBorder = selected ? engine::Color::yellow() : engine::Color(80, 80, 100);
-        renderer.drawRect({x + 10, sy, w - 20, slotH}, engine::Color(20, 20, 40, 230));
-        renderer.drawRect({x + 10, sy, w - 20, 2}, boxBorder);
-        renderer.drawRect({x + 10, sy + slotH - 2, w - 20, 2}, boxBorder);
-        renderer.drawRect({x + 10, sy, 2, slotH}, boxBorder);
-        renderer.drawRect({x + 10 + w - 22, sy, 2, slotH}, boxBorder);
-
-        renderer.drawText(slotName(i), {x + 20, sy + 6}, 14, slotColor(i));
-
-        std::shared_ptr<EquipmentItem> item;
-        switch (i)
-        {
-        case 0:
-            item = gear.weapon;
-            break;
-        case 1:
-            item = gear.armor;
-            break;
-        case 2:
-            item = gear.accessory;
-            break;
-        case 3:
-            item = gear.relic;
-            break;
-        }
-
+        auto item = equippedAt(gear, i);
+        bool selected = section_ == Section::Equipment && equipmentIndex_ == i;
+        engine::Color color = selected ? engine::Color::yellow() : engine::Color::white();
+        renderer.drawText(std::string(selected ? "> " : "  ") + slotName(i) + ": " + (item ? item->name() : "(empty)"),
+                          {x + 18, rowY}, 15, color);
         if (item)
-        {
-            renderer.drawText(item->name(), {x + 20, sy + 28}, 16, engine::Color::white());
-            std::string stats;
-            if (item->strengthBonus() > 0)
-                stats += "STR+" + std::to_string(item->strengthBonus()) + " ";
-            if (item->magicBonus() > 0)
-                stats += "MAG+" + std::to_string(item->magicBonus()) + " ";
-            if (item->speedBonus() > 0)
-                stats += "SPD+" + std::to_string(item->speedBonus()) + " ";
-            renderer.drawText(stats, {x + 20, sy + 52}, 12, engine::Color::gray());
-        }
-        else
-        {
-            renderer.drawText("(empty)", {x + 20, sy + 40}, 14, engine::Color(100, 100, 100));
-        }
+            renderer.drawText(statsLine(*item), {x + 245, rowY}, 12, engine::Color::gray());
+        rowY += 30.0f;
     }
-}
 
-void StatusScene::renderBackpack(engine::IRenderer &renderer)
-{
-    float x = 580.0f, y = 20.0f, w = 210.0f, h = 530.0f;
-    engine::Color border = (section_ == Section::Backpack) ? engine::Color::yellow() : engine::Color(80, 80, 100);
-    renderer.drawRect({x, y, w, h}, engine::Color(25, 25, 50, 230));
-    renderer.drawRect({x, y, w, 2}, border);
-    renderer.drawRect({x, y + h - 2, w, 2}, border);
-    renderer.drawRect({x, y, 2, h}, border);
-    renderer.drawRect({x + w - 2, y, 2, h}, border);
+    rowY += 16.0f;
+    renderer.drawText("Backpack Equipment", {x + 10, rowY}, 17, engine::Color::cyan());
+    rowY += 28.0f;
 
-    renderer.drawText("Backpack", {x + 10, y + 10}, 20, engine::Color::white());
-
-    const auto &items = GameManager::instance().inventory().items();
-    if (items.empty())
+    auto eqIndices = equipmentInventoryIndices();
+    if (eqIndices.empty())
     {
-        renderer.drawText("(empty)", {x + 10, y + 50}, 16, engine::Color(100, 100, 100));
+        renderer.drawText("(no equipment in backpack)", {x + 18, rowY}, 14, engine::Color(100, 100, 100));
         return;
     }
 
-    float rowH = 28.0f;
-    float visibleH = h - 50;
-    int maxVisible = static_cast<int>(visibleH / rowH);
-    int start = std::max(0, backpackIndex_ - maxVisible / 2);
-    if (start + maxVisible > static_cast<int>(items.size()))
-        start = std::max(0, static_cast<int>(items.size()) - maxVisible);
-    int end = std::min(static_cast<int>(items.size()), start + maxVisible);
+    int maxVisible = 10;
+    int listIndex = std::max(0, equipmentIndex_ - 4);
+    int start = std::max(0, listIndex - maxVisible / 2);
+    if (start + maxVisible > static_cast<int>(eqIndices.size()))
+        start = std::max(0, static_cast<int>(eqIndices.size()) - maxVisible);
+    int end = std::min(static_cast<int>(eqIndices.size()), start + maxVisible);
 
     for (int i = start; i < end; ++i)
     {
-        if (!items[i])
-            continue;
-        float rowY = y + 45 + (i - start) * rowH;
-        bool selected = (section_ == Section::Backpack && i == backpackIndex_);
+        Item *raw = GameManager::instance().inventory().itemAt(eqIndices[static_cast<size_t>(i)]);
+        auto *item = dynamic_cast<EquipmentItem *>(raw);
+        if (!item) continue;
+        bool selected = section_ == Section::Equipment && equipmentIndex_ == i + 4;
         engine::Color color = selected ? engine::Color::yellow() : engine::Color::white();
-        std::string prefix = selected ? "> " : "  ";
-        renderer.drawText(prefix + items[i]->name(), {x + 8, rowY}, 13, color);
+        renderer.drawText(std::string(selected ? "> " : "  ") + item->name() + " [" + slotName(static_cast<int>(item->slot()) - 1) + "]",
+                          {x + 18, rowY}, 14, color);
+        renderer.drawText(statsLine(*item), {x + 255, rowY}, 12, engine::Color::gray());
+        rowY += 28.0f;
     }
+}
+
+std::vector<size_t> StatusScene::equipmentInventoryIndices() const
+{
+    std::vector<size_t> result;
+    const auto &items = GameManager::instance().inventory().items();
+    for (size_t i = 0; i < items.size(); ++i)
+    {
+        if (items[i] && items[i]->type() == ItemType::Equipment)
+            result.push_back(i);
+    }
+    return result;
 }
