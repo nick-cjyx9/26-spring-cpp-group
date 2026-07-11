@@ -120,6 +120,8 @@ sf::Keyboard::Key SfmlInput::toSfmlKey(Key key)
         return sf::Keyboard::F5;
     case Key::L:
         return sf::Keyboard::L;
+    case Key::R:
+        return sf::Keyboard::R;
     case Key::Num1:
         return sf::Keyboard::Num1;
     case Key::Num2:
