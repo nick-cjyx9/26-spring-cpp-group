@@ -119,10 +119,13 @@ bool GameManager::saveToSlot(int slotId)
         }
     }
 
+    std::vector<std::shared_ptr<EquipmentItem>> equipped = {
+        equippedGear_.weapon, equippedGear_.armor, equippedGear_.accessory, equippedGear_.relic};
+
     SaveRepository repo;
     bool ok = repo.saveAll(slotId, character_, inventory_, personas_,
                            socialLinkManager_, questManager_, day_,
-                           posX, posY, isNight_, onSecondMap_);
+                           posX, posY, isNight_, onSecondMap_, equipped);
     if (ok)
         currentSlotId_ = slotId;
     return ok;
@@ -162,13 +165,41 @@ bool GameManager::loadFromSlot(int slotId)
     float loadedPosY = 0.0f;
     bool loadedIsNight = false;
     bool loadedOnSecondMap = false;
+    std::vector<std::unique_ptr<Item>> loadedEquippedGear;
     if (!repo.loadAll(slotId, character_, inventory_, personas_,
                       socialLinkManager_, questManager_, &loadedDay,
-                      &loadedPosX, &loadedPosY, &loadedIsNight, &loadedOnSecondMap))
+                      &loadedPosX, &loadedPosY, &loadedIsNight, &loadedOnSecondMap,
+                      &loadedEquippedGear))
     {
         // Load failed: leave the seeded default state intact so the game is
         // still in a runnable state.
         return false;
+    }
+
+    // Legacy saves did not persist Item::textureId(), so equipment restored from
+    // those saves can still have correct stats but no icon in StatusScene.
+    // Rehydrate equipment textures from the seeded equipment database by item id.
+    auto restoreEquipmentTexture = [this](EquipmentItem &item)
+    {
+        if (!item.textureId().empty())
+            return;
+        auto it = std::find_if(equipmentDatabase_.begin(), equipmentDatabase_.end(),
+                               [&item](const std::shared_ptr<EquipmentItem> &candidate)
+                               {
+                                   return candidate && candidate->id() == item.id();
+                               });
+        if (it != equipmentDatabase_.end() && *it)
+            item.setTextureId((*it)->textureId());
+    };
+    for (const auto &item : inventory_.items())
+    {
+        if (auto *eq = dynamic_cast<EquipmentItem *>(item.get()))
+            restoreEquipmentTexture(*eq);
+    }
+    for (const auto &item : loadedEquippedGear)
+    {
+        if (auto *eq = dynamic_cast<EquipmentItem *>(item.get()))
+            restoreEquipmentTexture(*eq);
     }
 
     // Re-apply skills to the reconstructed Personas (loaded ones start empty).
@@ -215,6 +246,35 @@ bool GameManager::loadFromSlot(int slotId)
     {
         if (p)
             character_.addPersona(p);
+    }
+
+    // Restore equipped gear objects and recompute equipment bonuses from slots.
+    equippedGear_ = EquippedGear();
+    character_.setEquipmentBonuses(0, 0, 0);
+    for (auto &item : loadedEquippedGear)
+    {
+        auto *eq = dynamic_cast<EquipmentItem *>(item.get());
+        if (!eq)
+            continue;
+        auto shared = std::shared_ptr<EquipmentItem>(static_cast<EquipmentItem *>(item.release()));
+        switch (shared->slot())
+        {
+        case EquipmentSlot::Weapon:
+            equippedGear_.weapon = shared;
+            break;
+        case EquipmentSlot::Armor:
+            equippedGear_.armor = shared;
+            break;
+        case EquipmentSlot::Accessory:
+            equippedGear_.accessory = shared;
+            break;
+        case EquipmentSlot::Relic:
+            equippedGear_.relic = shared;
+            break;
+        default:
+            break;
+        }
+        character_.equip(shared);
     }
 
     // Names/portraits were just overwritten from the save; rebuild the generic

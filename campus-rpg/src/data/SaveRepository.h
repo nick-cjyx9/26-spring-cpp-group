@@ -5,6 +5,8 @@ class Inventory;
 class QuestManager;
 class SocialLinkManager;
 class Persona;
+class EquipmentItem;
+class Item;
 
 #include <memory>
 #include <string>
@@ -30,12 +32,14 @@ public:
                  const std::vector<std::shared_ptr<Persona>> &personas,
                  const SocialLinkManager &socialLinks, const QuestManager &quests,
                  int day = 1, float posX = 0, float posY = 0,
-                 bool isNight = false, bool onSecondMap = false);
+                 bool isNight = false, bool onSecondMap = false,
+                 const std::vector<std::shared_ptr<EquipmentItem>> &equippedGear = {});
     bool loadAll(int slotId, Character &character, Inventory &inventory,
                  std::vector<std::shared_ptr<Persona>> &personas,
                  SocialLinkManager &socialLinks, QuestManager &quests,
                  int *day = nullptr, float *posX = nullptr, float *posY = nullptr,
-                 bool *isNight = nullptr, bool *onSecondMap = nullptr);
+                 bool *isNight = nullptr, bool *onSecondMap = nullptr,
+                 std::vector<std::unique_ptr<Item>> *equippedGear = nullptr);
 
     bool deleteSlot(int slotId);
     bool slotExists(int slotId);
@@ -64,6 +68,8 @@ private:
                         float &posX, float &posY, bool &isNight);
     bool saveInventory_(int slotId, const Inventory &inventory);
     bool loadInventory_(int slotId, Inventory &inventory);
+    bool saveEquippedGear_(int slotId, const std::vector<std::shared_ptr<EquipmentItem>> &equippedGear);
+    bool loadEquippedGear_(int slotId, std::vector<std::unique_ptr<Item>> &equippedGear);
     bool savePersonas_(int slotId, const std::vector<std::shared_ptr<Persona>> &personas);
     bool loadPersonas_(int slotId, std::vector<std::shared_ptr<Persona>> &personas,
                        std::string &currentPersonaId);

@@ -106,6 +106,7 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             sqlite3_exec(db_, "DROP TABLE IF EXISTS character;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS persona;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS inventory;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS equipped_gear;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS social_link;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS quest_progress;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS game_state;", nullptr, nullptr, nullptr);
@@ -158,6 +159,18 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             description TEXT,
             value INTEGER DEFAULT 0,
             extra_data TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS equipped_gear (
+            slot_id INTEGER NOT NULL DEFAULT 1,
+            gear_slot INTEGER NOT NULL,
+            item_id TEXT NOT NULL,
+            item_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            value INTEGER DEFAULT 0,
+            extra_data TEXT,
+            PRIMARY KEY (slot_id, gear_slot)
         );
 
         CREATE TABLE IF NOT EXISTS social_link (
@@ -234,6 +247,8 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
     addColumnIfMissing("game_state", "on_second_map", "INTEGER DEFAULT 0");
 
     sqlite3_exec(db_, "CREATE TABLE IF NOT EXISTS game_state (slot_id INTEGER PRIMARY KEY, day INTEGER DEFAULT 1);",
+                 nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "CREATE TABLE IF NOT EXISTS equipped_gear (slot_id INTEGER NOT NULL DEFAULT 1, gear_slot INTEGER NOT NULL, item_id TEXT NOT NULL, item_type TEXT NOT NULL, name TEXT NOT NULL, description TEXT, value INTEGER DEFAULT 0, extra_data TEXT, PRIMARY KEY (slot_id, gear_slot));",
                  nullptr, nullptr, nullptr);
 
     if (version < 1)

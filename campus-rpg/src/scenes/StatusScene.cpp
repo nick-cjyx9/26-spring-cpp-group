@@ -6,6 +6,7 @@
 #include "Persona.h"
 
 #include <algorithm>
+#include <sstream>
 
 namespace
 {
@@ -60,13 +61,84 @@ namespace
             return "Free";
         return std::to_string(skill.cost()) + (skill.costType() == SkillCostType::HP ? " HP" : " SP");
     }
+
+    std::string skillDescription(const Skill &skill)
+    {
+        std::string text = ::elementName(skill.element()) + " / " + skillCostText(skill) + " / Power " + std::to_string(skill.power());
+        if (skill.isHealing())
+            text += " - restores HP to the caster.";
+        else if (skill.element() == Element::Physical)
+            text += " - physical damage; can be dodged.";
+        else
+            text += " - magic damage using caster MAG and target affinity.";
+        return text;
+    }
+
+    void drawPanel(engine::IRenderer &renderer, float x, float y, float w, float h, engine::Color border)
+    {
+        renderer.drawRect({x + 6, y + 6, w, h}, engine::Color(0, 0, 0, 100));
+        renderer.drawRect({x, y, w, h}, engine::Color(18, 20, 38, 238));
+        renderer.drawRect({x, y, w, 3}, border);
+        renderer.drawRect({x, y + h - 3, w, 3}, border);
+        renderer.drawRect({x, y, 3, h}, border);
+        renderer.drawRect({x + w - 3, y, 3, h}, border);
+        renderer.drawRect({x + 8, y + 34, w - 16, 1}, engine::Color(95, 105, 150, 190));
+    }
+
+    std::vector<std::string> wrapText(const std::string &text, size_t width)
+    {
+        std::vector<std::string> lines;
+        std::istringstream words(text);
+        std::string word;
+        std::string line;
+        while (words >> word)
+        {
+            if (!line.empty() && line.size() + 1 + word.size() > width)
+            {
+                lines.push_back(line);
+                line.clear();
+            }
+            if (!line.empty())
+                line += " ";
+            line += word;
+        }
+        if (!line.empty())
+            lines.push_back(line);
+        return lines;
+    }
+
+    void drawEquipmentIcon(engine::IRenderer &renderer, const EquipmentItem *item, float x, float y, float size)
+    {
+        renderer.drawRect({x, y, size, size}, engine::Color(8, 8, 18, 230));
+        renderer.drawRect({x, y, size, 2}, engine::Color(140, 150, 210));
+        renderer.drawRect({x, y + size - 2, size, 2}, engine::Color(55, 60, 95));
+        renderer.drawRect({x, y, 2, size}, engine::Color(140, 150, 210));
+        renderer.drawRect({x + size - 2, y, 2, size}, engine::Color(55, 60, 95));
+        if (item && !item->textureId().empty())
+            renderer.drawTexture(std::string("equipment/") + item->textureId(), {x + 6, y + 6, size - 12, size - 12});
+        else
+            renderer.drawRect({x + 12, y + 12, size - 24, size - 24}, engine::Color(55, 55, 80));
+    }
 }
 
 void StatusScene::handleInput(engine::IInput &input)
 {
     if (input.wasKeyJustPressed(engine::Key::Escape))
     {
+        if (showSkillDetails_)
+        {
+            showSkillDetails_ = false;
+            return;
+        }
         GameManager::instance().enterScene(GameManager::instance().isNight() ? SceneType::Night : SceneType::Town);
+        return;
+    }
+
+    if (showSkillDetails_)
+    {
+        if (input.wasKeyJustPressed(engine::Key::N) || input.wasKeyJustPressed(engine::Key::Enter) ||
+            input.wasKeyJustPressed(engine::Key::E))
+            showSkillDetails_ = false;
         return;
     }
 
@@ -102,6 +174,9 @@ void StatusScene::handlePersonaInput(engine::IInput &input)
         personaIndex_ = (personaIndex_ - 1 + count) % count;
     if (input.wasKeyJustPressed(engine::Key::Down) || input.wasKeyJustPressed(engine::Key::S))
         personaIndex_ = (personaIndex_ + 1) % count;
+
+    if (input.wasKeyJustPressed(engine::Key::N))
+        showSkillDetails_ = !showSkillDetails_;
 
     if ((input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E)) &&
         personaIndex_ >= 0 && personaIndex_ < count && owned[personaIndex_])
@@ -192,50 +267,87 @@ void StatusScene::update(float deltaTime)
 void StatusScene::render(engine::IRenderer &renderer)
 {
     renderer.clear();
-    renderer.drawRect({0, 0, 800, 600}, engine::Color(15, 15, 30));
+    renderer.drawRect({0, 0, 800, 600}, engine::Color(8, 9, 22));
+    renderer.drawRect({0, 0, 800, 90}, engine::Color(18, 20, 45, 230));
+    renderer.drawRect({0, 88, 800, 2}, engine::Color(220, 190, 80, 230));
+    renderer.drawText("CHARACTER / PERSONA", {28, 24}, 30, engine::Color(245, 245, 255));
+    renderer.drawText("Out-of-battle Persona management and equipment loadout", {32, 58}, 14, engine::Color(150, 160, 200));
 
+    renderProfilePanel(renderer);
     renderPersonaPanel(renderer);
     renderEquipmentPanel(renderer);
 
-    renderer.drawText("A/D: switch panel   Persona Enter: switch   Persona Space: destroy   Equipment Enter: equip/unequip   Esc: back",
-                      {30, 570}, 13, engine::Color::gray());
+    renderer.drawText("A/D: switch panel   Persona Enter: switch   N: skill details   Persona Space: destroy   Equipment Enter: equip/unequip   Esc: back",
+                      {20, 570}, 12, engine::Color::gray());
 
     if (!message_.empty())
     {
         renderer.drawRect({230, 282, 340, 36}, engine::Color(0, 0, 0, 220));
         renderer.drawText(message_, {242, 293}, 16, engine::Color::green());
     }
+
+    if (showSkillDetails_)
+        renderSkillDetailsOverlay(renderer);
+}
+
+void StatusScene::renderProfilePanel(engine::IRenderer &renderer)
+{
+    float x = 20.0f, y = 105.0f, w = 220.0f, h = 445.0f;
+    drawPanel(renderer, x, y, w, h, engine::Color(80, 170, 255));
+
+    auto &character = GameManager::instance().character();
+    Persona *persona = character.currentPersona();
+    renderer.drawText("Profile", {x + 14, y + 10}, 19, engine::Color::white());
+
+    renderer.drawRect({x + 45, y + 50, 130, 165}, engine::Color(10, 10, 24, 230));
+    renderer.drawTexture("hero_" + std::to_string(GameManager::instance().selectedHeroIndex()),
+                         {x + 52, y + 56, 116, 145});
+    renderer.drawRect({x + 45, y + 50, 130, 3}, engine::Color(220, 190, 80));
+    renderer.drawRect({x + 45, y + 212, 130, 3}, engine::Color(220, 190, 80));
+
+    renderer.drawText(character.name(), {x + 18, y + 228}, 22, engine::Color(245, 245, 255));
+    renderer.drawText("Lv." + std::to_string(character.level()) + "   Gold " + std::to_string(character.gold()),
+                      {x + 18, y + 255}, 14, engine::Color::yellow());
+    renderer.drawText("HP " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()),
+                      {x + 18, y + 283}, 15, engine::Color(110, 255, 130));
+    renderer.drawText("SP " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()),
+                      {x + 118, y + 283}, 15, engine::Color(100, 190, 255));
+
+    renderer.drawText("Current Persona", {x + 18, y + 320}, 16, engine::Color::cyan());
+    if (persona)
+    {
+        renderer.drawText(persona->name() + " / " + persona->arcana(), {x + 18, y + 344}, 14, engine::Color::white());
+        renderer.drawText("Base  STR " + std::to_string(persona->strength()) +
+                              "  MAG " + std::to_string(persona->magic()) +
+                              "  SPD " + std::to_string(persona->speed()),
+                          {x + 18, y + 370}, 12, engine::Color(170, 170, 190));
+    }
+    renderer.drawText("Final STR " + std::to_string(character.attack()), {x + 18, y + 402}, 14, engine::Color(255, 150, 150));
+    renderer.drawText("MAG " + std::to_string(character.magic()), {x + 104, y + 402}, 14, engine::Color(150, 190, 255));
+    renderer.drawText("SPD " + std::to_string(character.speed()), {x + 164, y + 402}, 14, engine::Color(255, 230, 120));
 }
 
 void StatusScene::renderPersonaPanel(engine::IRenderer &renderer)
 {
-    float x = 20.0f, y = 20.0f, w = 280.0f, h = 530.0f;
-    engine::Color border = (section_ == Section::Persona) ? engine::Color::yellow() : engine::Color(80, 80, 100);
-    renderer.drawRect({x, y, w, h}, engine::Color(25, 25, 50, 230));
-    renderer.drawRect({x, y, w, 2}, border);
-    renderer.drawRect({x, y + h - 2, w, 2}, border);
-    renderer.drawRect({x, y, 2, h}, border);
-    renderer.drawRect({x + w - 2, y, 2, h}, border);
+    float x = 260.0f, y = 105.0f, w = 240.0f, h = 445.0f;
+    engine::Color border = (section_ == Section::Persona) ? engine::Color::yellow() : engine::Color(80, 80, 120);
+    drawPanel(renderer, x, y, w, h, border);
 
     auto &character = GameManager::instance().character();
     const auto &owned = character.ownedPersonas();
-    renderer.drawText("Persona Slots " + std::to_string(owned.size()) + "/" + std::to_string(Character::kMaxOwnedPersonas),
-                      {x + 10, y + 10}, 18, engine::Color::white());
-    renderer.drawText(character.name() + "  Lv." + std::to_string(character.level()) +
-                          "  HP " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()) +
-                          "  SP " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()),
-                      {x + 10, y + 36}, 12, engine::Color(200, 200, 220));
+    renderer.drawText("Persona Deck " + std::to_string(owned.size()) + "/" + std::to_string(Character::kMaxOwnedPersonas),
+                      {x + 12, y + 10}, 18, engine::Color::white());
 
-    float rowY = y + 65.0f;
+    float rowY = y + 48.0f;
     for (int i = 0; i < static_cast<int>(Character::kMaxOwnedPersonas); ++i)
     {
         bool selected = section_ == Section::Persona && i == personaIndex_;
         engine::Color boxBorder = selected ? engine::Color::yellow() : engine::Color(80, 80, 100);
-        renderer.drawRect({x + 10, rowY, w - 20, 48}, engine::Color(20, 20, 40, 230));
+        renderer.drawRect({x + 10, rowY, w - 20, 44}, engine::Color(20, 20, 42, 235));
         renderer.drawRect({x + 10, rowY, w - 20, 2}, boxBorder);
-        renderer.drawRect({x + 10, rowY + 46, w - 20, 2}, boxBorder);
-        renderer.drawRect({x + 10, rowY, 2, 48}, boxBorder);
-        renderer.drawRect({x + w - 12, rowY, 2, 48}, boxBorder);
+        renderer.drawRect({x + 10, rowY + 42, w - 20, 2}, boxBorder);
+        renderer.drawRect({x + 10, rowY, 2, 44}, boxBorder);
+        renderer.drawRect({x + w - 12, rowY, 2, 44}, boxBorder);
 
         if (i < static_cast<int>(owned.size()) && owned[i])
         {
@@ -251,10 +363,10 @@ void StatusScene::renderPersonaPanel(engine::IRenderer &renderer)
         {
             renderer.drawText("(empty)", {x + 28, rowY + 16}, 14, engine::Color(100, 100, 100));
         }
-        rowY += 56.0f;
+        rowY += 49.0f;
     }
 
-    renderSelectedPersonaDetail(renderer, x + 10, y + 410);
+    renderSelectedPersonaDetail(renderer, x + 10, y + 350);
 }
 
 void StatusScene::renderSelectedPersonaDetail(engine::IRenderer &renderer, float x, float y)
@@ -264,7 +376,7 @@ void StatusScene::renderSelectedPersonaDetail(engine::IRenderer &renderer, float
         return;
 
     const auto &p = owned[personaIndex_];
-    renderer.drawText("Skills:", {x, y}, 14, engine::Color::cyan());
+    renderer.drawText("Skills (N for detail popup)", {x, y}, 14, engine::Color::cyan());
     float sy = y + 20.0f;
     int shown = 0;
     for (const auto &skill : p->skills())
@@ -277,18 +389,50 @@ void StatusScene::renderSelectedPersonaDetail(engine::IRenderer &renderer, float
     }
 }
 
+void StatusScene::renderSkillDetailsOverlay(engine::IRenderer &renderer)
+{
+    const auto &owned = GameManager::instance().character().ownedPersonas();
+    if (personaIndex_ < 0 || personaIndex_ >= static_cast<int>(owned.size()) || !owned[personaIndex_])
+        return;
+
+    const auto &p = owned[personaIndex_];
+    renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 0, 155));
+
+    float x = 110.0f, y = 95.0f, w = 580.0f, h = 410.0f;
+    drawPanel(renderer, x, y, w, h, engine::Color(220, 190, 80));
+    renderer.drawText(p->name() + " Skill Details", {x + 24, y + 12}, 22, engine::Color::white());
+    renderer.drawText("N / Enter / E / Esc: close", {x + w - 190, y + 17}, 13, engine::Color::gray());
+
+    float sy = y + 58.0f;
+    for (const auto &skill : p->skills())
+    {
+        if (!skill || sy > y + h - 50.0f)
+            continue;
+
+        renderer.drawRect({x + 22, sy - 4, w - 44, 58}, engine::Color(12, 14, 30, 220));
+        renderer.drawText(skill->name(), {x + 36, sy + 4}, 16, engine::Color::yellow());
+        renderer.drawText(::elementName(skill->element()) + "  " + skillCostText(*skill) +
+                              "  Power " + std::to_string(skill->power()),
+                          {x + 220, sy + 6}, 13, engine::Color::cyan());
+
+        auto lines = wrapText(skillDescription(*skill), 72);
+        float lineY = sy + 28.0f;
+        for (size_t i = 0; i < lines.size() && i < 2; ++i)
+        {
+            renderer.drawText(lines[i], {x + 36, lineY}, 12, engine::Color(210, 210, 225));
+            lineY += 15.0f;
+        }
+        sy += 68.0f;
+    }
+}
+
 void StatusScene::renderEquipmentPanel(engine::IRenderer &renderer)
 {
-    float x = 320.0f, y = 20.0f, w = 460.0f, h = 530.0f;
-    engine::Color border = (section_ == Section::Equipment) ? engine::Color::yellow() : engine::Color(80, 80, 100);
-    renderer.drawRect({x, y, w, h}, engine::Color(25, 25, 50, 230));
-    renderer.drawRect({x, y, w, 2}, border);
-    renderer.drawRect({x, y + h - 2, w, 2}, border);
-    renderer.drawRect({x, y, 2, h}, border);
-    renderer.drawRect({x + w - 2, y, 2, h}, border);
+    float x = 520.0f, y = 105.0f, w = 260.0f, h = 445.0f;
+    engine::Color border = (section_ == Section::Equipment) ? engine::Color::yellow() : engine::Color(80, 80, 120);
+    drawPanel(renderer, x, y, w, h, border);
 
-    renderer.drawText("Equipment", {x + 10, y + 10}, 20, engine::Color::white());
-    renderer.drawText("Equipped slots + backpack equipment only", {x + 140, y + 15}, 13, engine::Color::gray());
+    renderer.drawText("Equipment", {x + 12, y + 10}, 20, engine::Color::white());
 
     const auto &gear = GameManager::instance().equippedGear();
     float rowY = y + 50.0f;
@@ -297,16 +441,18 @@ void StatusScene::renderEquipmentPanel(engine::IRenderer &renderer)
         auto item = equippedAt(gear, i);
         bool selected = section_ == Section::Equipment && equipmentIndex_ == i;
         engine::Color color = selected ? engine::Color::yellow() : engine::Color::white();
-        renderer.drawText(std::string(selected ? "> " : "  ") + slotName(i) + ": " + (item ? item->name() : "(empty)"),
-                          {x + 18, rowY}, 15, color);
+        drawEquipmentIcon(renderer, item.get(), x + 14, rowY, 42.0f);
+        renderer.drawText(std::string(selected ? "> " : "  ") + slotName(i), {x + 64, rowY + 2}, 14, color);
+        renderer.drawText(item ? item->name() : "(empty)", {x + 64, rowY + 19}, 13,
+                          item ? engine::Color::white() : engine::Color(100, 100, 100));
         if (item)
-            renderer.drawText(statsLine(*item), {x + 245, rowY}, 12, engine::Color::gray());
-        rowY += 30.0f;
+            renderer.drawText(statsLine(*item), {x + 64, rowY + 34}, 11, engine::Color::gray());
+        rowY += 52.0f;
     }
 
-    rowY += 16.0f;
-    renderer.drawText("Backpack Equipment", {x + 10, rowY}, 17, engine::Color::cyan());
-    rowY += 28.0f;
+    rowY += 8.0f;
+    renderer.drawText("Backpack Equipment", {x + 12, rowY}, 16, engine::Color::cyan());
+    rowY += 24.0f;
 
     auto eqIndices = equipmentInventoryIndices();
     if (eqIndices.empty())
@@ -315,7 +461,10 @@ void StatusScene::renderEquipmentPanel(engine::IRenderer &renderer)
         return;
     }
 
-    int maxVisible = 10;
+    const float listTop = rowY;
+    const float itemStep = 42.0f;
+    const float panelBottom = y + h - 14.0f;
+    int maxVisible = std::max(1, static_cast<int>((panelBottom - listTop) / itemStep));
     int listIndex = std::max(0, equipmentIndex_ - 4);
     int start = std::max(0, listIndex - maxVisible / 2);
     if (start + maxVisible > static_cast<int>(eqIndices.size()))
@@ -329,10 +478,23 @@ void StatusScene::renderEquipmentPanel(engine::IRenderer &renderer)
         if (!item) continue;
         bool selected = section_ == Section::Equipment && equipmentIndex_ == i + 4;
         engine::Color color = selected ? engine::Color::yellow() : engine::Color::white();
-        renderer.drawText(std::string(selected ? "> " : "  ") + item->name() + " [" + slotName(static_cast<int>(item->slot()) - 1) + "]",
-                          {x + 18, rowY}, 14, color);
-        renderer.drawText(statsLine(*item), {x + 255, rowY}, 12, engine::Color::gray());
-        rowY += 28.0f;
+        drawEquipmentIcon(renderer, item, x + 14, rowY, 36.0f);
+        renderer.drawText(std::string(selected ? "> " : "  ") + item->name(), {x + 56, rowY + 2}, 13, color);
+        renderer.drawText(std::string(slotName(static_cast<int>(item->slot()) - 1)) + "  " + statsLine(*item),
+                          {x + 56, rowY + 20}, 11, engine::Color::gray());
+        rowY += itemStep;
+    }
+
+    if (static_cast<int>(eqIndices.size()) > maxVisible)
+    {
+        float barX = x + w - 12.0f;
+        float barY = listTop;
+        float barH = panelBottom - listTop;
+        float thumbH = std::max(18.0f, barH * static_cast<float>(maxVisible) / static_cast<float>(eqIndices.size()));
+        float denom = static_cast<float>(std::max(1, static_cast<int>(eqIndices.size()) - maxVisible));
+        float thumbY = barY + (barH - thumbH) * (static_cast<float>(start) / denom);
+        renderer.drawRect({barX, barY, 4.0f, barH}, engine::Color(45, 45, 70, 210));
+        renderer.drawRect({barX, thumbY, 4.0f, thumbH}, engine::Color(220, 190, 80, 230));
     }
 }
 
