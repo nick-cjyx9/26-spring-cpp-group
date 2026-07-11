@@ -70,6 +70,17 @@ void NightScene::handleInput(engine::IInput &input)
         }
     }
 
+    if (input.wasKeyJustPressed(engine::Key::R))
+    {
+        PlayerEntity *p = findPlayer(GameManager::instance().currentMap());
+        if (p)
+        {
+            p->setPosition(mapDefaultSpawn(GameManager::instance().onSecondMap()));
+            stuckMessage_ = "Rescued!";
+            stuckMessageTimer_ = 3.0f;
+        }
+    }
+
     if (input.wasKeyJustPressed(engine::Key::Escape))
     {
         // Returning from night to day = next day: refresh NPCs on the map.
@@ -81,15 +92,27 @@ void NightScene::handleInput(engine::IInput &input)
 
 void NightScene::update(float deltaTime)
 {
+    if (stuckMessageTimer_ > 0.0f)
+    {
+        stuckMessageTimer_ -= deltaTime;
+        if (stuckMessageTimer_ <= 0.0f)
+        {
+            stuckMessageTimer_ = 0.0f;
+            stuckMessage_.clear();
+        }
+    }
+
     TileMap &map = GameManager::instance().currentMap();
     PlayerEntity *player = findPlayer(map);
     if (!player)
         return;
 
-    // Auto-rescue: if player is stuck inside a collision zone, teleport to default spawn.
+    // Auto-rescue: if player is stuck inside a collision zone, move to the
+    // nearest walkable position instead of jumping to the default spawn
+    // (which may itself be blocked).
     bool isSecond = GameManager::instance().onSecondMap();
     if (isInCollisionZone(player->position(), isSecond))
-        player->setPosition(mapDefaultSpawn(isSecond));
+        player->setPosition(findNearestWalkable(player->position(), isSecond));
 
     engine::Vec2 newPos = player->position();
     newPos.x += moveX_ * moveSpeed_ * deltaTime;
@@ -212,12 +235,19 @@ void NightScene::render(engine::IRenderer &renderer)
 
     if (onSecond)
     {
-        renderer.drawText("Night [School] - touch shadows to fight   C: status   <: exit   Esc: next day",
-                          {120, 570}, 14, engine::Color::white());
+        renderer.drawText("Night [School] - touch shadows to fight   C: status   R: rescue   <: exit   Esc: next day",
+                          {90, 570}, 14, engine::Color::white());
     }
     else
     {
-        renderer.drawText("Night - touch shadows to fight   C: status   Home: E   >: school   Esc: next day",
-                          {60, 570}, 14, engine::Color::white());
+        renderer.drawText("Night - touch shadows to fight   C: status   R: rescue   Home: E   >: school   Esc: next day",
+                          {50, 570}, 14, engine::Color::white());
+    }
+
+    // Stuck rescue feedback overlay.
+    if (!stuckMessage_.empty())
+    {
+        renderer.drawRect({300, 510, 200, 36}, engine::Color(0, 0, 0, 200));
+        renderer.drawText(stuckMessage_, {340, 519}, 18, engine::Color::cyan());
     }
 }

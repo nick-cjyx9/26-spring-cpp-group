@@ -17,4 +17,6 @@ private:
     float moveY_ = 0.0f;
     std::string saveMessage_;
     float saveMessageTimer_ = 0.0f;
+    std::string stuckMessage_;
+    float stuckMessageTimer_ = 0.0f;
 };

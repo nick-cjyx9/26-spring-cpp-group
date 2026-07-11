@@ -33,7 +33,9 @@ inline const std::vector<engine::Rect> &townNpcSpawnZones()
 
 inline engine::Vec2 townDefaultSpawn()
 {
-    return {365.0f, 58.0f};
+    // Just below the houses wall (houses zone ends at y=208). Verified walkable:
+    // not inside any town collision zone.
+    return {365.0f, 220.0f};
 }
 
 // =====================================================================
@@ -133,4 +135,39 @@ inline bool isInCollisionZone(engine::Vec2 pos, bool onSecondMap)
             return true;
     }
     return false;
+}
+
+// =====================================================================
+// Stuck rescue: find the nearest walkable position to a (possibly
+// trapped) point by scanning outward in expanding square rings.
+// Falls back to the map default spawn (guaranteed walkable).
+// =====================================================================
+
+inline engine::Vec2 findNearestWalkable(engine::Vec2 pos, bool onSecondMap)
+{
+    if (!isInCollisionZone(pos, onSecondMap))
+        return pos;
+
+    const float step = 10.0f;
+    const int maxRadius = 60; // up to 600px search radius
+    for (int r = 1; r <= maxRadius; ++r)
+    {
+        for (int dx = -r; dx <= r; ++dx)
+        {
+            for (int dy = -r; dy <= r; ++dy)
+            {
+                const int adx = dx < 0 ? -dx : dx;
+                const int ady = dy < 0 ? -dy : dy;
+                if (adx != r && ady != r)
+                    continue; // only probe the ring edge (interior already checked)
+                engine::Vec2 cand{pos.x + dx * step, pos.y + dy * step};
+                if (cand.x < 0.0f || cand.y < 0.0f ||
+                    cand.x > 800.0f || cand.y > 600.0f)
+                    continue;
+                if (!isInCollisionZone(cand, onSecondMap))
+                    return cand;
+            }
+        }
+    }
+    return mapDefaultSpawn(onSecondMap);
 }

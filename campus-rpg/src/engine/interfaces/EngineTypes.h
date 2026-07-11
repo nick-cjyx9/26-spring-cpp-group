@@ -87,6 +87,7 @@ enum class Key
     Space,
     F5,
     L,
+    R,
     Num1,
     Num2,
     Num3,
@@ -132,6 +133,8 @@ inline std::string keyName(Key key)
         return "F5";
     case Key::L:
         return "L";
+    case Key::R:
+        return "R";
     case Key::Num1:
         return "1";
     case Key::Num2:
