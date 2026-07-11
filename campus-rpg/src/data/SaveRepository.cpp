@@ -89,7 +89,6 @@ namespace
         std::string id = itemId ? itemId : "";
         std::string n = name ? name : "";
         std::string desc = description ? description : "";
-
         std::string textureId = getString("textureId");
 
         if (std::string(typeStr) == "Food")
