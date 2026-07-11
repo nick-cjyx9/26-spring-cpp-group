@@ -94,7 +94,7 @@ void testSaveAndLoadCharacterFullState()
     QuestManager qm;
     std::vector<std::shared_ptr<Persona>> personas;
 
-    CHECK(repo.saveAll(1, hero, inv, personas, slm, qm));
+    CHECK(repo.saveAll(1, hero, inv, personas, slm, qm, 7));
     CHECK(repo.slotExists(1));
 
     Character loaded;
@@ -102,7 +102,8 @@ void testSaveAndLoadCharacterFullState()
     std::vector<std::shared_ptr<Persona>> loadedPersonas;
     SocialLinkManager loadedSlm;
     QuestManager loadedQm;
-    CHECK(repo.loadAll(1, loaded, loadedInv, loadedPersonas, loadedSlm, loadedQm));
+    int loadedDay = 0;
+    CHECK(repo.loadAll(1, loaded, loadedInv, loadedPersonas, loadedSlm, loadedQm, &loadedDay));
 
     CHECK_EQ(loaded.name(), std::string("Hero"));
     CHECK_EQ(loaded.level(), expectedLevel);
@@ -110,6 +111,7 @@ void testSaveAndLoadCharacterFullState()
     CHECK_EQ(loaded.sp(), expectedSp);
     CHECK_EQ(loaded.gold(), expectedGold);
     CHECK_EQ(loaded.maxHp(), hero.maxHp());
+    CHECK_EQ(loadedDay, 7);
     // base stats now come from Persona, not persisted on Character
 
     auto info = repo.slotInfo(1);

@@ -28,10 +28,12 @@ public:
     // ---- Multi-slot API (preferred) ----
     bool saveAll(int slotId, const Character &character, const Inventory &inventory,
                  const std::vector<std::shared_ptr<Persona>> &personas,
-                 const SocialLinkManager &socialLinks, const QuestManager &quests);
+                 const SocialLinkManager &socialLinks, const QuestManager &quests,
+                 int day = 1);
     bool loadAll(int slotId, Character &character, Inventory &inventory,
                  std::vector<std::shared_ptr<Persona>> &personas,
-                 SocialLinkManager &socialLinks, QuestManager &quests);
+                 SocialLinkManager &socialLinks, QuestManager &quests,
+                 int *day = nullptr);
 
     bool deleteSlot(int slotId);
     bool slotExists(int slotId);
@@ -66,5 +68,7 @@ private:
     bool saveQuests_(int slotId, const QuestManager &manager);
     bool loadQuests_(int slotId, QuestManager &manager);
     bool saveMeta_(int slotId, const Character &character);
+    bool saveDay_(int slotId, int day);
+    bool loadDay_(int slotId, int &day);
     bool deleteMeta_(int slotId);
 };

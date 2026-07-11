@@ -90,7 +90,7 @@ bool GameManager::saveToSlot(int slotId)
 {
     SaveRepository repo;
     bool ok = repo.saveAll(slotId, character_, inventory_, personas_,
-                           socialLinkManager_, questManager_);
+                           socialLinkManager_, questManager_, day_);
     if (ok)
         currentSlotId_ = slotId;
     return ok;
@@ -125,8 +125,9 @@ bool GameManager::loadFromSlot(int slotId)
         skillSnapshot[p->id()] = std::move(skills);
     }
 
+    int loadedDay = 1;
     if (!repo.loadAll(slotId, character_, inventory_, personas_,
-                      socialLinkManager_, questManager_))
+                      socialLinkManager_, questManager_, &loadedDay))
     {
         // Load failed: leave the seeded default state intact so the game is
         // still in a runnable state.
@@ -147,6 +148,7 @@ bool GameManager::loadFromSlot(int slotId)
     }
 
     currentSlotId_ = slotId;
+    day_ = loadedDay;
 
     // Restore the currently-equipped persona from the save.
     std::string currentId = repo.currentPersonaId(slotId);

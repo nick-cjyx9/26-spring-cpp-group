@@ -605,9 +605,58 @@ bool SaveRepository::deleteMeta_(int slotId)
     return true;
 }
 
+bool SaveRepository::saveDay_(int slotId, int day)
+{
+    sqlite3 *db = DatabaseManager::instance().database();
+    if (!db)
+        return false;
+
+    if (day < 1)
+        day = 1;
+
+    const char *sql = "REPLACE INTO game_state (slot_id, day) VALUES (?, ?)";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_int(stmt, 1, slotId);
+    sqlite3_bind_int(stmt, 2, day);
+
+    bool ok = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
+bool SaveRepository::loadDay_(int slotId, int &day)
+{
+    sqlite3 *db = DatabaseManager::instance().database();
+    if (!db)
+        return false;
+
+    const char *sql = "SELECT day FROM game_state WHERE slot_id = ?";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+        return false;
+
+    sqlite3_bind_int(stmt, 1, slotId);
+
+    bool ok = false;
+    if (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        day = sqlite3_column_int(stmt, 0);
+        if (day < 1)
+            day = 1;
+        ok = true;
+    }
+
+    sqlite3_finalize(stmt);
+    return ok;
+}
+
 bool SaveRepository::saveAll(int slotId, const Character &character, const Inventory &inventory,
                              const std::vector<std::shared_ptr<Persona>> &personas,
-                             const SocialLinkManager &socialLinks, const QuestManager &quests)
+                             const SocialLinkManager &socialLinks, const QuestManager &quests,
+                             int day)
 {
     if (!DatabaseManager::instance().isOpen())
         return false;
@@ -625,6 +674,7 @@ bool SaveRepository::saveAll(int slotId, const Character &character, const Inven
               savePersonas_(slotId, personas) &&
               saveSocialLinks_(slotId, socialLinks) &&
               saveQuests_(slotId, quests) &&
+              saveDay_(slotId, day) &&
               saveMeta_(slotId, character);
 
     if (ok)
@@ -636,7 +686,8 @@ bool SaveRepository::saveAll(int slotId, const Character &character, const Inven
 
 bool SaveRepository::loadAll(int slotId, Character &character, Inventory &inventory,
                              std::vector<std::shared_ptr<Persona>> &personas,
-                             SocialLinkManager &socialLinks, QuestManager &quests)
+                             SocialLinkManager &socialLinks, QuestManager &quests,
+                             int *day)
 {
     if (!DatabaseManager::instance().isOpen())
         return false;
@@ -645,9 +696,18 @@ bool SaveRepository::loadAll(int slotId, Character &character, Inventory &invent
         return false;
 
     std::string currentPersonaId;
-    return loadCharacter_(slotId, character) && loadInventory_(slotId, inventory) &&
-           loadPersonas_(slotId, personas, currentPersonaId) && loadSocialLinks_(slotId, socialLinks) &&
-           loadQuests_(slotId, quests);
+    bool ok = loadCharacter_(slotId, character) && loadInventory_(slotId, inventory) &&
+              loadPersonas_(slotId, personas, currentPersonaId) && loadSocialLinks_(slotId, socialLinks) &&
+              loadQuests_(slotId, quests);
+    if (ok && day)
+    {
+        int loadedDay = 1;
+        if (loadDay_(slotId, loadedDay))
+            *day = loadedDay;
+        else
+            *day = 1;
+    }
+    return ok;
 }
 
 bool SaveRepository::deleteSlot(int slotId)
@@ -661,7 +721,7 @@ bool SaveRepository::deleteSlot(int slotId)
 
     sqlite3_exec(db, "BEGIN", nullptr, nullptr, nullptr);
 
-    const char *tables[] = {"character", "persona", "inventory", "social_link", "quest_progress", "save_meta"};
+    const char *tables[] = {"character", "persona", "inventory", "social_link", "quest_progress", "game_state", "save_meta"};
     bool ok = true;
     for (const char *t : tables)
     {
@@ -816,12 +876,12 @@ bool SaveRepository::saveAll(const Character &character, const Inventory &invent
                              const std::vector<std::shared_ptr<Persona>> &personas,
                              const SocialLinkManager &socialLinks, const QuestManager &quests)
 {
-    return saveAll(1, character, inventory, personas, socialLinks, quests);
+    return saveAll(1, character, inventory, personas, socialLinks, quests, 1);
 }
 
 bool SaveRepository::loadAll(Character &character, Inventory &inventory,
                              std::vector<std::shared_ptr<Persona>> &personas,
                              SocialLinkManager &socialLinks, QuestManager &quests)
 {
-    return loadAll(1, character, inventory, personas, socialLinks, quests);
+    return loadAll(1, character, inventory, personas, socialLinks, quests, nullptr);
 }

@@ -108,6 +108,7 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             sqlite3_exec(db_, "DROP TABLE IF EXISTS inventory;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS social_link;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS quest_progress;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS game_state;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS save_meta;", nullptr, nullptr, nullptr);
         }
     }
@@ -178,6 +179,11 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             PRIMARY KEY (slot_id, quest_id)
         );
 
+        CREATE TABLE IF NOT EXISTS game_state (
+            slot_id INTEGER PRIMARY KEY,
+            day INTEGER DEFAULT 1
+        );
+
         CREATE TABLE IF NOT EXISTS save_meta (
             slot_id INTEGER PRIMARY KEY,
             character_name TEXT,
@@ -222,6 +228,9 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
     addColumnIfMissing("social_link", "name", "TEXT");
     addColumnIfMissing("social_link", "portrait", "TEXT");
 
+    sqlite3_exec(db_, "CREATE TABLE IF NOT EXISTS game_state (slot_id INTEGER PRIMARY KEY, day INTEGER DEFAULT 1);",
+                 nullptr, nullptr, nullptr);
+
     if (version < 1)
     {
         // If legacy tables were renamed, copy their data into slot_id=1 of the
@@ -254,6 +263,9 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
                 INSERT INTO quest_progress (slot_id, quest_id, accepted, completed, rewarded)
                 SELECT 1, quest_id, accepted, completed, rewarded
                 FROM quest_progress_legacy;
+
+                INSERT INTO game_state (slot_id, day)
+                VALUES (1, 1);
 
                 INSERT INTO save_meta (slot_id, character_name, level, updated_at)
                 SELECT 1, name, level, 'migrated'

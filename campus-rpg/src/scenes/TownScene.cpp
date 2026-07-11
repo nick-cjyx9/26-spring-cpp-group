@@ -56,21 +56,6 @@ void TownScene::handleInput(engine::IInput &input)
     {
         GameManager::instance().enterScene(SceneType::Status);
     }
-    if (input.wasKeyJustPressed(engine::Key::N))
-    {
-        GameManager::instance().setNight(true);
-        TileMap &map = GameManager::instance().currentMap();
-        engine::Vec2 playerPos{100, 100};
-        PlayerEntity *player = findPlayer(map);
-        if (player)
-            playerPos = player->position();
-        map.clearEntities();
-        map.addEntity(std::make_unique<PlayerEntity>(playerPos));
-        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime"));
-        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin"));
-        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss"));
-        GameManager::instance().enterScene(SceneType::Night);
-    }
     if (input.wasKeyJustPressed(engine::Key::F5))
     {
         if (GameManager::instance().saveCurrentSlot())
@@ -205,26 +190,34 @@ void TownScene::render(engine::IRenderer &renderer)
         }
     }
 
-    // HUD - top left corner: level info
-    renderer.drawRect({10, 10, 160, 50}, engine::Color(0, 0, 0, 180));
-    renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()),
-                      {20, 20}, 18, engine::Color::yellow());
+    // HUD: top boxes use the same size and padding.
+    constexpr float hudX = 10.0f;
+    constexpr float hudY = 10.0f;
+    constexpr float hudW = 180.0f;
+    constexpr float hudH = 56.0f;
+    constexpr float hudPad = 10.0f;
+    constexpr float rightHudX = 800.0f - hudX - hudW;
+    renderer.drawRect({hudX, hudY, hudW, hudH}, engine::Color(0, 0, 0, 200));
+    renderer.drawRect({hudX + 2.0f, hudY + 2.0f, hudW - 4.0f, hudH - 4.0f}, engine::Color(30, 30, 50, 200));
+    renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()) +
+                          "  " + GameManager::instance().character().name(),
+                      {hudX + hudPad, hudY + hudPad + 2.0f}, 18, engine::Color::yellow());
 
-    // Day indicator - top right corner (replaces the old time clock).
-    renderer.drawRect({620, 10, 170, 50}, engine::Color(0, 0, 0, 200));
-    renderer.drawRect({622, 12, 166, 46}, engine::Color(30, 30, 50, 200));
+    // Day indicator - top right corner.
+    renderer.drawRect({rightHudX, hudY, hudW, hudH}, engine::Color(0, 0, 0, 200));
+    renderer.drawRect({rightHudX + 2.0f, hudY + 2.0f, hudW - 4.0f, hudH - 4.0f}, engine::Color(30, 30, 50, 200));
     renderer.drawText("Day " + std::to_string(GameManager::instance().day()),
-                      {650, 22}, 20, engine::Color::cyan());
+                      {rightHudX + hudPad, hudY + hudPad + 2.0f}, 20, engine::Color::cyan());
 
     // Interaction hint
     if (onSecond)
     {
-        renderer.drawText("E:Talk/Exit  I:Items  C:Status  L:Social  Space:Armory  N:Night  F5:Save  [School]",
+        renderer.drawText("E:Talk/Exit  I:Items  C:Status  L:Social  Space:Armory  F5:Save  [School]",
                           {40, 570}, 14, engine::Color::white());
     }
     else
     {
-        renderer.drawText("E:Talk/Shop/Home  I:Items  C:Status  L:Social  Space:Armory  N:Night  F5:Save",
+        renderer.drawText("E:Talk/Shop/Home  I:Items  C:Status  L:Social  Space:Armory  F5:Save",
                           {50, 570}, 14, engine::Color::white());
     }
 

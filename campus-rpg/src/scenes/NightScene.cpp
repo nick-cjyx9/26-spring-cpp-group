@@ -162,21 +162,26 @@ void NightScene::render(engine::IRenderer &renderer)
         }
     }
 
-    // HUD
-    renderer.drawRect({620, 10, 170, 70}, engine::Color(0, 0, 0, 180));
+    // HUD: same box size and padding as the day scene.
+    constexpr float hudX = 10.0f;
+    constexpr float hudY = 10.0f;
+    constexpr float hudW = 180.0f;
+    constexpr float hudH = 56.0f;
+    constexpr float hudPad = 10.0f;
+    constexpr float rightHudX = 800.0f - hudX - hudW;
+
+    renderer.drawRect({hudX, hudY, hudW, hudH}, engine::Color(0, 0, 0, 200));
+    renderer.drawRect({hudX + 2.0f, hudY + 2.0f, hudW - 4.0f, hudH - 4.0f}, engine::Color(30, 30, 50, 200));
+    renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()) +
+                          "  " + GameManager::instance().character().name(),
+                      {hudX + hudPad, hudY + hudPad + 2.0f}, 18, engine::Color::yellow());
+
+    renderer.drawRect({rightHudX, hudY, hudW, hudH}, engine::Color(0, 0, 0, 200));
+    renderer.drawRect({rightHudX + 2.0f, hudY + 2.0f, hudW - 4.0f, hudH - 4.0f}, engine::Color(30, 30, 50, 200));
+    renderer.drawText(onSecond ? "Night [School]" : "Night",
+                      {rightHudX + hudPad, hudY + hudPad + 2.0f}, 16, onSecond ? engine::Color(255, 150, 150) : engine::Color::white());
     if (onSecond)
-    {
-        renderer.drawText("Night [School]", {622, 14}, 16, engine::Color(255, 150, 150));
-        renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()),
-                          {720, 38}, 18, engine::Color::yellow());
-        renderer.drawText("Danger!", {635, 56}, 14, engine::Color(255, 100, 100));
-    }
-    else
-    {
-        renderer.drawText("Night", {635, 20}, 18, engine::Color::white());
-        renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()),
-                          {720, 20}, 18, engine::Color::yellow());
-    }
+        renderer.drawText("Danger!", {rightHudX + hudPad, hudY + 34.0f}, 14, engine::Color(255, 100, 100));
 
     // Map-switch arrows (same positions as day).
     if (!onSecond)
