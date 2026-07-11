@@ -146,9 +146,13 @@ void ShopScene::render(engine::IRenderer &renderer)
                 {
                     texPath = items[i]->textureId();
                 }
-                else
+                else if (items[i]->type() == ItemType::Equipment)
                 {
                     texPath = std::string("equipment/") + items[i]->textureId();
+                }
+                else
+                {
+                    texPath = std::string("items/") + items[i]->textureId();
                 }
                 renderer.drawTexture(texPath, {155.0f, y, 32, 32});
             }
@@ -187,9 +191,13 @@ void ShopScene::render(engine::IRenderer &renderer)
                     {
                         texPath = items[i]->textureId();
                     }
-                    else
+                    else if (items[i]->type() == ItemType::Equipment)
                     {
                         texPath = std::string("equipment/") + items[i]->textureId();
+                    }
+                    else
+                    {
+                        texPath = std::string("items/") + items[i]->textureId();
                     }
                     renderer.drawTexture(texPath, {155.0f, y, 32, 32});
                 }

@@ -156,7 +156,9 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             name TEXT NOT NULL,
             description TEXT,
             value INTEGER DEFAULT 0,
-            extra_data TEXT
+            extra_data TEXT,
+            texture_id TEXT DEFAULT '',
+            quantity INTEGER DEFAULT 1
         );
 
         CREATE TABLE IF NOT EXISTS social_link (
@@ -221,6 +223,8 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
     };
     addColumnIfMissing("social_link", "name", "TEXT");
     addColumnIfMissing("social_link", "portrait", "TEXT");
+    addColumnIfMissing("inventory", "texture_id", "TEXT DEFAULT ''");
+    addColumnIfMissing("inventory", "quantity", "INTEGER DEFAULT 1");
 
     if (version < 1)
     {
@@ -273,7 +277,7 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             }
         }
 
-        sqlite3_exec(db_, "PRAGMA user_version = 2;", nullptr, nullptr, nullptr);
+        sqlite3_exec(db_, "PRAGMA user_version = 3;", nullptr, nullptr, nullptr);
     }
 
     initialized_ = true;

@@ -323,7 +323,9 @@ void BattleScene::render(engine::IRenderer &renderer)
     // Enemy panel
     if (enemy)
     {
-        renderer.drawTexture("shadow", {520, 95, 96, 96});
+        std::string enemyTex = GameManager::instance().currentEnemyTextureId();
+        if (enemyTex.empty()) enemyTex = "shadow";
+        renderer.drawTexture(enemyTex, {520, 95, 96, 96});
         renderer.drawText(enemy->name(), {500, 60}, 22, engine::Color::white());
         renderer.drawText("HP " + std::to_string(enemy->hp()) + "/" + std::to_string(enemy->maxHp()),
                           {500, 205}, 18, engine::Color::red());
@@ -334,18 +336,22 @@ void BattleScene::render(engine::IRenderer &renderer)
     }
 
     // Player panel
-    renderer.drawTexture("player", {145, 250, 64, 64});
-    renderer.drawText(character.name(), {145, 225}, 22, engine::Color::white());
+    std::string playerTex = "player_" + std::to_string(GameManager::instance().selectedHeroIndex());
+    float playerSize = 128.0f;
+    float playerCX = 145.0f + 64.0f / 2.0f;
+    float playerCY = 250.0f + 64.0f / 2.0f;
+    renderer.drawTexture(playerTex, {playerCX - playerSize / 2.0f, playerCY - playerSize / 2.0f, playerSize, playerSize});
+    renderer.drawText(character.name(), {145, 190}, 22, engine::Color::white());
     renderer.drawText("HP " + std::to_string(character.hp()) + "/" + std::to_string(character.maxHp()) +
                           "  SP " + std::to_string(character.sp()) + "/" + std::to_string(character.maxSp()),
-                      {145, 330}, 16, engine::Color::green());
+                      {145, 355}, 16, engine::Color::green());
     if (persona)
     {
         renderer.drawText("Persona: " + persona->name() + " Lv" + std::to_string(persona->level()),
-                          {145, 353}, 15, engine::Color::cyan());
+                          {145, 378}, 15, engine::Color::cyan());
         renderer.drawText("STR " + std::to_string(character.attack()) + "  MAG " + std::to_string(character.magic()) +
                               "  SPD " + std::to_string(character.speed()),
-                          {145, 374}, 14, engine::Color::white());
+                          {145, 399}, 14, engine::Color::white());
     }
 
     // Menu panel

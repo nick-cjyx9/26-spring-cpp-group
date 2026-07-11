@@ -13,4 +13,5 @@ private:
     float moveSpeed_ = 150.0f;
     float moveX_ = 0.0f;
     float moveY_ = 0.0f;
+    float auraTimer_ = 0.0f;
 };

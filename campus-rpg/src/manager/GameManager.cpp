@@ -412,7 +412,7 @@ void GameManager::initDefaultShop()
                                                   "Basic protection.", 60, 0, 4, 0,
                                                   EquipmentSlot::Armor, "tile_15_24"));
     shop_.addItem(std::make_unique<PersonaItem>("item_pixie_contract", "Pixie Contract",
-                                                "Summons Pixie.", 150, "persona_pixie"));
+                                                "Summons Pixie.", 150, "persona_pixie", "items/persona_pixie"));
 }
 
 void GameManager::initDefaultQuests()
@@ -447,7 +447,9 @@ void GameManager::generateNpcPool()
         "Ivan", "Julia", "Kevin", "Luna", "Mason", "Nora", "Oscar", "Piper",
         "Quinn", "Rita", "Sean", "Tina"};
     static const std::vector<std::string> kPortraits = {
-        "npc_yosuke", "npc_chie", "npc_yukiko"};
+        "npc_portrait_0", "npc_portrait_1", "npc_portrait_2", "npc_portrait_3"};
+    static const std::vector<std::string> kSprites = {
+        "npc_sprite_0", "npc_sprite_1", "npc_sprite_2", "npc_sprite_3"};
     static const std::vector<std::string> kArcanas = {
         "Magician", "Chariot", "Priestess", "Fool", "Hierophant"};
 
@@ -462,7 +464,8 @@ void GameManager::generateNpcPool()
         NpcDefinition def;
         def.id = "sl_npc_" + std::to_string(i);
         def.name = (i < static_cast<int>(names.size())) ? names[i] : ("NPC" + std::to_string(i));
-        def.portraitId = kPortraits[rng() % kPortraits.size()];
+        def.portraitId = kPortraits[i % kPortraits.size()];
+        def.spriteId = kSprites[i % kSprites.size()];
         def.arcana = kArcanas[i % kArcanas.size()];
         npcPool_.push_back(def);
 
@@ -549,7 +552,11 @@ void GameManager::rebuildMapNpcs()
         static const engine::Vec2 kSpots[kNpcsPerDay] = {
             engine::Vec2{200.0f, 150.0f}, engine::Vec2{300.0f, 200.0f}};
         for (size_t i = 0; i < todayNpcIds_.size() && i < kNpcsPerDay; ++i)
-            map.addEntity(std::make_unique<NpcEntity>(kSpots[i], todayNpcIds_[i]));
+        {
+            const NpcDefinition *def = findNpc(todayNpcIds_[i]);
+            std::string spriteId = def ? def->spriteId : "";
+            map.addEntity(std::make_unique<NpcEntity>(kSpots[i], todayNpcIds_[i], spriteId));
+        }
     }
 
     // School map (second map)
@@ -568,7 +575,11 @@ void GameManager::rebuildMapNpcs()
         static const engine::Vec2 kSpots[kNpcsPerDay] = {
             engine::Vec2{250.0f, 180.0f}, engine::Vec2{400.0f, 230.0f}};
         for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kNpcsPerDay; ++i)
-            map.addEntity(std::make_unique<NpcEntity>(kSpots[i], todaySchoolNpcIds_[i]));
+        {
+            const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
+            std::string spriteId = def ? def->spriteId : "";
+            map.addEntity(std::make_unique<NpcEntity>(kSpots[i], todaySchoolNpcIds_[i], spriteId));
+        }
     }
 }
 
@@ -663,7 +674,11 @@ void GameManager::initDefaultMap()
     static const engine::Vec2 kNpcSpots[kNpcsPerDay] = {
         engine::Vec2{200.0f, 150.0f}, engine::Vec2{300.0f, 200.0f}};
     for (size_t i = 0; i < todayNpcIds_.size() && i < kNpcsPerDay; ++i)
-        currentMap_->addEntity(std::make_unique<NpcEntity>(kNpcSpots[i], todayNpcIds_[i]));
+    {
+        const NpcDefinition *def = findNpc(todayNpcIds_[i]);
+        std::string spriteId = def ? def->spriteId : "";
+        currentMap_->addEntity(std::make_unique<NpcEntity>(kNpcSpots[i], todayNpcIds_[i], spriteId));
+    }
 }
 
 void GameManager::initSecondMap()
@@ -678,7 +693,11 @@ void GameManager::initSecondMap()
     static const engine::Vec2 kNpcSpots[kNpcsPerDay] = {
         engine::Vec2{250.0f, 180.0f}, engine::Vec2{400.0f, 230.0f}};
     for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kNpcsPerDay; ++i)
-        secondMap_->addEntity(std::make_unique<NpcEntity>(kNpcSpots[i], todaySchoolNpcIds_[i]));
+    {
+        const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
+        std::string spriteId = def ? def->spriteId : "";
+        secondMap_->addEntity(std::make_unique<NpcEntity>(kNpcSpots[i], todaySchoolNpcIds_[i], spriteId));
+    }
 }
 
 // ---- Equipment system ----

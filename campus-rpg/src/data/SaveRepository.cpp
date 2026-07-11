@@ -22,18 +22,23 @@ namespace
     std::string extraDataFromItem(const Item &item)
     {
         std::ostringstream oss;
+        if (!item.textureId().empty())
+            oss << "textureId=" << item.textureId();
         switch (item.type())
         {
         case ItemType::Food:
         case ItemType::Potion:
+            if (oss.tellp() > 0) oss << ",";
             oss << "healAmount=" << static_cast<const FoodItem &>(item).healAmount();
             break;
         case ItemType::SpRecovery:
+            if (oss.tellp() > 0) oss << ",";
             oss << "spAmount=" << static_cast<const SpItem &>(item).spAmount();
             break;
         case ItemType::Equipment:
         {
             const auto &eq = static_cast<const EquipmentItem &>(item);
+            if (oss.tellp() > 0) oss << ",";
             oss << "strengthBonus=" << eq.strengthBonus()
                 << ",magicBonus=" << eq.magicBonus()
                 << ",speedBonus=" << eq.speedBonus()
@@ -41,6 +46,7 @@ namespace
             break;
         }
         case ItemType::Persona:
+            if (oss.tellp() > 0) oss << ",";
             oss << "personaId=" << static_cast<const PersonaItem &>(item).personaId();
             break;
         }
@@ -61,33 +67,37 @@ namespace
             std::string val = extra.substr(pos, end - pos);
             return std::stoi(val);
         };
+        auto getStr = [&extra](const std::string &key) -> std::string
+        {
+            size_t pos = extra.find(key + "=");
+            if (pos == std::string::npos)
+                return "";
+            pos += key.length() + 1;
+            size_t end = extra.find(",", pos);
+            return extra.substr(pos, end - pos);
+        };
 
         std::string id = itemId ? itemId : "";
         std::string n = name ? name : "";
         std::string desc = description ? description : "";
+        std::string tex = getStr("textureId");
 
         if (std::string(typeStr) == "Food")
-            return std::make_unique<FoodItem>(id, n, desc, value, getInt("healAmount"));
+            return std::make_unique<FoodItem>(id, n, desc, value, getInt("healAmount"), tex);
         if (std::string(typeStr) == "Potion")
-            return std::make_unique<PotionItem>(id, n, desc, value, getInt("healAmount"));
+            return std::make_unique<PotionItem>(id, n, desc, value, getInt("healAmount"), tex);
         if (std::string(typeStr) == "SP")
-            return std::make_unique<SpItem>(id, n, desc, value, getInt("spAmount"));
+            return std::make_unique<SpItem>(id, n, desc, value, getInt("spAmount"), tex);
         if (std::string(typeStr) == "Equipment")
             return std::make_unique<EquipmentItem>(id, n, desc, value,
                                                    getInt("strengthBonus"), getInt("magicBonus"),
                                                    getInt("speedBonus"),
-                                                   static_cast<EquipmentSlot>(getInt("slot")));
+                                                   static_cast<EquipmentSlot>(getInt("slot")),
+                                                   tex);
         if (std::string(typeStr) == "Persona")
         {
-            size_t pos = extra.find("personaId=");
-            std::string pid;
-            if (pos != std::string::npos)
-            {
-                pos += 10;
-                size_t end = extra.find(",", pos);
-                pid = extra.substr(pos, end - pos);
-            }
-            return std::make_unique<PersonaItem>(id, n, desc, value, pid);
+            std::string pid = getStr("personaId");
+            return std::make_unique<PersonaItem>(id, n, desc, value, pid, tex);
         }
         return nullptr;
     }
@@ -257,8 +267,8 @@ bool SaveRepository::saveInventory_(int slotId, const Inventory &inventory)
     sqlite3_finalize(delStmt);
 
     const char *sql = R"(
-        INSERT INTO inventory (slot_id, ord, item_id, item_type, name, description, value, extra_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO inventory (slot_id, ord, item_id, item_type, name, description, value, extra_data, texture_id, quantity)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )";
 
     sqlite3_stmt *stmt = nullptr;
@@ -280,6 +290,8 @@ bool SaveRepository::saveInventory_(int slotId, const Inventory &inventory)
         sqlite3_bind_int(stmt, 7, item->value());
         std::string extra = extraDataFromItem(*item);
         sqlite3_bind_text(stmt, 8, extra.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 9, item->textureId().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 10, item->quantity());
         sqlite3_step(stmt);
     }
 
@@ -294,7 +306,7 @@ bool SaveRepository::loadInventory_(int slotId, Inventory &inventory)
         return false;
 
     inventory.clear();
-    const char *sql = "SELECT item_id, item_type, name, description, value, extra_data "
+    const char *sql = "SELECT item_id, item_type, name, description, value, extra_data, texture_id, quantity "
                       "FROM inventory WHERE slot_id = ? ORDER BY ord";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -312,7 +324,15 @@ bool SaveRepository::loadInventory_(int slotId, Inventory &inventory)
             reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1)),
             reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5)));
         if (item)
+        {
+            const char *texCol = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 6));
+            if (texCol && texCol[0] != '\0')
+                item->setTextureId(texCol);
+            int qty = sqlite3_column_int(stmt, 7);
+            if (qty > 0)
+                item->setQuantity(qty);
             inventory.addItem(std::move(item));
+        }
     }
 
     sqlite3_finalize(stmt);

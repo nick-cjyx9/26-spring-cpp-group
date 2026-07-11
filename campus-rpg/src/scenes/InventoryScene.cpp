@@ -33,11 +33,19 @@ namespace
         }
     }
 
-    std::string truncateName(const std::string &name, size_t maxLen)
+    std::vector<std::string> wrapText(const std::string &text, size_t maxChars)
     {
-        if (name.length() <= maxLen)
-            return name;
-        return name.substr(0, maxLen - 3) + "...";
+        std::vector<std::string> lines;
+        if (text.empty())
+            return lines;
+        size_t start = 0;
+        while (start < text.size())
+        {
+            size_t len = std::min(maxChars, text.size() - start);
+            lines.push_back(text.substr(start, len));
+            start += len;
+        }
+        return lines;
     }
 } // namespace
 
@@ -177,9 +185,8 @@ void InventoryScene::render(engine::IRenderer &renderer)
     renderer.drawText("Capacity: " + std::to_string(items.size()) + "/" + std::to_string(inventory.capacity()),
                       {170, 212}, 16, engine::Color::white());
 
-    // Grid: 4 columns, each cell 110x90
     float cellW = 110.0f;
-    float cellH = 90.0f;
+    float cellH = 100.0f;
     int cols = 4;
     int rows = 3;
     float gridX = 170.0f;
@@ -191,45 +198,49 @@ void InventoryScene::render(engine::IRenderer &renderer)
         int row = static_cast<int>(i) / cols;
         float cx = gridX + col * cellW;
         float cy = gridY + row * cellH;
-        bool selected = (static_cast<int>(i) == selectedIndex_);
 
-        // Cell border
-        engine::Color borderColor = selected ? engine::Color::yellow() : engine::Color(80, 80, 100);
+        engine::Color borderColor = (static_cast<int>(i) == selectedIndex_)
+            ? engine::Color::yellow() : engine::Color(80, 80, 100);
         renderer.drawRect({cx, cy, cellW - 4, cellH - 4}, engine::Color(20, 20, 40, 230));
         renderer.drawRect({cx, cy, cellW - 4, 2}, borderColor);
         renderer.drawRect({cx, cy + cellH - 6, cellW - 4, 2}, borderColor);
         renderer.drawRect({cx, cy, 2, cellH - 6}, borderColor);
         renderer.drawRect({cx + cellW - 6, cy, 2, cellH - 6}, borderColor);
 
-        // Item texture
-        auto *eq = dynamic_cast<EquipmentItem *>(items[i].get());
-        std::string texPath;
-        if (!items[i]->textureId().empty())
+        // Item image
+        const auto &texId = items[i]->textureId();
+        float imgSize = 44.0f;
+        if (!texId.empty())
         {
-            if (items[i]->textureId().find('/') != std::string::npos)
-            {
-                texPath = items[i]->textureId();
-            }
+            std::string texPath;
+            if (texId.find('/') != std::string::npos)
+                texPath = texId;
+            else if (items[i]->type() == ItemType::Equipment)
+                texPath = std::string("equipment/") + texId;
             else
-            {
-                texPath = std::string("equipment/") + items[i]->textureId();
-            }
-            renderer.drawTexture(texPath, {cx + (cellW - 48) / 2, cy + 4, 48, 48});
+                texPath = std::string("items/") + texId;
+            renderer.drawTexture(texPath, {cx + (cellW - 4 - imgSize) / 2, cy + 4, imgSize, imgSize});
         }
         else
         {
-            // Placeholder for items without texture
-            renderer.drawRect({cx + (cellW - 48) / 2, cy + 4, 48, 48}, engine::Color(60, 60, 80));
+            renderer.drawRect({cx + (cellW - 4 - imgSize) / 2, cy + 4, imgSize, imgSize},
+                              engine::Color(60, 60, 80));
         }
 
-        // Name (truncated to fit cell)
-        std::string name = truncateName(items[i]->name(), 10);
-        renderer.drawText(name, {cx + 4, cy + 54}, 11,
-                          selected ? engine::Color::yellow() : engine::Color::white());
+        // Wrapped name (max 2 lines, ~12 chars per line)
+        auto lines = wrapText(items[i]->name(), 12);
+        engine::Color nameColor = (static_cast<int>(i) == selectedIndex_)
+            ? engine::Color::yellow() : engine::Color::white();
+        float nameY = cy + 4 + imgSize + 4;
+        for (size_t li = 0; li < lines.size() && li < 2; ++li)
+        {
+            renderer.drawText(lines[li], {cx + 4, nameY + li * 14.0f}, 11, nameColor);
+        }
 
-        // Quantity (always show)
+        // Quantity
+        float qtyY = nameY + std::min(lines.size(), size_t(2)) * 14.0f;
         renderer.drawText("x" + std::to_string(items[i]->quantity()),
-                          {cx + 4, cy + 66}, 10, engine::Color(200, 200, 0));
+                          {cx + 4, qtyY}, 10, engine::Color(200, 200, 0));
     }
 
     if (!message_.empty())

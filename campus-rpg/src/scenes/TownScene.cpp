@@ -66,9 +66,9 @@ void TownScene::handleInput(engine::IInput &input)
             playerPos = player->position();
         map.clearEntities();
         map.addEntity(std::make_unique<PlayerEntity>(playerPos));
-        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime"));
-        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin"));
-        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss"));
+        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime", "monsters/bunny"));
+        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin", "monsters/duck"));
+        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss", "monsters/treant"));
         GameManager::instance().enterScene(SceneType::Night);
     }
     if (input.wasKeyJustPressed(engine::Key::F5))
@@ -196,12 +196,22 @@ void TownScene::render(engine::IRenderer &renderer)
         if (entity->type() == "player")
         {
             auto b = entity->worldBounds();
-            renderer.drawTexture("player", {b.x, b.y, 48, 48});
+            std::string playerTex = "player_" + std::to_string(GameManager::instance().selectedHeroIndex());
+            float size = 96.0f;
+            float cx = b.x + b.width / 2.0f;
+            float cy = b.y + b.height / 2.0f;
+            renderer.drawTexture(playerTex, {cx - size / 2.0f, cy - size / 2.0f, size, size});
         }
         else if (entity->type() == "npc")
         {
             auto b = entity->worldBounds();
-            renderer.drawTexture("npc", {b.x, b.y, 48, 48});
+            auto npcEntity = static_cast<NpcEntity *>(entity.get());
+            std::string tex = npcEntity->spriteTextureId();
+            if (tex.empty()) tex = "npc";
+            float size = 96.0f;
+            float cx = b.x + b.width / 2.0f;
+            float cy = b.y + b.height / 2.0f;
+            renderer.drawTexture(tex, {cx - size / 2.0f, cy - size / 2.0f, size, size});
         }
     }
 
