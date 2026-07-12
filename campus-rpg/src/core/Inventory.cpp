@@ -1,5 +1,7 @@
 #include "Inventory.h"
 
+#include <algorithm>
+
 Inventory::Inventory(size_t capacity) : capacity_(capacity) {}
 
 bool Inventory::addItem(std::unique_ptr<Item> item)
@@ -73,4 +75,52 @@ Item *Inventory::itemAt(size_t index) const
     if (index >= items_.size())
         return nullptr;
     return items_[index].get();
+}
+
+Item *Inventory::findItemById(const std::string &id) const
+{
+    for (const auto &item : items_)
+    {
+        if (item && item->id() == id)
+            return item.get();
+    }
+    return nullptr;
+}
+
+bool Inventory::removeItemById(const std::string &id, int quantity)
+{
+    if (quantity <= 0)
+        return false;
+    for (auto &item : items_)
+    {
+        if (!item || item->id() != id)
+            continue;
+        if (item->quantity() > quantity)
+        {
+            item->addQuantity(-quantity);
+            return true;
+        }
+        if (item->quantity() == quantity)
+        {
+            // Mark for removal by setting quantity to 0, then erase.
+            item->setQuantity(0);
+            break;
+        }
+        return false; // not enough
+    }
+    // Erase items with zero quantity.
+    auto it = std::remove_if(items_.begin(), items_.end(),
+                             [](const std::unique_ptr<Item> &item) { return item->quantity() <= 0; });
+    items_.erase(it, items_.end());
+    return true;
+}
+
+int Inventory::countItem(const std::string &id) const
+{
+    for (const auto &item : items_)
+    {
+        if (item && item->id() == id)
+            return item->quantity();
+    }
+    return 0;
 }

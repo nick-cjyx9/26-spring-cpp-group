@@ -600,8 +600,8 @@ bool SaveRepository::saveQuests_(int slotId, const QuestManager &manager)
     sqlite3_step(delStmt);
     sqlite3_finalize(delStmt);
 
-    const char *sql = "INSERT INTO quest_progress (slot_id, quest_id, accepted, completed, rewarded) "
-                      "VALUES (?, ?, ?, ?, ?)";
+    const char *sql = "INSERT INTO quest_progress (slot_id, quest_id, accepted, completed, rewarded, progress) "
+                      "VALUES (?, ?, ?, ?, ?, ?)";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return false;
@@ -616,6 +616,7 @@ bool SaveRepository::saveQuests_(int slotId, const QuestManager &manager)
         sqlite3_bind_int(stmt, 3, quest->isAccepted() ? 1 : 0);
         sqlite3_bind_int(stmt, 4, quest->isCompleted() ? 1 : 0);
         sqlite3_bind_int(stmt, 5, quest->isRewarded() ? 1 : 0);
+        sqlite3_bind_int(stmt, 6, quest->currentProgress());
         sqlite3_step(stmt);
     }
     for (const auto *quest : manager.completedQuests())
@@ -628,6 +629,7 @@ bool SaveRepository::saveQuests_(int slotId, const QuestManager &manager)
         sqlite3_bind_int(stmt, 3, quest->isAccepted() ? 1 : 0);
         sqlite3_bind_int(stmt, 4, quest->isCompleted() ? 1 : 0);
         sqlite3_bind_int(stmt, 5, quest->isRewarded() ? 1 : 0);
+        sqlite3_bind_int(stmt, 6, quest->currentProgress());
         sqlite3_step(stmt);
     }
 
@@ -641,7 +643,7 @@ bool SaveRepository::loadQuests_(int slotId, QuestManager &manager)
     if (!db)
         return false;
 
-    const char *sql = "SELECT quest_id, accepted, completed, rewarded FROM quest_progress WHERE slot_id = ?";
+    const char *sql = "SELECT quest_id, accepted, completed, rewarded, progress FROM quest_progress WHERE slot_id = ?";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
         return false;
@@ -660,6 +662,7 @@ bool SaveRepository::loadQuests_(int slotId, QuestManager &manager)
             q->complete();
         if (sqlite3_column_int(stmt, 3))
             q->reward();
+        q->setCurrentProgress(sqlite3_column_int(stmt, 4));
     }
 
     sqlite3_finalize(stmt);

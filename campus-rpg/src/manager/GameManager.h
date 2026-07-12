@@ -34,7 +34,8 @@ enum class SceneType
     Armory,
     LevelUp,
     RestConfirm,
-    DebugCheat
+    DebugCheat,
+    Quest
 };
 
 // Fired whenever a Social Link ranks up. The UI layer registers a callback
@@ -176,9 +177,12 @@ public:
     // Today's talk count for a given NPC id (capped at kMaxTalksPerNpc).
     int talkCountToday(const std::string &npcId) const;
     static constexpr int kNpcPoolSize = 10;
-    static constexpr int kTownNpcsPerDay = 2;
+    static constexpr int kTownNpcsPerDay = 3;
     static constexpr int kSchoolNpcsPerDay = 1;
     static constexpr int kMaxTalksPerNpc = 2;
+    static constexpr int kMaxTalksPerDay = 2;   // Max unique NPCs talked to per day.
+
+    int totalTalksToday() const { return totalTalksToday_; }
 
     // ---- Equipment system ----
     struct EquippedGear
@@ -241,6 +245,7 @@ private:
     std::vector<std::string> todayNpcIds_;
     std::vector<std::string> todaySchoolNpcIds_;
     std::map<std::string, int> talkCountToday_;
+    int totalTalksToday_ = 0;
 
     RankUpCallback rankUpCallback_;
 };
