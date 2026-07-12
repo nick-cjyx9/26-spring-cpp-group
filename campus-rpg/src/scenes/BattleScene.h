@@ -25,6 +25,8 @@ private:
     void handleItemMenu(engine::IInput &input);
     void handlePersonaMenu(engine::IInput &input);
     void returnAfterBattle();
+    void beginSleepTransition();
+    void finishSleepTransition();
 
     BattleMenu menu_ = BattleMenu::Main;
     int selectedAction_ = 0;
@@ -32,4 +34,9 @@ private:
     int selectedItem_ = 0;
     int selectedPersona_ = 0;
     std::string message_;
+    bool sleepTransition_ = false;
+    float sleepTimer_ = 0.0f;
+    bool sleepLeveledUp_ = false;
+    bool sleepStartedOnSecondMap_ = false;
+    bool postBattleHandled_ = false;
 };

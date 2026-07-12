@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IScene.h"
+#include <string>
 
 class NightScene : public engine::IScene
 {
@@ -14,4 +15,6 @@ private:
     float moveX_ = 0.0f;
     float moveY_ = 0.0f;
     float auraTimer_ = 0.0f;
+    std::string stuckMessage_;
+    float stuckMessageTimer_ = 0.0f;
 };

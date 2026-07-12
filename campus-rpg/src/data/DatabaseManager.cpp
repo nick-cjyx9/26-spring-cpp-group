@@ -106,8 +106,10 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             sqlite3_exec(db_, "DROP TABLE IF EXISTS character;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS persona;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS inventory;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS equipped_gear;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS social_link;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS quest_progress;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db_, "DROP TABLE IF EXISTS game_state;", nullptr, nullptr, nullptr);
             sqlite3_exec(db_, "DROP TABLE IF EXISTS save_meta;", nullptr, nullptr, nullptr);
         }
     }
@@ -161,6 +163,18 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             quantity INTEGER DEFAULT 1
         );
 
+        CREATE TABLE IF NOT EXISTS equipped_gear (
+            slot_id INTEGER NOT NULL DEFAULT 1,
+            gear_slot INTEGER NOT NULL,
+            item_id TEXT NOT NULL,
+            item_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            value INTEGER DEFAULT 0,
+            extra_data TEXT,
+            PRIMARY KEY (slot_id, gear_slot)
+        );
+
         CREATE TABLE IF NOT EXISTS social_link (
             slot_id INTEGER NOT NULL DEFAULT 1,
             id TEXT NOT NULL,
@@ -178,6 +192,11 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
             completed INTEGER DEFAULT 0,
             rewarded INTEGER DEFAULT 0,
             PRIMARY KEY (slot_id, quest_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS game_state (
+            slot_id INTEGER PRIMARY KEY,
+            day INTEGER DEFAULT 1
         );
 
         CREATE TABLE IF NOT EXISTS save_meta (
@@ -226,6 +245,16 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
     addColumnIfMissing("inventory", "texture_id", "TEXT DEFAULT ''");
     addColumnIfMissing("inventory", "quantity", "INTEGER DEFAULT 1");
 
+    // Schema v3: persona exp persistence and on_second_map game state.
+    addColumnIfMissing("persona", "persona_exp", "INTEGER DEFAULT 0");
+    addColumnIfMissing("persona", "persona_exp_to_next", "INTEGER DEFAULT 100");
+    addColumnIfMissing("game_state", "on_second_map", "INTEGER DEFAULT 0");
+
+    sqlite3_exec(db_, "CREATE TABLE IF NOT EXISTS game_state (slot_id INTEGER PRIMARY KEY, day INTEGER DEFAULT 1);",
+                 nullptr, nullptr, nullptr);
+    sqlite3_exec(db_, "CREATE TABLE IF NOT EXISTS equipped_gear (slot_id INTEGER NOT NULL DEFAULT 1, gear_slot INTEGER NOT NULL, item_id TEXT NOT NULL, item_type TEXT NOT NULL, name TEXT NOT NULL, description TEXT, value INTEGER DEFAULT 0, extra_data TEXT, PRIMARY KEY (slot_id, gear_slot));",
+                 nullptr, nullptr, nullptr);
+
     if (version < 1)
     {
         // If legacy tables were renamed, copy their data into slot_id=1 of the
@@ -258,6 +287,9 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
                 INSERT INTO quest_progress (slot_id, quest_id, accepted, completed, rewarded)
                 SELECT 1, quest_id, accepted, completed, rewarded
                 FROM quest_progress_legacy;
+
+                INSERT INTO game_state (slot_id, day)
+                VALUES (1, 1);
 
                 INSERT INTO save_meta (slot_id, character_name, level, updated_at)
                 SELECT 1, name, level, 'migrated'

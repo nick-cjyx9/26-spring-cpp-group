@@ -6,6 +6,48 @@
 
 #include <algorithm>
 
+namespace
+{
+    constexpr int kVisibleShopRows = 7;
+    constexpr float kListTop = 175.0f;
+    constexpr float kRowHeight = 42.0f;
+
+    int firstVisibleIndex(int selectedIndex, int itemCount)
+    {
+        if (itemCount <= kVisibleShopRows)
+            return 0;
+        int first = selectedIndex - kVisibleShopRows / 2;
+        first = std::max(0, first);
+        return std::min(first, itemCount - kVisibleShopRows);
+    }
+
+    std::string texturePathForShopItem(const Item &item)
+    {
+        const std::string &textureId = item.textureId();
+        if (textureId.empty())
+            return "";
+        if (textureId.find('/') != std::string::npos || textureId.rfind("arcana_", 0) == 0)
+            return textureId;
+        return std::string("equipment/") + textureId;
+    }
+
+    void drawScrollbar(engine::IRenderer &renderer, int selectedIndex, int itemCount)
+    {
+        if (itemCount <= kVisibleShopRows)
+            return;
+
+        const float trackX = 660.0f;
+        const float trackY = kListTop;
+        const float trackH = kVisibleShopRows * kRowHeight - 10.0f;
+        renderer.drawRect({trackX, trackY, 6.0f, trackH}, engine::Color(60, 60, 80, 220));
+
+        float thumbH = std::max(24.0f, trackH * static_cast<float>(kVisibleShopRows) / static_cast<float>(itemCount));
+        float maxThumbY = trackY + trackH - thumbH;
+        float t = itemCount <= 1 ? 0.0f : static_cast<float>(selectedIndex) / static_cast<float>(itemCount - 1);
+        renderer.drawRect({trackX, trackY + (maxThumbY - trackY) * t, 6.0f, thumbH}, engine::Color(220, 220, 110, 240));
+    }
+} // namespace
+
 void ShopScene::handleInput(engine::IInput &input)
 {
     auto &gm = GameManager::instance();
@@ -52,9 +94,15 @@ void ShopScene::handleInput(engine::IInput &input)
                     }
                     else
                     {
-                        gm.character().spendGold(item->value());
-                        gm.addPersonaToPlayer(persona);
-                        message_ = "Obtained Persona: " + persona->name();
+                        if (gm.addPersonaToPlayer(persona))
+                        {
+                            gm.character().spendGold(item->value());
+                            message_ = "Obtained Persona: " + persona->name();
+                        }
+                        else
+                        {
+                            message_ = "Persona slots full or already owned.";
+                        }
                     }
                 }
             }
@@ -131,41 +179,31 @@ void ShopScene::render(engine::IRenderer &renderer)
     if (mode_ == Mode::Buy)
     {
         const auto &items = gm.shop().items();
-        for (size_t i = 0; i < items.size(); ++i)
+        int itemCount = static_cast<int>(items.size());
+        int first = firstVisibleIndex(selectedIndex_, itemCount);
+        int last = std::min(first + kVisibleShopRows, itemCount);
+        for (int i = first; i < last; ++i)
         {
-            engine::Color color = (static_cast<int>(i) == selectedIndex_) ? engine::Color::yellow() : engine::Color::white();
-            std::string prefix = (static_cast<int>(i) == selectedIndex_) ? "> " : "  ";
-            std::string type = items[i]->typeString();
-            float y = 175.0f + static_cast<float>(i) * 42.0f;
+            engine::Color color = (i == selectedIndex_) ? engine::Color::yellow() : engine::Color::white();
+            std::string prefix = (i == selectedIndex_) ? "> " : "  ";
+            std::string type = items[static_cast<size_t>(i)]->typeString();
+            float y = kListTop + static_cast<float>(i - first) * kRowHeight;
 
-            // Draw item icon
-            if (!items[i]->textureId().empty())
-            {
-                std::string texPath;
-                if (items[i]->textureId().find('/') != std::string::npos)
-                {
-                    texPath = items[i]->textureId();
-                }
-                else if (items[i]->type() == ItemType::Equipment)
-                {
-                    texPath = std::string("equipment/") + items[i]->textureId();
-                }
-                else
-                {
-                    texPath = std::string("items/") + items[i]->textureId();
-                }
+            std::string texPath = texturePathForShopItem(*items[static_cast<size_t>(i)]);
+            if (!texPath.empty())
                 renderer.drawTexture(texPath, {155.0f, y, 32, 32});
-            }
             else
-            {
                 renderer.drawRect({155.0f, y, 32, 32}, engine::Color(60, 60, 80));
-            }
 
-            renderer.drawText(prefix + items[i]->name() + " [" + type + "] - " + std::to_string(items[i]->value()) + "G",
+            renderer.drawText(prefix + items[static_cast<size_t>(i)]->name() + " [" + type + "] - " + std::to_string(items[static_cast<size_t>(i)]->value()) + "G",
                               {195.0f, y + 6}, 18, color);
-            renderer.drawText("  " + items[i]->description(), {195.0f, y + 24}, 13, engine::Color::gray());
+            renderer.drawText("  " + items[static_cast<size_t>(i)]->description(), {195.0f, y + 24}, 13, engine::Color::gray());
         }
-        renderer.drawText("Enter: buy   Esc: back", {135, 525}, 14, engine::Color::gray());
+        drawScrollbar(renderer, selectedIndex_, itemCount);
+        if (itemCount > 0)
+            renderer.drawText("Showing " + std::to_string(first + 1) + "-" + std::to_string(last) + " / " + std::to_string(itemCount),
+                              {500, 525}, 14, engine::Color::gray());
+        renderer.drawText("Up/Down: scroll   Enter: buy   Esc: back", {135, 525}, 14, engine::Color::gray());
     }
     else
     {
@@ -176,39 +214,28 @@ void ShopScene::render(engine::IRenderer &renderer)
         }
         else
         {
-            for (size_t i = 0; i < items.size(); ++i)
+            int itemCount = static_cast<int>(items.size());
+            int first = firstVisibleIndex(sellIndex_, itemCount);
+            int last = std::min(first + kVisibleShopRows, itemCount);
+            for (int i = first; i < last; ++i)
             {
-                engine::Color color = (static_cast<int>(i) == sellIndex_) ? engine::Color::yellow() : engine::Color::white();
-                std::string prefix = (static_cast<int>(i) == sellIndex_) ? "> " : "  ";
-                int sellPrice = items[i]->value() / 2;
-                float y = 175.0f + static_cast<float>(i) * 42.0f;
+                engine::Color color = (i == sellIndex_) ? engine::Color::yellow() : engine::Color::white();
+                std::string prefix = (i == sellIndex_) ? "> " : "  ";
+                int sellPrice = items[static_cast<size_t>(i)]->value() / 2;
+                float y = kListTop + static_cast<float>(i - first) * kRowHeight;
 
-                // Draw item icon
-                if (!items[i]->textureId().empty())
-                {
-                    std::string texPath;
-                    if (items[i]->textureId().find('/') != std::string::npos)
-                    {
-                        texPath = items[i]->textureId();
-                    }
-                    else if (items[i]->type() == ItemType::Equipment)
-                    {
-                        texPath = std::string("equipment/") + items[i]->textureId();
-                    }
-                    else
-                    {
-                        texPath = std::string("items/") + items[i]->textureId();
-                    }
+                std::string texPath = texturePathForShopItem(*items[static_cast<size_t>(i)]);
+                if (!texPath.empty())
                     renderer.drawTexture(texPath, {155.0f, y, 32, 32});
-                }
                 else
-                {
                     renderer.drawRect({155.0f, y, 32, 32}, engine::Color(60, 60, 80));
-                }
 
-                renderer.drawText(prefix + items[i]->name() + " [" + items[i]->typeString() + "] - " + std::to_string(sellPrice) + "G",
+                renderer.drawText(prefix + items[static_cast<size_t>(i)]->name() + " [" + items[static_cast<size_t>(i)]->typeString() + "] - " + std::to_string(sellPrice) + "G",
                                   {195.0f, y + 6}, 18, color);
             }
+            drawScrollbar(renderer, sellIndex_, itemCount);
+            renderer.drawText("Showing " + std::to_string(first + 1) + "-" + std::to_string(last) + " / " + std::to_string(itemCount),
+                              {500, 525}, 14, engine::Color::gray());
         }
         renderer.drawText("Enter: sell   Esc: back", {135, 525}, 14, engine::Color::gray());
     }

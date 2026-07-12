@@ -2,13 +2,22 @@
 #include "GameManager.h"
 #include "TileMap.h"
 #include "Entity.h"
+#include "TownMapData.h"
 
 namespace
 {
     bool canMoveTo(engine::Vec2 pos, const TileMap & /*map*/)
     {
-        // No tile collision: allow movement anywhere within the 800x600 window.
-        return pos.x >= 0.0f && pos.x <= 800.0f && pos.y >= 0.0f && pos.y <= 600.0f;
+        if (pos.x < 0.0f || pos.y < 0.0f || pos.x > 800.0f || pos.y > 600.0f)
+            return false;
+        engine::Rect playerBox{pos.x, pos.y, 1.0f, 1.0f};
+        bool isSecond = GameManager::instance().onSecondMap();
+        for (const auto &wall : mapCollisionZones(isSecond))
+        {
+            if (playerBox.intersects(wall))
+                return false;
+        }
+        return true;
     }
 
     PlayerEntity *findPlayer(TileMap &map)
@@ -46,11 +55,29 @@ void NightScene::handleInput(engine::IInput &input)
     if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
     {
         PlayerEntity *p = findPlayer(GameManager::instance().currentMap());
-        if (p && !GameManager::instance().onSecondMap() &&
-            p->position().x > 550.0f && p->position().x < 650.0f && p->position().y <= 90.0f)
+        if (p && !GameManager::instance().onSecondMap())
         {
-            GameManager::instance().enterScene(SceneType::RestConfirm);
-            return;
+            engine::Rect playerBox{p->position().x - 5.0f, p->position().y - 5.0f,
+                                   10.0f, 10.0f};
+            for (const auto &zone : townInteractionZones())
+            {
+                if (zone.type == InteractionType::Home && playerBox.intersects(zone.area))
+                {
+                    GameManager::instance().enterScene(SceneType::RestConfirm);
+                    return;
+                }
+            }
+        }
+    }
+
+    if (input.wasKeyJustPressed(engine::Key::R))
+    {
+        PlayerEntity *p = findPlayer(GameManager::instance().currentMap());
+        if (p)
+        {
+            p->setPosition(mapDefaultSpawn(GameManager::instance().onSecondMap()));
+            stuckMessage_ = "Rescued!";
+            stuckMessageTimer_ = 3.0f;
         }
     }
 
@@ -66,11 +93,27 @@ void NightScene::handleInput(engine::IInput &input)
 void NightScene::update(float deltaTime)
 {
     auraTimer_ += deltaTime;
+    if (stuckMessageTimer_ > 0.0f)
+    {
+        stuckMessageTimer_ -= deltaTime;
+        if (stuckMessageTimer_ <= 0.0f)
+        {
+            stuckMessageTimer_ = 0.0f;
+            stuckMessage_.clear();
+        }
+    }
 
     TileMap &map = GameManager::instance().currentMap();
     PlayerEntity *player = findPlayer(map);
     if (!player)
         return;
+
+    // Auto-rescue: if player is stuck inside a collision zone, move to the
+    // nearest walkable position instead of jumping to the default spawn
+    // (which may itself be blocked).
+    bool isSecond = GameManager::instance().onSecondMap();
+    if (isInCollisionZone(player->position(), isSecond))
+        player->setPosition(findNearestWalkable(player->position(), isSecond));
 
     engine::Vec2 newPos = player->position();
     newPos.x += moveX_ * moveSpeed_ * deltaTime;
@@ -107,7 +150,7 @@ void NightScene::update(float deltaTime)
         // Travel to school map at night.
         GameManager::instance().setOnSecondMap(true);
         TileMap &school = GameManager::instance().schoolMap();
-        engine::Vec2 spawnPos = {80.0f, 220.0f};
+        engine::Vec2 spawnPos = schoolDefaultSpawn();
         school.clearEntities();
         school.addEntity(std::make_unique<PlayerEntity>(spawnPos));
         school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime", "monsters/iceball"));
@@ -221,21 +264,26 @@ void NightScene::render(engine::IRenderer &renderer)
         }
     }
 
-    // HUD
-    renderer.drawRect({620, 10, 170, 70}, engine::Color(0, 0, 0, 180));
+    // HUD: same box size and padding as the day scene.
+    constexpr float hudX = 10.0f;
+    constexpr float hudY = 10.0f;
+    constexpr float hudW = 180.0f;
+    constexpr float hudH = 56.0f;
+    constexpr float hudPad = 10.0f;
+    constexpr float rightHudX = 800.0f - hudX - hudW;
+
+    renderer.drawRect({hudX, hudY, hudW, hudH}, engine::Color(0, 0, 0, 200));
+    renderer.drawRect({hudX + 2.0f, hudY + 2.0f, hudW - 4.0f, hudH - 4.0f}, engine::Color(30, 30, 50, 200));
+    renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()) +
+                          "  " + GameManager::instance().character().name(),
+                      {hudX + hudPad, hudY + hudPad + 2.0f}, 18, engine::Color::yellow());
+
+    renderer.drawRect({rightHudX, hudY, hudW, hudH}, engine::Color(0, 0, 0, 200));
+    renderer.drawRect({rightHudX + 2.0f, hudY + 2.0f, hudW - 4.0f, hudH - 4.0f}, engine::Color(30, 30, 50, 200));
+    renderer.drawText(onSecond ? "Night [School]" : "Night",
+                      {rightHudX + hudPad, hudY + hudPad + 2.0f}, 16, onSecond ? engine::Color(255, 150, 150) : engine::Color::white());
     if (onSecond)
-    {
-        renderer.drawText("Night [School]", {622, 14}, 16, engine::Color(255, 150, 150));
-        renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()),
-                          {720, 38}, 18, engine::Color::yellow());
-        renderer.drawText("Danger!", {635, 56}, 14, engine::Color(255, 100, 100));
-    }
-    else
-    {
-        renderer.drawText("Night", {635, 20}, 18, engine::Color::white());
-        renderer.drawText("lv." + std::to_string(GameManager::instance().character().level()),
-                          {720, 20}, 18, engine::Color::yellow());
-    }
+        renderer.drawText("Danger!", {rightHudX + hudPad, hudY + 34.0f}, 14, engine::Color(255, 100, 100));
 
     // Map-switch arrows (same positions as day).
     if (!onSecond)
@@ -245,12 +293,19 @@ void NightScene::render(engine::IRenderer &renderer)
 
     if (onSecond)
     {
-        renderer.drawText("Night [School] - touch shadows to fight   C: status   <: exit   Esc: next day",
-                          {120, 570}, 14, engine::Color::white());
+        renderer.drawText("Night [School] - touch shadows to fight   C: status   R: rescue   <: exit   Esc: next day",
+                          {90, 570}, 14, engine::Color::white());
     }
     else
     {
-        renderer.drawText("Night - touch shadows to fight   C: status   Home: E   >: school   Esc: next day",
-                          {60, 570}, 14, engine::Color::white());
+        renderer.drawText("Night - touch shadows to fight   C: status   R: rescue   Home: E   >: school   Esc: next day",
+                          {50, 570}, 14, engine::Color::white());
+    }
+
+    // Stuck rescue feedback overlay.
+    if (!stuckMessage_.empty())
+    {
+        renderer.drawRect({300, 510, 200, 36}, engine::Color(0, 0, 0, 200));
+        renderer.drawText(stuckMessage_, {340, 519}, 18, engine::Color::cyan());
     }
 }
