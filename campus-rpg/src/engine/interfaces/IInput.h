@@ -18,12 +18,8 @@ public:
     virtual Vec2 mousePosition() const = 0;
 
     // Returns text typed since the last call (printable ASCII chars plus
-    // '\\b' for backspace). Cleared on read. Used for name/ID entry in scenes.
+    // '\b' for backspace). Cleared on read. Used for name/ID entry in scenes.
     virtual std::string consumeTypedText() = 0;
-
-    // Returns accumulated mouse wheel delta since the last call.
-    // Positive = scrolled up, negative = scrolled down, 0 = no scroll.
-    virtual int consumeScrollDelta() = 0;
 };
 
 } // namespace engine

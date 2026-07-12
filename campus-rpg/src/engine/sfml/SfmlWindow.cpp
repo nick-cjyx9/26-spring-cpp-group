@@ -43,8 +43,6 @@ void SfmlWindow::pollEvents(IInput &input)
                 input_->onSfmlKeyReleased(event.key.code);
             else if (event.type == sf::Event::TextEntered)
                 input_->onSfmlTextEntered(event.text.unicode);
-            else if (event.type == sf::Event::MouseWheelScrolled)
-                input_->onSfmlMouseWheelScrolled(static_cast<int>(event.mouseWheelScroll.delta));
         }
     }
 }

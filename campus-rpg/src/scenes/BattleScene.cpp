@@ -9,8 +9,6 @@
 #include "Affinity.h"
 #include "TileMap.h"
 #include "Entity.h"
-#include "Quest.h"
-#include "QuestManager.h"
 
 #include <algorithm>
 #include <string>
@@ -518,26 +516,6 @@ bool BattleScene::processVictory()
 
     character.gainExp(totalExp);
     character.addGold(totalGold);
-
-    // Update kill-quest progress for accepted kill quests.
-    {
-        auto &qm = GameManager::instance().questManager();
-        int enemyCount = 0;
-        for (const auto &enemyPtr : battle.enemies())
-        {
-            if (enemyPtr)
-                ++enemyCount;
-        }
-        for (auto *q : qm.acceptedQuests())
-        {
-            if (!q || q->type() != QuestType::Kill)
-                continue;
-            q->setCurrentProgress(q->currentProgress() + enemyCount);
-            if (q->currentProgress() >= q->targetCount())
-                q->complete();
-        }
-    }
-
     return character.hasLevelUpSnapshot();
 }
 

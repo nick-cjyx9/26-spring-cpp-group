@@ -25,13 +25,6 @@ public:
 
     Item *itemAt(size_t index) const;
 
-    // Find the first item with the given id. Returns nullptr if not found.
-    Item *findItemById(const std::string &id) const;
-    // Remove a specific quantity of an item by id. Returns false if not enough.
-    bool removeItemById(const std::string &id, int quantity = 1);
-    // Count total quantity of an item by id.
-    int countItem(const std::string &id) const;
-
 private:
     std::vector<std::unique_ptr<Item>> items_;
     size_t capacity_ = 20;

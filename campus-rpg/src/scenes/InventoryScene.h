@@ -16,7 +16,6 @@ private:
     std::vector<size_t> visibleItemIndices() const;
 
     int selectedIndex_ = 0;
-    int gridScrollOffset_ = 0;
     std::string message_;
     float messageTimer_ = 0.0f;
 };

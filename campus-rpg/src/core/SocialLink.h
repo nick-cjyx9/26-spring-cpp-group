@@ -21,11 +21,10 @@ struct SocialLinkReward
     bool hasReward() const { return personaLevels > 0 || newSkill != nullptr; }
 };
 
-// Per-rank data: multiple dialogue lines shown at this rank + reward unlocked upon reaching it.
+// Per-rank data: dialogue shown at this rank + reward unlocked upon reaching it.
 struct SocialLinkRankData
 {
-    std::string dialogue;                    // Legacy single dialogue (kept for backward compatibility)
-    std::vector<std::string> dialogues;      // Multi-line dialogue sequence
+    std::string dialogue;
     SocialLinkReward reward;
 };
 

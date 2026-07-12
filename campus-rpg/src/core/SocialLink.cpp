@@ -74,10 +74,5 @@ const SocialLinkReward *SocialLink::currentReward() const
 std::string SocialLink::currentDialogue() const
 {
     const auto *data = currentRankData();
-    if (!data)
-        return std::string();
-    // If multi-line dialogues exist, return the first one; legacy single dialogue otherwise.
-    if (!data->dialogues.empty())
-        return data->dialogues[0];
-    return data->dialogue;
+    return data ? data->dialogue : std::string();
 }
