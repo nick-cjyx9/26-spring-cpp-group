@@ -9,9 +9,48 @@
 
 namespace
 {
+    const char *slotName(EquipmentSlot s)
+    {
+        switch (s)
+        {
+        case EquipmentSlot::Weapon: return "Weapon";
+        case EquipmentSlot::Armor: return "Armor";
+        case EquipmentSlot::Accessory: return "Accessory";
+        case EquipmentSlot::Relic: return "Relic";
+        default: return "None";
+        }
+    }
+
+    EquipmentSlot digitToSlot(int key)
+    {
+        switch (key)
+        {
+        case 1: return EquipmentSlot::Weapon;
+        case 2: return EquipmentSlot::Armor;
+        case 3: return EquipmentSlot::Accessory;
+        case 4: return EquipmentSlot::Relic;
+        default: return EquipmentSlot::None;
+        }
+    }
+
+    std::vector<std::string> wrapText(const std::string &text, size_t maxChars)
+    {
+        std::vector<std::string> lines;
+        if (text.empty())
+            return lines;
+        size_t start = 0;
+        while (start < text.size())
+        {
+            size_t len = std::min(maxChars, text.size() - start);
+            lines.push_back(text.substr(start, len));
+            start += len;
+        }
+        return lines;
+    }
+
     std::string truncateName(const std::string &name, size_t maxLen)
     {
-        if (name.length() <= maxLen)
+        if (name.size() <= maxLen)
             return name;
         return name.substr(0, maxLen - 3) + "...";
     }
@@ -145,15 +184,39 @@ void InventoryScene::render(engine::IRenderer &renderer)
         renderer.drawRect({cx, cy, 2, cellH - 6}, borderColor);
         renderer.drawRect({cx + cellW - 6, cy, 2, cellH - 6}, borderColor);
 
-        if (!item->textureId().empty())
-            renderer.drawTexture(item->textureId(), {cx + (cellW - 48) / 2, cy + 4, 48, 48});
+        // Item image
+        const auto &texId = item->textureId();
+        float imgSize = 48.0f;
+        if (!texId.empty())
+        {
+            std::string texPath;
+            if (texId.find('/') != std::string::npos)
+                texPath = texId;
+            else if (item->type() == ItemType::Equipment)
+                texPath = std::string("equipment/") + texId;
+            else
+                texPath = std::string("items/") + texId;
+            renderer.drawTexture(texPath, {cx + (cellW - 4 - imgSize) / 2, cy + 4, imgSize, imgSize});
+        }
         else
-            renderer.drawRect({cx + (cellW - 48) / 2, cy + 4, 48, 48}, engine::Color(60, 60, 80));
+        {
+            renderer.drawRect({cx + (cellW - 4 - imgSize) / 2, cy + 4, imgSize, imgSize},
+                              engine::Color(60, 60, 80));
+        }
 
-        renderer.drawText(truncateName(item->name(), 10), {cx + 4, cy + 54}, 11,
-                          selected ? engine::Color::yellow() : engine::Color::white());
-        renderer.drawText(item->typeString() + " x" + std::to_string(item->quantity()),
-                          {cx + 4, cy + 66}, 10, engine::Color(200, 200, 0));
+        // Wrapped name (max 2 lines, ~12 chars per line)
+        auto lines = wrapText(item->name(), 12);
+        engine::Color nameColor = selected ? engine::Color::yellow() : engine::Color::white();
+        float nameY = cy + 4 + imgSize + 4;
+        for (size_t li = 0; li < lines.size() && li < 2; ++li)
+        {
+            renderer.drawText(lines[li], {cx + 4, nameY + li * 14.0f}, 11, nameColor);
+        }
+
+        // Quantity
+        float qtyY = nameY + std::min(lines.size(), size_t(2)) * 14.0f;
+        renderer.drawText("x" + std::to_string(item->quantity()),
+                          {cx + 4, qtyY}, 10, engine::Color(200, 200, 0));
     }
 
     if (!message_.empty())

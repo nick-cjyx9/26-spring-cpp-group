@@ -182,7 +182,7 @@ public:
     int talkCountToday(const std::string &npcId) const;
     static constexpr int kNpcPoolSize = 10;
     static constexpr int kTownNpcsPerDay = 2;
-    static constexpr int kSchoolNpcsPerDay = 1;
+    static constexpr int kSchoolNpcsPerDay = 2;
     static constexpr int kMaxTalksPerNpc = 2;
 
     // ---- Equipment system ----

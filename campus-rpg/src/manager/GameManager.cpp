@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <map>
 #include <random>
 
@@ -41,6 +42,41 @@ namespace
         std::uniform_real_distribution<float> xDist(z.x + 16.0f, z.x + z.width - 16.0f);
         std::uniform_real_distribution<float> yDist(z.y + 16.0f, z.y + z.height - 16.0f);
         return {xDist(rng), yDist(rng)};
+    }
+
+    float distance(const engine::Vec2 &a, const engine::Vec2 &b)
+    {
+        float dx = a.x - b.x;
+        float dy = a.y - b.y;
+        return std::sqrt(dx * dx + dy * dy);
+    }
+
+    // Pick a random spawn position that is at least minDist away from every
+    // position in existing. Falls back to the first valid attempt if no
+    // fully-satisfying spot is found within maxRetries.
+    engine::Vec2 randomSpawnInZones(const std::vector<engine::Rect> &zones, std::mt19937 &rng,
+                                    const std::vector<engine::Vec2> &existing, float minDist)
+    {
+        constexpr int kMaxRetries = 50;
+        engine::Vec2 bestPos = randomSpawnInZones(zones, rng);
+        for (int attempt = 0; attempt < kMaxRetries; ++attempt)
+        {
+            engine::Vec2 pos = randomSpawnInZones(zones, rng);
+            bool ok = true;
+            for (const auto &p : existing)
+            {
+                if (distance(pos, p) < minDist)
+                {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok)
+                return pos;
+            if (attempt == 0)
+                bestPos = pos;
+        }
+        return bestPos;
     }
 } // namespace
 
@@ -629,6 +665,12 @@ void GameManager::initDefaultShop()
     shop_.addItem(std::make_unique<FoodItem>("food_bread", "Bread", "A loaf of campus bread.", 10, 20, "items/bread"));
     shop_.addItem(std::make_unique<PotionItem>("potion_hp", "HP Potion", "Restores a lot of HP.", 30, 50, "items/potion_red"));
     shop_.addItem(std::make_unique<SpItem>("item_coffee", "Coffee", "Restores a little SP.", 20, 15, "items/coffee"));
+    shop_.addItem(std::make_unique<EquipmentItem>("eq_wooden_sword", "Wooden Sword",
+                                                  "A training sword.", 80, 5, 0, 0,
+                                                  EquipmentSlot::Weapon, "tile_00_00"));
+    shop_.addItem(std::make_unique<EquipmentItem>("eq_leather_armor", "Leather Armor",
+                                                  "Basic protection.", 60, 0, 4, 0,
+                                                  EquipmentSlot::Armor, "tile_15_24"));
 
     auto priceFor = [](const Persona &persona)
     {
@@ -1034,12 +1076,14 @@ void GameManager::rebuildMapNpcs()
         map.clearEntities();
         map.addEntity(std::make_unique<PlayerEntity>(playerPos));
 
+        std::vector<engine::Vec2> placedPositions;
         for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
         {
-            engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
+            engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng, placedPositions, 200.0f);
             const NpcDefinition *def = findNpc(todayNpcIds_[i]);
             std::string spriteId = def ? def->spriteId : "";
             map.addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i], spriteId));
+            placedPositions.push_back(pos);
         }
     }
 
@@ -1056,12 +1100,14 @@ void GameManager::rebuildMapNpcs()
         map.clearEntities();
         map.addEntity(std::make_unique<PlayerEntity>(playerPos));
 
+        std::vector<engine::Vec2> placedPositions;
         for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
         {
-            engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
+            engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng, placedPositions, 200.0f);
             const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
             std::string spriteId = def ? def->spriteId : "";
             map.addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i], spriteId));
+            placedPositions.push_back(pos);
         }
     }
 }
@@ -1151,12 +1197,14 @@ void GameManager::initDefaultMap()
     currentMap_->addEntity(std::make_unique<PlayerEntity>(townDefaultSpawn()));
 
     std::mt19937 rng(std::random_device{}());
+    std::vector<engine::Vec2> placedPositions;
     for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
     {
-        engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
+        engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng, placedPositions, 200.0f);
         const NpcDefinition *def = findNpc(todayNpcIds_[i]);
         std::string spriteId = def ? def->spriteId : "";
         currentMap_->addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i], spriteId));
+        placedPositions.push_back(pos);
     }
 }
 
@@ -1167,12 +1215,14 @@ void GameManager::initSecondMap()
     secondMap_->addEntity(std::make_unique<PlayerEntity>(schoolDefaultSpawn()));
 
     std::mt19937 rng(std::random_device{}());
+    std::vector<engine::Vec2> placedPositions;
     for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
     {
-        engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
+        engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng, placedPositions, 200.0f);
         const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
         std::string spriteId = def ? def->spriteId : "";
         secondMap_->addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i], spriteId));
+        placedPositions.push_back(pos);
     }
 }
 

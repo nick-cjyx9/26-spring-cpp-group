@@ -28,7 +28,9 @@ namespace
             return "";
         if (textureId.find('/') != std::string::npos || textureId.rfind("arcana_", 0) == 0)
             return textureId;
-        return std::string("equipment/") + textureId;
+        if (item.type() == ItemType::Equipment)
+            return std::string("equipment/") + textureId;
+        return std::string("items/") + textureId;
     }
 
     void drawScrollbar(engine::IRenderer &renderer, int selectedIndex, int itemCount)
