@@ -41,6 +41,13 @@ engine::Vec2 SfmlInput::mousePosition() const
     return {static_cast<float>(pos.x), static_cast<float>(pos.y)};
 }
 
+int SfmlInput::consumeScrollDelta()
+{
+    int d = scrollDelta_;
+    scrollDelta_ = 0;
+    return d;
+}
+
 void SfmlInput::onSfmlKeyPressed(sf::Keyboard::Key key)
 {
     for (size_t i = 1; i < static_cast<size_t>(Key::Count); ++i)
@@ -80,6 +87,11 @@ void SfmlInput::onSfmlTextEntered(std::uint32_t unicode)
     {
         typedBuffer_ += static_cast<char>(unicode);
     }
+}
+
+void SfmlInput::onSfmlMouseWheelScrolled(int delta)
+{
+    scrollDelta_ += delta;
 }
 
 sf::Keyboard::Key SfmlInput::toSfmlKey(Key key)
@@ -122,6 +134,8 @@ sf::Keyboard::Key SfmlInput::toSfmlKey(Key key)
         return sf::Keyboard::L;
     case Key::R:
         return sf::Keyboard::R;
+    case Key::U:
+        return sf::Keyboard::U;
     case Key::Num1:
         return sf::Keyboard::Num1;
     case Key::Num2:
