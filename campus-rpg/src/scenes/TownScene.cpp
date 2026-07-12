@@ -70,6 +70,22 @@ void TownScene::handleInput(engine::IInput &input)
         GameManager::instance().enterScene(SceneType::DebugCheat);
         return;
     }
+    if (input.wasKeyJustPressed(engine::Key::F5) && input.isKeyPressed(engine::Key::N))
+    {
+        GameManager::instance().setNight(true);
+        TileMap &map = GameManager::instance().currentMap();
+        engine::Vec2 playerPos{100, 100};
+        PlayerEntity *player = findPlayer(map);
+        if (player)
+            playerPos = player->position();
+        map.clearEntities();
+        map.addEntity(std::make_unique<PlayerEntity>(playerPos));
+        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 240}, "enemy_slime", "monsters/bunny"));
+        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin", "monsters/duck"));
+        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss", "monsters/treant"));
+        GameManager::instance().enterScene(SceneType::Night);
+        return;
+    }
     if (input.wasKeyJustPressed(engine::Key::F5))
     {
         if (GameManager::instance().saveCurrentSlot())
