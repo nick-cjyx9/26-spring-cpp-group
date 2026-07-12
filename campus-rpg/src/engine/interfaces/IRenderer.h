@@ -20,6 +20,10 @@ public:
     virtual void drawTexture(const std::string &textureId, const Vec2 &pos) = 0;
     virtual void drawTexture(const std::string &textureId, const Rect &dstRect) = 0;
     virtual void drawText(const std::string &text, const Vec2 &pos, int size, Color color) = 0;
+
+    // Measure the rendered width of `text` at the given font size, in pixels.
+    // Used for centering text. Returns 0 if the default font is unavailable.
+    virtual float textWidth(const std::string &text, int size) const = 0;
 };
 
 } // namespace engine

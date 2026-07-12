@@ -107,6 +107,7 @@ set(APP_LIB_SOURCES
     src/scenes/LevelUpScene.cpp
     src/scenes/RestConfirmScene.cpp
     src/scenes/DebugCheatScene.cpp
+    src/scenes/PauseMenuScene.cpp
 )
 
 add_library(CampusRPGAppLib STATIC ${APP_LIB_SOURCES})
