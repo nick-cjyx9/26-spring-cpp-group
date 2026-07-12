@@ -165,7 +165,7 @@ void NightScene::update(float deltaTime)
         engine::Vec2 spawnPos = {640.0f, 430.0f};
         town.clearEntities();
         town.addEntity(std::make_unique<PlayerEntity>(spawnPos));
-        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime", "monsters/bunny"));
+        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{225, 400}, "enemy_slime", "monsters/bunny"));
         town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin", "monsters/duck"));
         town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss", "monsters/treant"));
     }
