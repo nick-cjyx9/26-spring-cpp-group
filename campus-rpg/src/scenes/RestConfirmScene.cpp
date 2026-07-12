@@ -78,7 +78,7 @@ void RestConfirmScene::confirm()
         }
         map.clearEntities();
         map.addEntity(std::make_unique<PlayerEntity>(playerPos));
-        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime", "monsters/bunny"));
+        map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{225, 400}, "enemy_slime", "monsters/bunny"));
         map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin", "monsters/duck"));
         map.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss", "monsters/treant"));
         GameManager::instance().enterScene(SceneType::Night);
