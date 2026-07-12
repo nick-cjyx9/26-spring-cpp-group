@@ -788,6 +788,29 @@ void GameManager::initDefaultQuests()
                     "item_flower", 5, 100, 25, "sl_npc_9");
     addKillQuest("quest_lily_2", "Protect Lily", "Defeat 3 Slimes.",
                  "kill:3", 250, 40, "sl_npc_9");
+
+    // Chain quest 1: Defeat the third monster on the first map at night
+    {
+        Quest q1("quest_chain_1", "Defeat the Third Monster of the First Map",
+                 "Defeat the third monster on the first map at night.", "", 100, 50);
+        q1.setType(QuestType::Kill);
+        q1.setTargetCount(1);
+        q1.setTextColor(0);
+        q1.setPriority(0);
+        questManager_.addQuest(std::move(q1));
+    }
+
+    // Chain quest 2: Defeat the third monster on the second map at night (red, top priority)
+    {
+        Quest q2("quest_chain_2", "Defeat the Third Monster of the Second Map",
+                 "Defeat the third monster on the second map at night.", "", 200, 100);
+        q2.setType(QuestType::Kill);
+        q2.setTargetCount(1);
+        q2.setPrerequisiteId("quest_chain_1");
+        q2.setTextColor(1);
+        q2.setPriority(-1);
+        questManager_.addQuest(std::move(q2));
+    }
 }
 
 void GameManager::initDefaultEnemies()
@@ -835,12 +858,12 @@ void GameManager::generateNpcPool()
         {"sl_npc_1", "Eric", "npc_portrait_1", "npc_sprite_1", "Magician"},
         {"sl_npc_2", "Selena", "npc_portrait_2", "npc_sprite_2", "High Priestess"},
         {"sl_npc_3", "Maria", "npc_portrait_3", "npc_sprite_3", "Empress"},
-        {"sl_npc_4", "Arthur", "npc_portrait_0", "npc_sprite_0", "Emperor"},
-        {"sl_npc_5", "Thomas", "npc_portrait_1", "npc_sprite_1", "Hierophant"},
-        {"sl_npc_6", "Maxim", "npc_portrait_2", "npc_sprite_2", "Chariot"},
-        {"sl_npc_7", "Reina", "npc_portrait_3", "npc_sprite_3", "Strength"},
-        {"sl_npc_8", "Zhang", "npc_portrait_0", "npc_sprite_0", "Hermit"},
-        {"sl_npc_9", "Lily", "npc_portrait_1", "npc_sprite_1", "Lovers"}};
+        {"sl_npc_4", "Arthur", "npc_portrait_4", "npc_sprite_4", "Emperor"},
+        {"sl_npc_5", "Thomas", "npc_portrait_5", "npc_sprite_5", "Hierophant"},
+        {"sl_npc_6", "Maxim", "npc_portrait_6", "npc_sprite_6", "Chariot"},
+        {"sl_npc_7", "Reina", "npc_portrait_7", "npc_sprite_7", "Strength"},
+        {"sl_npc_8", "Zhang", "npc_portrait_8", "npc_sprite_8", "Hermit"},
+        {"sl_npc_9", "Lily", "npc_portrait_9", "npc_sprite_9", "Lovers"}};
 
     npcPool_.clear();
     for (int i = 0; i < kNpcPoolSize && i < static_cast<int>(kFixedPool.size()); ++i)
