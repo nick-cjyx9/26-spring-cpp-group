@@ -55,7 +55,8 @@ void TownScene::handleInput(engine::IInput &input)
 
     if (input.wasKeyJustPressed(engine::Key::E) || input.wasKeyJustPressed(engine::Key::Enter))
     {
-        tryInteract();
+        if (interactionCooldown_ <= 0.0f)
+            tryInteract();
     }
     if (input.wasKeyJustPressed(engine::Key::I))
     {
@@ -87,6 +88,10 @@ void TownScene::handleInput(engine::IInput &input)
     {
         GameManager::instance().enterScene(SceneType::SocialLink);
     }
+    if (input.wasKeyJustPressed(engine::Key::U))
+    {
+        GameManager::instance().enterScene(SceneType::Quest);
+    }
     if (input.wasKeyJustPressed(engine::Key::R))
     {
         TileMap &map = GameManager::instance().currentMap();
@@ -102,6 +107,13 @@ void TownScene::handleInput(engine::IInput &input)
 
 void TownScene::update(float deltaTime)
 {
+    if (interactionCooldown_ > 0.0f)
+    {
+        interactionCooldown_ -= deltaTime;
+        if (interactionCooldown_ < 0.0f)
+            interactionCooldown_ = 0.0f;
+    }
+
     if (saveMessageTimer_ > 0.0f)
     {
         saveMessageTimer_ -= deltaTime;
@@ -310,6 +322,7 @@ void TownScene::tryInteract()
     Entity *npc = map.firstEntityAt(interactionArea(*player), "npc");
     if (npc)
     {
+        interactionCooldown_ = kInteractionCooldown;
         GameManager::instance().enterScene(SceneType::Dialogue);
         return;
     }

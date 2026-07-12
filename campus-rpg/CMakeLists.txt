@@ -58,6 +58,7 @@ endif()
 set(CORE_SOURCES
     src/core/Character.cpp
     src/core/Item.cpp
+    src/core/MiscItem.cpp
     src/core/Inventory.cpp
     src/core/Quest.cpp
     src/core/QuestManager.cpp
@@ -107,6 +108,7 @@ set(APP_LIB_SOURCES
     src/scenes/LevelUpScene.cpp
     src/scenes/RestConfirmScene.cpp
     src/scenes/DebugCheatScene.cpp
+    src/scenes/QuestScene.cpp
 )
 
 add_library(CampusRPGAppLib STATIC ${APP_LIB_SOURCES})

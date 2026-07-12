@@ -50,21 +50,30 @@ void NightScene::handleInput(engine::IInput &input)
         GameManager::instance().enterScene(SceneType::Status);
         return;
     }
+    if (input.wasKeyJustPressed(engine::Key::U))
+    {
+        GameManager::instance().enterScene(SceneType::Quest);
+        return;
+    }
 
     // Home area interaction: only on the town map (not the school/second map).
     if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
     {
-        PlayerEntity *p = findPlayer(GameManager::instance().currentMap());
-        if (p && !GameManager::instance().onSecondMap())
+        if (interactionCooldown_ <= 0.0f)
         {
-            engine::Rect playerBox{p->position().x - 5.0f, p->position().y - 5.0f,
-                                   10.0f, 10.0f};
-            for (const auto &zone : townInteractionZones())
+            PlayerEntity *p = findPlayer(GameManager::instance().currentMap());
+            if (p && !GameManager::instance().onSecondMap())
             {
-                if (zone.type == InteractionType::Home && playerBox.intersects(zone.area))
+                engine::Rect playerBox{p->position().x - 5.0f, p->position().y - 5.0f,
+                                       10.0f, 10.0f};
+                for (const auto &zone : townInteractionZones())
                 {
-                    GameManager::instance().enterScene(SceneType::RestConfirm);
-                    return;
+                    if (zone.type == InteractionType::Home && playerBox.intersects(zone.area))
+                    {
+                        interactionCooldown_ = kInteractionCooldown;
+                        GameManager::instance().enterScene(SceneType::RestConfirm);
+                        return;
+                    }
                 }
             }
         }
@@ -92,7 +101,15 @@ void NightScene::handleInput(engine::IInput &input)
 
 void NightScene::update(float deltaTime)
 {
+    if (interactionCooldown_ > 0.0f)
+    {
+        interactionCooldown_ -= deltaTime;
+        if (interactionCooldown_ < 0.0f)
+            interactionCooldown_ = 0.0f;
+    }
+
     auraTimer_ += deltaTime;
+
     if (stuckMessageTimer_ > 0.0f)
     {
         stuckMessageTimer_ -= deltaTime;

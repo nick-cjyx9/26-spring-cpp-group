@@ -17,4 +17,8 @@ private:
     float auraTimer_ = 0.0f;
     std::string stuckMessage_;
     float stuckMessageTimer_ = 0.0f;
+
+    // Prevent rapid re-interaction after exiting dialogue.
+    float interactionCooldown_ = 0.0f;
+    static constexpr float kInteractionCooldown = 0.3f;
 };

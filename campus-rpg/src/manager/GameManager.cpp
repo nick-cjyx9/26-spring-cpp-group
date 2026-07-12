@@ -1,6 +1,7 @@
 #include "GameManager.h"
 #include "Enemy.h"
 #include "Item.h"
+#include "MiscItem.h"
 #include "Persona.h"
 #include "SaveRepository.h"
 #include "DatabaseManager.h"
@@ -22,9 +23,9 @@
 #include "LevelUpScene.h"
 #include "RestConfirmScene.h"
 #include "DebugCheatScene.h"
+#include "QuestScene.h"
 
 #include <algorithm>
-#include <array>
 #include <map>
 #include <random>
 
@@ -66,6 +67,7 @@ void GameManager::seedDefaultState(const std::string &playerName)
     todayNpcIds_.clear();
     todaySchoolNpcIds_.clear();
     npcPool_.clear();
+    totalTalksToday_ = 0;
     onSecondMap_ = false;
 
     initDefaultPersonas();
@@ -78,12 +80,22 @@ void GameManager::seedDefaultState(const std::string &playerName)
     initSecondMap();           // build school map + today's NPCs
     initDefaultEquipment();
 
-    // Start with a fixed Fool Persona. The full Persona registry is available
-    // for shop purchases and battle drops, but not owned at start.
+    // All default personas are owned by the player.
     character_.clearOwnedPersonas();
-    auto starter = findPersona("persona_orpheus");
+    for (const auto &p : personas_)
+    {
+        if (p)
+            character_.addPersona(p);
+    }
+
+    // Pick a random balanced starter Persona.
+    std::vector<std::string> starters = {
+        "persona_izanagi", "persona_pixie", "persona_orpheus"};
+    std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<size_t> dist(0, starters.size() - 1);
+    auto starter = findPersona(starters[dist(rng)]);
     if (starter)
-        setPlayerPersona(starter);
+        character_.setPersona(starter);
 
     recomputeSocialLinkBonuses();
 }
@@ -114,7 +126,7 @@ bool GameManager::saveToSlot(int slotId)
         equippedGear_.weapon, equippedGear_.armor, equippedGear_.accessory, equippedGear_.relic};
 
     SaveRepository repo;
-    bool ok = repo.saveAll(slotId, character_, inventory_, character_.ownedPersonas(),
+    bool ok = repo.saveAll(slotId, character_, inventory_, personas_,
                            socialLinkManager_, questManager_, day_,
                            posX, posY, isNight_, onSecondMap_, equipped);
     if (ok)
@@ -143,8 +155,7 @@ bool GameManager::loadFromSlot(int slotId)
     // registry, so we re-apply the seeded skills to matching personas after
     // load. This restores gameplay state for the default personas.
     std::map<std::string, std::vector<std::shared_ptr<Skill>>> skillSnapshot;
-    std::vector<std::shared_ptr<Persona>> defaultPersonaRegistry = personas_;
-    for (const auto &p : defaultPersonaRegistry)
+    for (const auto &p : personas_)
     {
         if (!p)
             continue;
@@ -194,25 +205,17 @@ bool GameManager::loadFromSlot(int slotId)
             restoreEquipmentTexture(*eq);
     }
 
-    // Re-apply skills to the reconstructed owned Personas (loaded ones start empty),
-    // then merge in default unowned Personas so shop/drop lookup still works.
-    std::vector<std::string> loadedOwnedPersonaIds;
+    // Re-apply skills to the reconstructed Personas (loaded ones start empty).
     for (auto &p : personas_)
     {
         if (!p)
             continue;
-        loadedOwnedPersonaIds.push_back(p->id());
         auto it = skillSnapshot.find(p->id());
         if (it != skillSnapshot.end())
         {
             for (const auto &s : it->second)
                 p->learnSkill(s);
         }
-    }
-    for (const auto &defaultPersona : defaultPersonaRegistry)
-    {
-        if (defaultPersona && !findPersona(defaultPersona->id()))
-            personas_.push_back(defaultPersona);
     }
 
     currentSlotId_ = slotId;
@@ -240,12 +243,10 @@ bool GameManager::loadFromSlot(int slotId)
             character_.setPersona(p);
     }
 
-    // Sync only the saved owned Personas after load; the rest of personas_ is
-    // the global registry used by shop/drop lookup.
+    // Sync owned personas after load.
     character_.clearOwnedPersonas();
-    for (const auto &ownedId : loadedOwnedPersonaIds)
+    for (const auto &p : personas_)
     {
-        auto p = findPersona(ownedId);
         if (p)
             character_.addPersona(p);
     }
@@ -392,6 +393,9 @@ void GameManager::enterScene(SceneType type)
     case SceneType::DebugCheat:
         currentScene_ = std::make_unique<DebugCheatScene>();
         break;
+    case SceneType::Quest:
+        currentScene_ = std::make_unique<QuestScene>();
+        break;
     }
 }
 
@@ -505,115 +509,36 @@ bool GameManager::unequipToInventory(EquipmentSlot slot)
 
 void GameManager::initDefaultPersonas()
 {
-    struct PersonaSeed
-    {
-        const char *id;
-        const char *name;
-        const char *arcana;
-        int level;
-        int strength;
-        int magic;
-        int speed;
-        Element resist;
-        Element weak;
-        const char *skill1;
-        const char *skill2;
-        const char *unlock1;
-        const char *unlock2;
-    };
+    auto izanagi = std::make_shared<Persona>("persona_izanagi", "Izanagi", "Fool", 2,
+                                             6, 5, 5);
+    izanagi->setAffinity(Element::Electric, Affinity::Resist);
+    izanagi->setAffinity(Element::Wind, Affinity::Weak);
+    izanagi->learnSkill(std::make_shared<Skill>("skill_zio", "Zio", Element::Electric, 6, 4, SkillCostType::SP));
+    izanagi->learnSkill(std::make_shared<Skill>("skill_cleave", "Cleave", Element::Physical, 8, 0, SkillCostType::HP));
+    // Potential skills unlocked via Social Link rank-ups.
+    izanagi->addPotentialSkill(3, std::make_shared<Skill>("skill_zionga", "Zionga", Element::Electric, 12, 8, SkillCostType::SP));
+    izanagi->addPotentialSkill(6, std::make_shared<Skill>("skill_mazionga", "Mazionga", Element::Electric, 20, 14, SkillCostType::SP));
+    personas_.push_back(izanagi);
 
-    auto skill = [](const std::string &id) -> std::shared_ptr<Skill>
-    {
-        static const std::map<std::string, std::tuple<const char *, Element, int, int, SkillCostType, bool>> kSkills = {
-            {"skill_agi", {"Agi", Element::Fire, 6, 4, SkillCostType::SP, false}},
-            {"skill_agilao", {"Agilao", Element::Fire, 12, 8, SkillCostType::SP, false}},
-            {"skill_maragi", {"Maragi", Element::Fire, 20, 12, SkillCostType::SP, false}},
-            {"skill_bufu", {"Bufu", Element::Ice, 6, 4, SkillCostType::SP, false}},
-            {"skill_bufula", {"Bufula", Element::Ice, 12, 8, SkillCostType::SP, false}},
-            {"skill_zio", {"Zio", Element::Electric, 6, 4, SkillCostType::SP, false}},
-            {"skill_zionga", {"Zionga", Element::Electric, 12, 8, SkillCostType::SP, false}},
-            {"skill_mazionga", {"Mazionga", Element::Electric, 20, 14, SkillCostType::SP, false}},
-            {"skill_garu", {"Garu", Element::Wind, 6, 4, SkillCostType::SP, false}},
-            {"skill_garula", {"Garula", Element::Wind, 12, 8, SkillCostType::SP, false}},
-            {"skill_magaru", {"Magaru", Element::Wind, 18, 12, SkillCostType::SP, false}},
-            {"skill_hama", {"Hama", Element::Light, 10, 8, SkillCostType::SP, false}},
-            {"skill_mahama", {"Mahama", Element::Light, 18, 14, SkillCostType::SP, false}},
-            {"skill_mudo", {"Mudo", Element::Dark, 10, 8, SkillCostType::SP, false}},
-            {"skill_mamudo", {"Mamudo", Element::Dark, 18, 14, SkillCostType::SP, false}},
-            {"skill_cleave", {"Cleave", Element::Physical, 8, 0, SkillCostType::HP, false}},
-            {"skill_slash", {"Slash", Element::Physical, 10, 0, SkillCostType::HP, false}},
-            {"skill_mighty_swing", {"Mighty Swing", Element::Physical, 20, 0, SkillCostType::HP, false}},
-            {"skill_dia", {"Dia", Element::Almighty, 15, 6, SkillCostType::SP, true}},
-            {"skill_diarama", {"Diarama", Element::Almighty, 35, 12, SkillCostType::SP, true}},
-            {"skill_megidola", {"Megidola", Element::Almighty, 25, 18, SkillCostType::SP, false}},
-        };
-        auto it = kSkills.find(id);
-        if (it == kSkills.end())
-            return nullptr;
-        const auto &[name, element, power, cost, costType, healing] = it->second;
-        return std::make_shared<Skill>(id, name, element, power, cost, costType, healing);
-    };
+    auto pixie = std::make_shared<Persona>("persona_pixie", "Pixie", "Magician", 2,
+                                           4, 6, 5);
+    pixie->setAffinity(Element::Wind, Affinity::Resist);
+    pixie->setAffinity(Element::Electric, Affinity::Weak);
+    pixie->learnSkill(std::make_shared<Skill>("skill_garu", "Garu", Element::Wind, 6, 4, SkillCostType::SP));
+    pixie->learnSkill(std::make_shared<Skill>("skill_dia", "Dia", Element::Almighty, 15, 6, SkillCostType::SP, true));
+    pixie->addPotentialSkill(3, std::make_shared<Skill>("skill_garula", "Garula", Element::Wind, 12, 8, SkillCostType::SP));
+    pixie->addPotentialSkill(6, std::make_shared<Skill>("skill_diarama", "Diarama", Element::Almighty, 35, 12, SkillCostType::SP, true));
+    personas_.push_back(pixie);
 
-    static const std::array<PersonaSeed, 44> kPersonas = {{
-        {"persona_orpheus", "Orpheus", "Fool", 1, 5, 5, 5, Element::Fire, Element::Ice, "skill_agi", "skill_dia", "skill_agilao", "skill_diarama"},
-        {"persona_sun_wukong", "Sun Wukong", "Fool", 4, 9, 6, 9, Element::Physical, Element::Ice, "skill_slash", "skill_garu", "skill_mighty_swing", "skill_megidola"},
-        {"persona_pixie", "Pixie", "Magician", 1, 4, 7, 6, Element::Wind, Element::Electric, "skill_garu", "skill_dia", "skill_garula", "skill_diarama"},
-        {"persona_merlin", "Merlin", "Magician", 4, 5, 12, 7, Element::Electric, Element::Dark, "skill_zio", "skill_diarama", "skill_zionga", "skill_megidola"},
-        {"persona_kikuri_hime", "Kikuri-Hime", "Priestess", 1, 4, 8, 5, Element::Light, Element::Dark, "skill_hama", "skill_dia", "skill_bufula", "skill_diarama"},
-        {"persona_chang_e", "Chang'e", "Priestess", 4, 5, 12, 7, Element::Ice, Element::Fire, "skill_bufu", "skill_diarama", "skill_bufula", "skill_mahama"},
-        {"persona_gaia", "Gaia", "Empress", 2, 5, 8, 4, Element::Wind, Element::Fire, "skill_garu", "skill_dia", "skill_garula", "skill_diarama"},
-        {"persona_nuwa", "Nuwa", "Empress", 4, 6, 12, 6, Element::Light, Element::Dark, "skill_hama", "skill_diarama", "skill_mahama", "skill_megidola"},
-        {"persona_ares", "Ares", "Emperor", 2, 8, 4, 5, Element::Physical, Element::Ice, "skill_cleave", "skill_agi", "skill_slash", "skill_agilao"},
-        {"persona_odin", "Odin", "Emperor", 4, 10, 8, 6, Element::Electric, Element::Wind, "skill_zionga", "skill_slash", "skill_mazionga", "skill_mighty_swing"},
-        {"persona_xuanwu", "Xuanwu", "Hierophant", 2, 5, 7, 5, Element::Ice, Element::Fire, "skill_bufu", "skill_dia", "skill_bufula", "skill_diarama"},
-        {"persona_thoth", "Thoth", "Hierophant", 4, 5, 12, 7, Element::Light, Element::Physical, "skill_hama", "skill_zio", "skill_mahama", "skill_megidola"},
-        {"persona_eros", "Eros", "Lovers", 1, 5, 6, 7, Element::Wind, Element::Electric, "skill_garu", "skill_dia", "skill_garula", "skill_diarama"},
-        {"persona_aphrodite", "Aphrodite", "Lovers", 4, 4, 12, 8, Element::Light, Element::Dark, "skill_hama", "skill_diarama", "skill_mahama", "skill_megidola"},
-        {"persona_guan_yu", "Guan Yu", "Chariot", 2, 9, 4, 5, Element::Physical, Element::Wind, "skill_cleave", "skill_slash", "skill_mighty_swing", "skill_zionga"},
-        {"persona_achilles", "Achilles", "Chariot", 4, 10, 5, 9, Element::Physical, Element::Electric, "skill_slash", "skill_garula", "skill_mighty_swing", "skill_magaru"},
-        {"persona_themis", "Themis", "Justice", 1, 5, 7, 5, Element::Light, Element::Dark, "skill_hama", "skill_dia", "skill_mahama", "skill_diarama"},
-        {"persona_athena", "Athena", "Justice", 4, 8, 9, 7, Element::Light, Element::Dark, "skill_hama", "skill_slash", "skill_mahama", "skill_mighty_swing"},
-        {"persona_heracles", "Heracles", "Strength", 2, 10, 3, 4, Element::Physical, Element::Ice, "skill_cleave", "skill_slash", "skill_mighty_swing", "skill_agilao"},
-        {"persona_thor", "Thor", "Strength", 4, 11, 6, 7, Element::Electric, Element::Wind, "skill_zio", "skill_mighty_swing", "skill_zionga", "skill_mazionga"},
-        {"persona_zhong_kui", "Zhong Kui", "Hermit", 3, 8, 8, 6, Element::Dark, Element::Light, "skill_mudo", "skill_slash", "skill_mamudo", "skill_mighty_swing"},
-        {"persona_prometheus", "Prometheus", "Hermit", 6, 7, 15, 10, Element::Fire, Element::Ice, "skill_agilao", "skill_megidola", "skill_maragi", "skill_diarama"},
-        {"persona_norn", "Norn", "Fortune", 3, 6, 10, 7, Element::Wind, Element::Electric, "skill_garula", "skill_dia", "skill_magaru", "skill_diarama"},
-        {"persona_fortuna", "Fortuna", "Fortune", 6, 7, 13, 13, Element::Wind, Element::Dark, "skill_garula", "skill_megidola", "skill_magaru", "skill_mahama"},
-        {"persona_odin_wanderer", "Odin Wanderer", "Hanged Man", 3, 7, 11, 6, Element::Electric, Element::Wind, "skill_zionga", "skill_dia", "skill_mazionga", "skill_megidola"},
-        {"persona_loki", "Loki", "Hanged Man", 6, 7, 14, 13, Element::Dark, Element::Light, "skill_mudo", "skill_garula", "skill_mamudo", "skill_magaru"},
-        {"persona_thanatos", "Thanatos", "Death", 3, 9, 10, 5, Element::Dark, Element::Light, "skill_mudo", "skill_slash", "skill_mamudo", "skill_mighty_swing"},
-        {"persona_hades", "Hades", "Death", 6, 9, 17, 8, Element::Dark, Element::Light, "skill_mamudo", "skill_megidola", "skill_diarama", "skill_mighty_swing"},
-        {"persona_iris", "Iris", "Temperance", 3, 5, 11, 8, Element::Wind, Element::Electric, "skill_garula", "skill_diarama", "skill_magaru", "skill_mahama"},
-        {"persona_guanyin", "Guanyin", "Temperance", 6, 6, 16, 10, Element::Light, Element::Dark, "skill_mahama", "skill_diarama", "skill_megidola", "skill_dia"},
-        {"persona_succubus", "Succubus", "Devil", 3, 5, 12, 8, Element::Dark, Element::Light, "skill_mudo", "skill_garula", "skill_mamudo", "skill_magaru"},
-        {"persona_mara", "Mara", "Devil", 6, 12, 13, 8, Element::Dark, Element::Light, "skill_mamudo", "skill_mighty_swing", "skill_megidola", "skill_slash"},
-        {"persona_minotaur", "Minotaur", "Tower", 3, 12, 5, 6, Element::Physical, Element::Light, "skill_mighty_swing", "skill_cleave", "skill_slash", "skill_agilao"},
-        {"persona_typhon", "Typhon", "Tower", 6, 14, 13, 6, Element::Fire, Element::Ice, "skill_maragi", "skill_mighty_swing", "skill_megidola", "skill_agilao"},
-        {"persona_astraea", "Astraea", "Star", 3, 6, 11, 8, Element::Light, Element::Dark, "skill_hama", "skill_garula", "skill_mahama", "skill_magaru"},
-        {"persona_amaterasu", "Amaterasu", "Star", 6, 7, 17, 10, Element::Light, Element::Dark, "skill_mahama", "skill_maragi", "skill_megidola", "skill_diarama"},
-        {"persona_artemis", "Artemis", "Moon", 3, 8, 9, 9, Element::Ice, Element::Fire, "skill_bufula", "skill_slash", "skill_mamudo", "skill_mighty_swing"},
-        {"persona_tsukuyomi", "Tsukuyomi", "Moon", 6, 8, 16, 10, Element::Ice, Element::Light, "skill_bufula", "skill_mamudo", "skill_megidola", "skill_diarama"},
-        {"persona_apollo", "Apollo", "Sun", 3, 7, 12, 8, Element::Fire, Element::Ice, "skill_agilao", "skill_hama", "skill_maragi", "skill_mahama"},
-        {"persona_hou_yi", "Hou Yi", "Sun", 6, 15, 10, 10, Element::Fire, Element::Dark, "skill_maragi", "skill_mighty_swing", "skill_megidola", "skill_slash"},
-        {"persona_anubis", "Anubis", "Judgement", 3, 7, 13, 7, Element::Dark, Element::Physical, "skill_hama", "skill_mudo", "skill_mahama", "skill_mamudo"},
-        {"persona_yama", "Yama", "Judgement", 6, 10, 16, 8, Element::Dark, Element::Light, "skill_mamudo", "skill_megidola", "skill_mahama", "skill_mighty_swing"},
-        {"persona_izanagi_no_okami", "Izanagi-no-Okami", "World", 5, 10, 12, 10, Element::Almighty, Element::Dark, "skill_zionga", "skill_megidola", "skill_mazionga", "skill_diarama"},
-        {"persona_pangu", "Pangu", "World", 7, 16, 14, 8, Element::Physical, Element::Dark, "skill_mighty_swing", "skill_megidola", "skill_maragi", "skill_mahama"},
-    }};
-
-    personas_.clear();
-    for (const auto &seed : kPersonas)
-    {
-        auto persona = std::make_shared<Persona>(seed.id, seed.name, seed.arcana, seed.level,
-                                                 seed.strength, seed.magic, seed.speed);
-        persona->setAffinity(seed.resist, Affinity::Resist);
-        persona->setAffinity(seed.weak, Affinity::Weak);
-        persona->learnSkill(skill(seed.skill1));
-        persona->learnSkill(skill(seed.skill2));
-        persona->addPotentialSkill(seed.level + 2, skill(seed.unlock1));
-        persona->addPotentialSkill(seed.level + 5, skill(seed.unlock2));
-        personas_.push_back(std::move(persona));
-    }
+    auto orpheus = std::make_shared<Persona>("persona_orpheus", "Orpheus", "Fool", 2,
+                                             5, 5, 5);
+    orpheus->setAffinity(Element::Fire, Affinity::Resist);
+    orpheus->setAffinity(Element::Ice, Affinity::Weak);
+    orpheus->learnSkill(std::make_shared<Skill>("skill_agi", "Agi", Element::Fire, 6, 4, SkillCostType::SP));
+    orpheus->learnSkill(std::make_shared<Skill>("skill_dia", "Dia", Element::Almighty, 15, 6, SkillCostType::SP, true));
+    orpheus->addPotentialSkill(3, std::make_shared<Skill>("skill_agilao", "Agilao", Element::Fire, 12, 8, SkillCostType::SP));
+    orpheus->addPotentialSkill(6, std::make_shared<Skill>("skill_diarama", "Diarama", Element::Almighty, 35, 12, SkillCostType::SP, true));
+    personas_.push_back(orpheus);
 }
 
 void GameManager::initDefaultShop()
@@ -621,75 +546,183 @@ void GameManager::initDefaultShop()
     shop_.addItem(std::make_unique<FoodItem>("food_bread", "Bread", "A loaf of campus bread.", 10, 20, "items/bread"));
     shop_.addItem(std::make_unique<PotionItem>("potion_hp", "HP Potion", "Restores a lot of HP.", 30, 50, "items/potion_red"));
     shop_.addItem(std::make_unique<SpItem>("item_coffee", "Coffee", "Restores a little SP.", 20, 15, "items/coffee"));
-
-    auto priceFor = [](const Persona &persona)
-    {
-        int statTotal = persona.strength() + persona.magic() + persona.speed();
-        if (persona.level() <= 2)
-            return 80 + statTotal * 8;
-        if (statTotal <= 24)
-            return 160 + statTotal * 12;
-        return 420 + statTotal * 20;
-    };
-    auto arcanaTexture = [](std::string arcana)
-    {
-        std::transform(arcana.begin(), arcana.end(), arcana.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        std::replace(arcana.begin(), arcana.end(), ' ', '_');
-        if (arcana == "hanged_man")
-            return std::string("arcana_hanged_man");
-        if (arcana == "fortune")
-            return std::string("arcana_fortune");
-        return std::string("arcana_") + arcana;
-    };
-
-    for (const auto &persona : personas_)
-    {
-        if (!persona)
-            continue;
-        std::string itemId = "item_" + persona->id().substr(std::string("persona_").size()) + "_contract";
-        shop_.addItem(std::make_unique<PersonaItem>(itemId, persona->name() + " Contract",
-                                                    "Summons " + persona->name() + " of the " + persona->arcana() + " Arcana.",
-                                                    priceFor(*persona), persona->id(), arcanaTexture(persona->arcana())));
-    }
+    shop_.addItem(std::make_unique<PersonaItem>("item_pixie_contract", "Pixie Contract",
+                                                "Summons Pixie.", 150, "persona_pixie"));
+    // Quest collectibles
+    shop_.addItem(std::make_unique<MiscItem>("item_star_shard", "Star Shard", "A crystallized fragment of memory dropped by monsters.", 80, "items/gem_blue"));
+    shop_.addItem(std::make_unique<MiscItem>("item_moon_mushroom", "Moonlight Mushroom", "A glowing mushroom that only grows under the full moon.", 60, "items/mushroom"));
+    shop_.addItem(std::make_unique<MiscItem>("item_monster_tooth", "Monster Tooth", "A sharp tooth taken from a defeated monster.", 40, "items/bone"));
+    shop_.addItem(std::make_unique<MiscItem>("item_tarot_card", "Tarot Card", "A mysterious card imbued with arcane power. One of the 22 Major Arcana.", 100, "items/card"));
 }
 
 void GameManager::initDefaultQuests()
 {
-    questManager_.addQuest(Quest("quest_first", "First Steps",
-                                 "Defeat your first slime.", "kill:1", 20, 30));
-    questManager_.addQuest(Quest("quest_veteran", "Campus Veteran",
-                                 "Defeat 3 goblins.", "kill:3", 50, 80));
+    // Fool - Yang Ming
+    {
+        Quest q1("quest_fool_1", "The Perfect Taste", "Bring 3 loaves of bread to Yang Ming.", "collect:bread:3", 30, 20);
+        q1.setType(QuestType::Collect);
+        q1.setNpcId("sl_npc_0");
+        q1.setTargetItemId("food_bread");
+        q1.setTargetCount(3);
+        questManager_.addQuest(std::move(q1));
+
+        Quest q2("quest_fool_2", "Mushroom Hunt", "Defeat 3 slimes for Yang Ming.", "kill:3", 50, 40);
+        q2.setType(QuestType::Kill);
+        q2.setNpcId("sl_npc_0");
+        q2.setTargetCount(3);
+        questManager_.addQuest(std::move(q2));
+    }
+
+    // Magician - Eric
+    {
+        Quest q1("quest_magician_1", "Arcane Study", "Defeat 2 goblins for Eric's research.", "kill:2", 40, 30);
+        q1.setType(QuestType::Kill);
+        q1.setNpcId("sl_npc_1");
+        q1.setTargetCount(2);
+        questManager_.addQuest(std::move(q1));
+
+        Quest q2("quest_magician_2", "Star Shard Collection", "Bring Eric a Star Shard.", "collect:star_shard:1", 60, 50);
+        q2.setType(QuestType::Collect);
+        q2.setNpcId("sl_npc_1");
+        q2.setTargetItemId("item_star_shard");
+        q2.setTargetCount(1);
+        questManager_.addQuest(std::move(q2));
+    }
+
+    // High Priestess - Selena
+    {
+        Quest q1("quest_priestess_1", "Moonlight Ritual", "Bring Selena 2 Moonlight Mushrooms.", "collect:moon_mushroom:2", 35, 25);
+        q1.setType(QuestType::Collect);
+        q1.setNpcId("sl_npc_2");
+        q1.setTargetItemId("item_moon_mushroom");
+        q1.setTargetCount(2);
+        questManager_.addQuest(std::move(q1));
+
+        Quest q2("quest_priestess_2", "Prophecy of Darkness", "Defeat a powerful monster for Selena's prophecy.", "kill:1", 100, 80);
+        q2.setType(QuestType::Kill);
+        q2.setNpcId("sl_npc_2");
+        q2.setTargetCount(1);
+        questManager_.addQuest(std::move(q2));
+    }
+
+    // Empress - Maria
+    {
+        Quest q1("quest_empress_1", "Warm Bread", "Bring Maria 3 loaves of bread.", "collect:bread:3", 25, 20);
+        q1.setType(QuestType::Collect);
+        q1.setNpcId("sl_npc_3");
+        q1.setTargetItemId("food_bread");
+        q1.setTargetCount(3);
+        questManager_.addQuest(std::move(q1));
+
+        Quest q2("quest_empress_2", "Exotic Flavors", "Defeat 4 goblins to collect rare ingredients.", "kill:4", 80, 70);
+        q2.setType(QuestType::Kill);
+        q2.setNpcId("sl_npc_3");
+        q2.setTargetCount(4);
+        questManager_.addQuest(std::move(q2));
+    }
+
+    // Emperor - Arthur
+    {
+        Quest q1("quest_emperor_1", "Clear the Slimes", "Defeat 5 slimes threatening the town.", "kill:5", 50, 40);
+        q1.setType(QuestType::Kill);
+        q1.setNpcId("sl_npc_4");
+        q1.setTargetCount(5);
+        questManager_.addQuest(std::move(q1));
+
+        Quest q2("quest_emperor_2", "Arm the Guard", "Bring Arthur an iron sword.", "collect:iron_sword:1", 100, 80);
+        q2.setType(QuestType::Collect);
+        q2.setNpcId("sl_npc_4");
+        q2.setTargetItemId("wp_iron");
+        q2.setTargetCount(1);
+        questManager_.addQuest(std::move(q2));
+    }
+
+    // Hierophant - Thomas
+    {
+        Quest q1("quest_hierophant_1", "Holy Offering", "Bring Thomas 3 HP potions.", "collect:potion:3", 45, 35);
+        q1.setType(QuestType::Collect);
+        q1.setNpcId("sl_npc_5");
+        q1.setTargetItemId("potion_hp");
+        q1.setTargetCount(3);
+        questManager_.addQuest(std::move(q1));
+
+        Quest q2("quest_hierophant_2", "Purify Evil", "Defeat 3 goblins for Thomas.", "kill:3", 90, 75);
+        q2.setType(QuestType::Kill);
+        q2.setNpcId("sl_npc_5");
+        q2.setTargetCount(3);
+        questManager_.addQuest(std::move(q2));
+    }
+
+    // Chariot - Maxim
+    {
+        Quest q1("quest_chariot_1", "Warrior's Proof", "Defeat 3 slimes for Maxim.", "kill:3", 60, 50);
+        q1.setType(QuestType::Kill);
+        q1.setNpcId("sl_npc_6");
+        q1.setTargetCount(3);
+        questManager_.addQuest(std::move(q1));
+
+        Quest q2("quest_chariot_2", "Trophy Collection", "Bring Maxim 2 monster teeth.", "collect:monster_tooth:2", 55, 45);
+        q2.setType(QuestType::Collect);
+        q2.setNpcId("sl_npc_6");
+        q2.setTargetItemId("item_monster_tooth");
+        q2.setTargetCount(2);
+        questManager_.addQuest(std::move(q2));
+    }
+
+    // Strength - Reina
+    {
+        Quest q1("quest_strength_1", "Feed the Beasts", "Bring Reina 4 loaves of bread.", "collect:bread:4", 30, 25);
+        q1.setType(QuestType::Collect);
+        q1.setNpcId("sl_npc_7");
+        q1.setTargetItemId("food_bread");
+        q1.setTargetCount(4);
+        questManager_.addQuest(std::move(q1));
+
+        Quest q2("quest_strength_2", "Challenge the Strong", "Defeat 2 powerful monsters for Reina.", "kill:2", 150, 120);
+        q2.setType(QuestType::Kill);
+        q2.setNpcId("sl_npc_7");
+        q2.setTargetCount(2);
+        questManager_.addQuest(std::move(q2));
+    }
+
+    // Hermit - Old Zhang
+    {
+        Quest q1("quest_hermit_1", "Bitter Memories", "Bring Old Zhang a coffee.", "collect:coffee:1", 20, 15);
+        q1.setType(QuestType::Collect);
+        q1.setNpcId("sl_npc_8");
+        q1.setTargetItemId("item_coffee");
+        q1.setTargetCount(1);
+        questManager_.addQuest(std::move(q1));
+
+        Quest q2("quest_hermit_2", "Cleansing the Past", "Defeat 5 goblins for Old Zhang.", "kill:5", 75, 65);
+        q2.setType(QuestType::Kill);
+        q2.setNpcId("sl_npc_8");
+        q2.setTargetCount(5);
+        questManager_.addQuest(std::move(q2));
+    }
+
+    // Wheel of Fortune - Fortuna
+    {
+        Quest q1("quest_fortune_1", "Gamble of Fate", "Bring Fortuna 2 Star Shards.", "collect:star_shard:2", 50, 40);
+        q1.setType(QuestType::Collect);
+        q1.setNpcId("sl_npc_9");
+        q1.setTargetItemId("item_star_shard");
+        q1.setTargetCount(2);
+        questManager_.addQuest(std::move(q1));
+
+        Quest q2("quest_fortune_2", "Guardian of Fate", "Defeat a powerful monster to protect the Wheel.", "kill:1", 120, 100);
+        q2.setType(QuestType::Kill);
+        q2.setNpcId("sl_npc_9");
+        q2.setTargetCount(1);
+        questManager_.addQuest(std::move(q2));
+    }
 }
 
 void GameManager::initDefaultEnemies()
 {
-    auto slime = std::make_unique<Slime>();
-    slime->addDropPersonaId("persona_pixie");
-    slime->addDropPersonaId("persona_orpheus");
-    slime->addDropPersonaId("persona_kikuri_hime");
-    slime->addDropPersonaId("persona_eros");
-    slime->addDropPersonaId("persona_themis");
-    enemyTemplates_.push_back(std::move(slime));
-
-    auto goblin = std::make_unique<Goblin>();
-    goblin->addDropPersonaId("persona_guan_yu");
-    goblin->addDropPersonaId("persona_ares");
-    goblin->addDropPersonaId("persona_xuanwu");
-    goblin->addDropPersonaId("persona_heracles");
-    goblin->addDropPersonaId("persona_norn");
-    goblin->addDropPersonaId("persona_zhong_kui");
-    enemyTemplates_.push_back(std::move(goblin));
-
-    auto boss = std::make_unique<Boss>();
-    boss->addDropPersonaId("persona_merlin");
-    boss->addDropPersonaId("persona_athena");
-    boss->addDropPersonaId("persona_thor");
-    boss->addDropPersonaId("persona_achilles");
-    boss->addDropPersonaId("persona_hades");
-    boss->addDropPersonaId("persona_amaterasu");
-    boss->addDropPersonaId("persona_yama");
-    boss->addDropPersonaId("persona_pangu");
-    enemyTemplates_.push_back(std::move(boss));
+    enemyTemplates_.push_back(std::make_unique<Slime>());
+    enemyTemplates_.push_back(std::make_unique<Goblin>());
+    enemyTemplates_.push_back(std::make_unique<Boss>());
 }
 
 void GameManager::initDefaultSocialLinks()
@@ -700,39 +733,26 @@ void GameManager::initDefaultSocialLinks()
 
 void GameManager::generateNpcPool()
 {
-    // A persistent pool of kNpcPoolSize unique NPCs per save. Names are picked
-    // without replacement from a fixed English name list; portraits are chosen
-    // randomly (with replacement) from the 3 available textures; arcana is
-    // deterministic by index so stat-reward mapping stays stable across loads.
-    static const std::vector<std::string> kNamePool = {
-        "Aiden", "Bella", "Caleb", "Diana", "Ethan", "Fiona", "Gavin", "Hannah",
-        "Ivan", "Julia", "Kevin", "Luna", "Mason", "Nora", "Oscar", "Piper",
-        "Quinn", "Rita", "Sean", "Tina"};
-    static const std::vector<std::string> kPortraits = {
-        "npc_portrait_0", "npc_portrait_1", "npc_portrait_2", "npc_portrait_3"};
-    static const std::vector<std::string> kSprites = {
-        "npc_sprite_0", "npc_sprite_1", "npc_sprite_2", "npc_sprite_3"};
-    static const std::vector<std::string> kArcanas = {
-        "Magician", "Chariot", "Priestess", "Fool", "Hierophant"};
-
-    std::mt19937 rng(std::random_device{}());
-
-    std::vector<std::string> names = kNamePool;
-    std::shuffle(names.begin(), names.end(), rng);
+    // Fixed pool of 10 tarot-themed NPCs. Each corresponds to a Major Arcana.
+    // Names and arcana are fixed so story / quests remain stable across saves.
+    static const std::vector<NpcDefinition> kFixedPool = {
+        {"sl_npc_0", "Yang Ming", "npc_yosuke", "Fool"},
+        {"sl_npc_1", "Eric", "npc_chie", "Magician"},
+        {"sl_npc_2", "Selena", "npc_yukiko", "High Priestess"},
+        {"sl_npc_3", "Maria", "npc_yosuke", "Empress"},
+        {"sl_npc_4", "Arthur", "npc_chie", "Emperor"},
+        {"sl_npc_5", "Thomas", "npc_yukiko", "Hierophant"},
+        {"sl_npc_6", "Maxim", "npc_yosuke", "Chariot"},
+        {"sl_npc_7", "Reina", "npc_chie", "Strength"},
+        {"sl_npc_8", "Old Zhang", "npc_yukiko", "Hermit"},
+        {"sl_npc_9", "Fortuna", "npc_yosuke", "Wheel of Fortune"}};
 
     npcPool_.clear();
-    for (int i = 0; i < kNpcPoolSize; ++i)
+    for (int i = 0; i < kNpcPoolSize && i < static_cast<int>(kFixedPool.size()); ++i)
     {
-        NpcDefinition def;
-        def.id = "sl_npc_" + std::to_string(i);
-        def.name = (i < static_cast<int>(names.size())) ? names[i] : ("NPC" + std::to_string(i));
-        def.portraitId = kPortraits[i % kPortraits.size()];
-        def.spriteId = kSprites[i % kSprites.size()];
-        def.arcana = kArcanas[i % kArcanas.size()];
-        npcPool_.push_back(def);
-
-        SocialLink link(def.id, def.name, def.arcana);
-        link.setPortraitId(def.portraitId);
+        npcPool_.push_back(kFixedPool[i]);
+        SocialLink link(kFixedPool[i].id, kFixedPool[i].name, kFixedPool[i].arcana);
+        link.setPortraitId(kFixedPool[i].portraitId);
         socialLinkManager_.addLink(std::move(link));
     }
 
@@ -741,36 +761,175 @@ void GameManager::generateNpcPool()
 
 void GameManager::applyNpcDialogueTemplates()
 {
-    // Generic, name-agnostic dialogue shared by every pool NPC. The NPC's name
-    // is prepended at fill time so the displayed text matches the loaded identity.
-    static const std::vector<std::string> kLines = {
-        "Oh, hey! Good to see you around.",
-        "I was just thinking about our last chat.",
-        "You know, I really enjoy these little talks.",
-        "I feel like we're starting to click, you know?",
-        "Honestly, you're one of the few people I can be myself around.",
-        "Hey, whatever happens out there, I've got your back. Always.",
-        "I don't say this often, but... thanks for sticking with me.",
-        "You bring out a side of me I'd kind of forgotten existed.",
-        "This bond we're building... it means more than you think.",
-        "You're my truest friend. I hope you know that.",
-        "So this is what a real bond feels like. Let's keep going, together."};
+    // Per-NPC unique dialogues keyed by npc id.
+    // Each NPC has 11 entries (rank 0..10). Each entry is a vector of dialogue lines.
+    static const std::map<std::string, std::vector<std::vector<std::string>>> kNpcDialogues = {
+        // Fool - Yang Ming: a wanderer obsessed with the "perfect taste"
+        {"sl_npc_0",
+         {
+             {"Yang Ming: \"Hey there! You look like someone who appreciates good food. Ever heard of... yellow-braised chicken?\"", "Yang Ming: \"I travel the world searching for flavors that remind me of home. That dish... it was perfection.\"", "Yang Ming: \"You also came from another world? I knew I wasn't the only one! The tarot cards... they hold the key.\""},
+             {"Yang Ming: \"Hey, good to see you again! I've been thinking about that chicken you mentioned.\"", "Yang Ming: \"This world has strange ingredients, but nothing quite matches the golden sauce of home.\"", "Yang Ming: \"Every Persona carries a fragment of memory. Mine? It tastes like home.\""},
+             {"Yang Ming: \"I met a chef once who could make miracles with mushrooms. Maybe we can find him?\"", "Yang Ming: \"The monsters here drop strange ingredients. I've been collecting them for a 'special recipe.'\"", "Yang Ming: \"You know, this world isn't so bad. At least the monsters don't complain about my cooking.\""},
+             {"Yang Ming: \"I've been thinking... maybe the way back is through understanding all 22 Arcana.\"", "Yang Ming: \"Each Arcana represents a piece of the puzzle. Only together can they reveal the path home.\"", "Yang Ming: \"You're the only one who understands the longing for that flavor. Let's find it together.\""},
+             {"Yang Ming: \"My Persona gets stronger every time I remember that taste. Memory is power here.\"", "Yang Ming: \"The Fool's journey is one of discovery. And today, I discovered a new recipe!\"", "Yang Ming: \"Whether we find that chicken again or not, I'm glad to have a friend who understands.\""},
+             {"Yang Ming: \"I've been experimenting with monster ingredients. Want to try my latest creation?\"", "Yang Ming: \"It's not yellow-braised chicken, but it's got potential. Here, taste this!\"", "Yang Ming: \"Maybe the secret isn't finding the same dish, but creating something new that carries the same warmth.\""},
+             {"Yang Ming: \"You know, I've been thinking about our journey. The 22 Arcana, the Personas, this whole world...\"", "Yang Ming: \"What if the reason we're here is because someone wanted us to find something?\"", "Yang Ming: \"Not just a way home, but a reason to stay. A purpose beyond the familiar.\""},
+             {"Yang Ming: \"I found something interesting in the forest yesterday. A mushroom that glows golden.\"", "Yang Ming: \"It reminded me of the sauce from that chicken dish. Maybe... maybe it's connected.\"", "Yang Ming: \"The world works in mysterious ways. Even here, the memory of home finds a way to reach us.\""},
+             {"Yang Ming: \"I've been talking to the other Arcana holders. They all have their own stories, their own reasons.\"", "Yang Ming: \"Some seek power, some seek knowledge. But you and I? We just want that taste of home.\"", "Yang Ming: \"And maybe that's exactly what makes our bonds the strongest. Shared longing creates the deepest ties.\""},
+             {"Yang Ming: \"I've almost perfected the recipe. Just a few more ingredients, and I'll have something truly special.\"", "Yang Ming: \"It's not the same as the original, but it carries the same spirit. The same love.\"", "Yang Ming: \"When I share it with you, I want you to remember: home isn't a place, it's a feeling. And we can carry it anywhere.\""},
+             {"Yang Ming: \"I've finally done it. I've recreated the yellow-braised chicken of my dreams!\"", "Yang Ming: \"Come, sit with me. Let's eat together, as friends who found each other across worlds.\"", "Yang Ming: \"No matter where our journey takes us next, we'll always have this moment. This taste. This bond.\""},
+         }},
+        // Magician - Eric: a scholar studying Personas
+        {"sl_npc_1",
+         {
+             {"Eric: \"Ah, another awakened one. I can sense the resonance of your Persona from here.\"", "Eric: \"The Magician Arcana represents power and resourcefulness. It suits me, don't you think?\"", "Eric: \"I've been cataloguing the 22 Major Arcana Personas. Your collection is... impressive.\""},
+             {"Eric: \"Each Persona corresponds to a skill. The Fool starts the journey; the World completes it.\"", "Eric: \"Did you know? The monsters at night carry crystallized memories. I call them 'Star Shards.'\"", "Eric: \"I need more data on combat applications. Would you help me study the monsters?\""},
+             {"Eric: \"Your ability to switch Personas mid-battle is fascinating. Most people are bound to one.\"", "Eric: \"The tarot cards aren't just symbols. They're anchors for the soul in this world.\"", "Eric: \"I've made a breakthrough! The Star Shards can temporarily boost Persona abilities.\""},
+             {"Eric: \"With your help, my research is almost complete. The truth about this world is within reach.\"", "Eric: \"But truth is like a Persona: the more you understand it, the more complex it becomes.\"", "Eric: \"Thank you, friend. You've helped me understand that knowledge means nothing without bonds.\""},
+             {"Eric: \"I've been analyzing the patterns in Persona awakenings. There's a correlation between emotional state and power output.\"", "Eric: \"When you're thinking about that yellow-braised chicken, your Persona resonates at a unique frequency.\"", "Eric: \"Emotion is the key. The stronger the feeling, the stronger the Persona. Your love for that dish... it's your greatest power source.\""},
+             {"Eric: \"The Arcana system is more complex than I initially thought. Each card doesn't just grant power—it shapes personality.\"", "Eric: \"The Fool isn't actually foolish. It represents the pure potential of a new beginning. Like you, arriving here with nothing but memories.\"", "Eric: \"And from that emptiness, infinite possibility. That's the true meaning of the Arcana.\""},
+             {"Eric: \"I've discovered something troubling. The monsters aren't natural creatures.\"", "Eric: \"They're manifestations of... something. Fears, regrets, lost memories. Fragmented souls, given form.\"", "Eric: \"That explains why they drop crystallized memories. They're literally made of the stuff.\""},
+             {"Eric: \"I've been collaborating with the Priestess. Her visions and my data are painting a clearer picture.\"", "Eric: \"This world... it's not just a world. It's a mirror. A reflection of collective human consciousness.\"", "Eric: \"The 22 Arcana represent 22 fundamental aspects of the human psyche. Understanding them means understanding ourselves.\""},
+             {"Eric: \"My latest theory: the reason you can carry 10 Personas is because the human psyche has room for 10 archetypes.\"", "Eric: \"But you can only wield one at a time because the mind needs focus. Multiple active Personas would cause... instability.\"", "Eric: \"It's like having 10 recipes but only one kitchen. You can prepare them all, but cook only one at a time.\""},
+             {"Eric: \"I've completed my research. The final piece of the puzzle... it's not what I expected.\"", "Eric: \"The 22 Arcana aren't separate entities. They're fragments of a single, greater whole.\"", "Eric: \"And that whole? It's not a Persona. It's a Person. Someone who embodies all 22 aspects simultaneously. Someone like... well, that's for you to discover.\""},
+         }},
+        // High Priestess - Selena: a mysterious fortune teller
+        {"sl_npc_2",
+         {
+             {"Selena: \"The cards have foretold your arrival. The Fool who seeks the taste of home...\"", "Selena: \"I see visions in the moonlight. The Priestess gazes into the abyss and sees truth.\"", "Selena: \"Your destiny is intertwined with the 22 Arcana. Only by awakening them all will you find your way.\""},
+             {"Selena: \"The night brings monsters, but also moonlight mushrooms. They glow with ancient memory.\"", "Selena: \"Beware the Shadow that walks between worlds. It hungers for what you cherish most.\"", "Selena: \"I have seen a vision: you and a plate of golden chicken, separated by a veil of stars.\""},
+             {"Selena: \"The moon is full tonight. My visions are clearer than ever. Would you hear your fortune?\"", "Selena: \"Each NPC you meet is a fragment of the world's memory. We are all echoes of the tarot.\"", "Selena: \"Your bond with the Fool grows strong. Together, you may yet pierce the veil between worlds.\""},
+             {"Selena: \"I see it now. The yellow-braised chicken is not just food. It is the anchor that calls you home.\"", "Selena: \"The moon reveals what the sun conceals. Tonight, the truth shines bright.\"", "Selena: \"You have grown much since we first met. The cards smile upon you, traveler.\""},
+             {"Selena: \"I've been meditating on your future. The visions are... unusual.\"", "Selena: \"I see you standing at a crossroads. One path leads home, the other leads deeper into this world.\"", "Selena: \"But here's the secret: both paths are the same. Home is not a place you leave, but a place you carry with you.\""},
+             {"Selena: \"The moon whispers secrets tonight. It speaks of a dish that transcends worlds.\"", "Selena: \"Your yellow-braised chicken... it's not just a meal. It's a memory encoded with love and longing.\"", "Selena: \"And in this world, where memories become magic, that love is a power beyond measure.\""},
+             {"Selena: \"I've been reading the stars. They align in a pattern I've never seen before.\"", "Selena: \"The constellation of the Fool overlaps with the Chariot, the Hermit, and... the World.\"", "Selena: \"You're not just collecting Personas. You're assembling a complete soul. A unified self.\""},
+             {"Selena: \"The other night, I had a vision of you at a table. Not in this world, but not in the old one either.\"", "Selena: \"A place between places. Where the 22 Arcana gather not as cards, but as friends.\"", "Selena: \"And at the center of that table? A steaming pot of yellow-braised chicken. The ultimate bond, shared among kindred spirits.\""},
+             {"Selena: \"My visions are growing stronger. I can see the threads connecting all things now.\"", "Selena: \"The monsters, the Personas, the Arcana... they're all expressions of the same force. Consciousness, longing, the will to exist.\"", "Selena: \"And your longing for that simple dish? It's the purest expression of all. Love, made tangible.\""},
+             {"Selena: \"I see a final vision. You, standing before a great door.\"", "Selena: \"Behind it lies your home. But the door doesn't open with a key. It opens with a memory.\"", "Selena: \"The memory of sitting with friends, sharing a warm meal, feeling completely at peace. That is the true key. And you've already forged it, in every bond you've made here.\""},
+         }},
+        // Empress - Maria: tavern owner whose cooking reminds the hero of home
+        {"sl_npc_3",
+         {
+             {"Maria: \"Welcome to my tavern! I don't recognize your face, but you look like you could use a warm meal.\"", "Maria: \"I make the best bread in town. But sometimes... I feel like something is missing from my recipes.\"", "Maria: \"You say my bread reminds you of something called 'yellow-braised chicken'? How intriguing!\""},
+             {"Maria: \"I dreamt of a dish with golden sauce and tender meat. Is that what you describe?\"", "Maria: \"Cooking is my Persona, in a way. It brings comfort and strength to those who partake.\"", "Maria: \"The monsters drop strange ingredients. I've been experimenting with them in my kitchen.\""},
+             {"Maria: \"You know, the Emperor himself visits my tavern. Even he can't resist my cooking.\"", "Maria: \"I've created a new recipe! It doesn't taste like your chicken, but it has heart.\"", "Maria: \"The way your eyes light up when you talk about that dish... it must have been wonderful.\""},
+             {"Maria: \"I'm going to keep trying until I recreate that 'yellow-braised chicken' for you.\"", "Maria: \"Friend, even if I never get it quite right, know that every meal here is made with care.\"", "Maria: \"Because in this world, food is more than sustenance. It's a way of showing love.\""},
+             {"Maria: \"I've been thinking about your stories. About the world you came from.\"", "Maria: \"You say everyone there eats this 'yellow-braised chicken'? It must be a dish of great cultural significance.\"", "Maria: \"In this world, food that carries such meaning... it becomes magical. Literally. The love in the recipe becomes power in the eater.\""},
+             {"Maria: \"I tried to recreate your dish last night. I used monster meat, golden mushrooms, and a sauce made from star nectar.\"", "Maria: \"It wasn't the same, of course. But when I tasted it... I felt something. A warmth. A connection across worlds.\"", "Maria: \"I think I understand now. The dish isn't important. The feeling it carries is what matters.\""},
+             {"Maria: \"I've been talking to the other Arcana holders. They all have their own comfort foods, their own memories of home.\"", "Maria: \"The Fool misses his chicken. The Magician misses his library. The Hermit... well, he misses his solitude.\"", "Maria: \"But we all gather here, at my tavern, and share our memories through food. That's the true magic of this place.\""},
+             {"Maria: \"I've created something special. A 'World's Welcome Stew.' It combines ingredients from every Arcana's homeland.\"", "Maria: \"When you taste it, you'll feel the love of the Fool, the wisdom of the Magician, the warmth of the Empress... all together.\"", "Maria: \"Because home isn't one place. It's the sum of all the places we've been loved.\""},
+             {"Maria: \"I think I've finally cracked it. The secret to your yellow-braised chicken.\"", "Maria: \"It's not the ingredients. It's not the technique. It's the intention behind it.\"", "Maria: \"When someone cooks for you with love, the dish carries a piece of their soul. And that soul-food nourishes more than the body.\""},
+             {"Maria: \"Tonight, I'm making a feast. For you, for all of us who found each other in this strange world.\"", "Maria: \"And at the center of the table, I'll place a dish. It may not be your yellow-braised chicken...\"", "Maria: \"But it's made with the same love. The same longing. The same hope. And I hope it tastes like home.\""},
+         }},
+        // Emperor - Arthur: town guard captain
+        {"sl_npc_4",
+         {
+             {"Arthur: \"State your business. These streets aren't safe at night, what with the monsters about.\"", "Arthur: \"The Emperor stands for authority and protection. I keep order in this town.\"", "Arthur: \"I've heard rumors of a traveler from another world. You, perhaps? No matter. All are welcome if they follow the law.\""},
+             {"Arthur: \"The night monsters grow bolder. I need capable fighters to cull their numbers.\"", "Arthur: \"My guards report strange crystals appearing near monster nests. Handle with care; they may be dangerous.\"", "Arthur: \"You've proven yourself in battle. Would you consider assisting the guard on a more permanent basis?\""},
+             {"Arthur: \"An Emperor is only as strong as the foundation he builds. This town is my foundation.\"", "Arthur: \"I respect strength, traveler. But I respect compassion even more. Do not lose yours.\"", "Arthur: \"The monsters seem drawn to something in this town. I suspect there's a greater threat lurking.\""},
+             {"Arthur: \"With your help, the town is safer than it's been in months. The people owe you a debt.\"", "Arthur: \"But safety is fragile. One weak link, and the whole chain breaks.\"", "Arthur: \"You have the heart of a true warrior. Should you ever need an ally, the guard stands with you.\""},
+             {"Arthur: \"I've been reviewing the guard's reports. The monster attacks are becoming more coordinated.\"", "Arthur: \"They're not random anymore. Something is directing them. Something intelligent.\"", "Arthur: \"I need you to investigate the northern ruins. That's where the largest concentration of monsters has been spotted.\""},
+             {"Arthur: \"The northern ruins... I should warn you. They're not just old buildings.\"", "Arthur: \"They're a gateway. A threshold between this world and... somewhere else.\"", "Arthur: \"The monsters are coming from there. And if we don't stop them, they'll overrun the entire region.\""},
+             {"Arthur: \"My scouts returned from the ruins. They didn't make it far, but what they saw was troubling.\"", "Arthur: \"Giant crystals growing from the ground. Glowing with the same light as those Star Shards the monsters drop.\"", "Arthur: \"And in the center of it all, a figure. Not a monster. Something... else. Something waiting.\""},
+             {"Arthur: \"I've been thinking about leadership. About what it means to be an Emperor.\"", "Arthur: \"It's not about giving orders. It's about taking responsibility. For every life under your protection.\"", "Arthur: \"You understand that. I can see it in the way you fight. Not for glory, but for others. That's true strength.\""},
+             {"Arthur: \"We're preparing for a final push against the ruins. I want you there, at the front.\"", "Arthur: \"Not because you're the strongest. But because you fight for the right reasons. And that inspires others.\"", "Arthur: \"When this is over, I'll buy you that 'yellow-braised chicken' you keep talking about. Whatever it takes.\""},
+             {"Arthur: \"The battle is won. The ruins are sealed. And you... you played the most crucial part.\"", "Arthur: \"I don't know if you realize this, but you're not just a traveler anymore. You're one of us now.\"", "Arthur: \"This town is your home. These people are your family. And as long as I stand, no one will take that from you.\""},
+         }},
+        // Hierophant - Thomas: old church priest who knows the lore
+        {"sl_npc_5",
+         {
+             {"Thomas: \"Welcome, child. The church is open to all who seek wisdom, even those from distant... very distant lands.\"", "Thomas: \"The Hierophant holds the keys to tradition and hidden knowledge. I have studied the 22 Arcana for decades.\"", "Thomas: \"You carry the scent of another world. Do not be alarmed; the divine sees all paths.\""},
+             {"Thomas: \"The tarot cards are more than images. They are living archetypes that shape reality itself.\"", "Thomas: \"I sense a great hunger in you, child. Not just for food, but for belonging.\"", "Thomas: \"The monsters are drawn to this town because of the Arcana's power. You must be cautious.\""},
+             {"Thomas: \"I have prepared holy water for the faithful. Take some; it may protect you in the dark.\"", "Thomas: \"The Fool's journey is one of self-discovery. Every Arcana you meet is a mirror to your soul.\"", "Thomas: \"I have seen the signs. A great change is coming, and you are at the center of it.\""},
+             {"Thomas: \"Your bonds with the townspeople grow stronger. That is the true magic of this world.\"", "Thomas: \"Not the spells or the Personas, but the connections between hearts. That is divine power.\"", "Thomas: \"May the light guide you, traveler. And may you find the home you seek.\""},
+             {"Thomas: \"I've been studying the ancient texts. The 22 Arcana weren't always separate.\"", "Thomas: \"Long ago, they were one. A single, complete being. The World, in its truest sense.\"", "Thomas: \"But it shattered. Broke into 22 pieces. And those pieces became the Arcana we know today.\""},
+             {"Thomas: \"The question is: why did it shatter? And more importantly, can it be reassembled?\"", "Thomas: \"Some texts suggest that the pieces can be reunited. But only by someone who embodies all 22 aspects.\"", "Thomas: \"Someone who has known joy and sorrow, strength and weakness, beginnings and endings. Someone like... well. You know who.\""},
+             {"Thomas: \"I've been praying on your behalf. The divine has shown me visions of your journey.\"", "Thomas: \"I see you carrying 10 Personas, switching between them as needed. The Fool's versatility. The Magician's adaptability.\"", "Thomas: \"But I also see you choosing one to embody fully. Not just carrying it, but becoming it. That is the path to true mastery.\""},
+             {"Thomas: \"The other Arcana holders speak of you with respect. Even the Emperor, who trusts few.\"", "Thomas: \"You have a way of connecting with people. Of seeing their true selves beneath the masks they wear.\"", "Thomas: \"That is the gift of the Fool. The ability to see truth in chaos. To find order in the random.\""},
+             {"Thomas: \"I've had a troubling vision. The shadows are gathering. Something ancient stirs in the deep.\"", "Thomas: \"The 22 Arcana were created to seal it away. And if they're not strong enough... it will return.\"", "Thomas: \"But the texts also speak of a hero. A Fool from another world, who came not by choice but by destiny. Who carries the memory of home like a shield.\""},
+             {"Thomas: \"You are that hero. I've known it since we first met.\"", "Thomas: \"Not because you're the strongest. But because you have the most to lose. And the most to protect.\"", "Thomas: \"The Arcana are ready. The town is ready. And I believe... you are ready too. Go forth, child. Your destiny awaits.\""},
+         }},
+        // Chariot - Maxim: hot-blooded adventurer seeking strong foes
+        {"sl_npc_6",
+         {
+             {"Maxim: \"Hey! You look strong! Let's fight! ...No? Then at least tell me where the strong monsters are!\"", "Maxim: \"The Chariot charges forward without fear! That's my motto, and it should be yours too!\"", "Maxim: \"I've heard rumors of a traveler who fights with multiple Personas. That must be you!\""},
+             {"Maxim: \"There's nothing better than a good fight to make you feel alive! Come on, let's spar!\"", "Maxim: \"The monsters at night are getting stronger. I couldn't be more thrilled!\"", "Maxim: \"I collect trophies from my victories. These monster teeth are proof of my strength!\""},
+             {"Maxim: \"You ever notice how the monsters drop weird stuff? I saw one drop a glowing crystal once!\"", "Maxim: \"Strength isn't just about muscles. It's about the will to keep going no matter what!\"", "Maxim: \"I want to be the strongest in this world! And that means defeating the strongest monsters!\""},
+             {"Maxim: \"You're a worthy rival, friend! One day we'll have an all-out battle, just you and me!\"", "Maxim: \"But not today. Today, we fight side by side. And that's even better!\"", "Maxim: \"No matter how strong I get, I'll never forget the friends who fought beside me. Thanks, partner!\""},
+             {"Maxim: \"I've been training with the Emperor's guard. They taught me formations, strategy... boring stuff.\"", "Maxim: \"But they also taught me something useful: how to channel my Persona's power into my strikes.\"", "Maxim: \"When you equip a Persona, don't just use its power. Become its power. That's the Chariot's way!\""},
+             {"Maxim: \"I fought a monster last night that could copy my moves. Every punch, every dodge.\"", "Maxim: \"At first, I was frustrated. But then I realized: if it can copy me, it means my moves are worth copying!\"", "Maxim: \"That's the secret to the Chariot. Don't fear being imitated. Fear being ignored.\""},
+             {"Maxim: \"I've been collecting Star Shards. Not for selling, but for something better.\"", "Maxim: \"I grind them up and mix them into my armor. Makes it glow. Makes me feel... more.\"", "Maxim: \"The Magician says it's dangerous. I say it's awesome. And you know what? Being awesome is half the battle!\""},
+             {"Maxim: \"The Emperor told me something interesting. About the ruins in the north.\"", "Maxim: \"He said there's a monster there that's stronger than anything we've faced. A real challenge!\"", "Maxim: \"I can't wait to fight it! But... I think I'll need your help. Not because I can't win, but because it'll be more fun together!\""},
+             {"Maxim: \"I've been thinking about strength. Real strength.\"", "Maxim: \"It's not about being the strongest. It's about protecting what matters. And you've taught me that.\"", "Maxim: \"When I fight now, I don't just fight for myself. I fight for the town, for my friends, for that weird chicken dish you keep talking about.\""},
+             {"Maxim: \"I've never said this before, but... I'm glad you're here.\"", "Maxim: \"This world was getting boring before you showed up. Same monsters, same battles. But you? You bring something new.\"", "Maxim: \"A reason to fight that's bigger than just winning. A reason to be strong. And I wouldn't have it any other way.\""},
+         }},
+        // Strength - Reina: beast tamer who lives in harmony with monsters
+        {"sl_npc_7",
+         {
+             {"Reina: \"Shh, you'll scare the creatures. They're not as dangerous as they seem, once you understand them.\"", "Reina: \"The Strength Arcana isn't about brute force. It's about compassion and inner courage.\"", "Reina: \"I sense a gentle soul in you, despite all the fighting. That is true strength.\""},
+             {"Reina: \"The monsters are just trying to survive, like us. But I understand the need to defend the town.\"", "Reina: \"I've been gathering food for the little ones. Could you spare some bread?\"", "Reina: \"My animal friends found something strange in the forest. Would you help me investigate?\""},
+             {"Reina: \"True power comes from understanding, not domination. Remember that in your darkest moments.\"", "Reina: \"The monsters respect me because I respect them. It's a balance we must all find.\"", "Reina: \"You've shown both courage and kindness. That is the essence of the Strength Arcana.\""},
+             {"Reina: \"My friends and I are safe because of you. Thank you for protecting the balance.\"", "Reina: \"But remember: every life is precious. Even the monsters have a place in this world.\"", "Reina: \"No matter how strong you become, never lose the compassion that makes you human.\""},
+             {"Reina: \"I've been studying the monsters' behavior. They're not attacking randomly.\"", "Reina: \"They're fleeing something. Something in the north. Something that scares even them.\"", "Reina: \"If we can understand what they're running from, maybe we can help them. And help ourselves.\""},
+             {"Reina: \"Last night, a monster cub wandered into town. It was lost, scared, alone.\"", "Reina: \"I fed it, comforted it, and guided it back to the forest. And you know what? It didn't attack anyone.\"", "Reina: \"Violence begets violence. But kindness... kindness can break the cycle.\""},
+             {"Reina: \"The other Arcana holders don't understand me. They think I'm weak for not wanting to fight.\"", "Reina: \"But I don't avoid conflict out of fear. I avoid it out of respect. For life, for balance, for the sanctity of existence.\"", "Reina: \"True Strength isn't about defeating enemies. It's about having the power to destroy, and choosing not to.\""},
+             {"Reina: \"I've been working on something. A way to communicate with the monsters.\"", "Reina: \"Not words, exactly. More like... emotions. Intentions. The universal language of the heart.\"", "Reina: \"And I think I've figured out how to teach it to you. Interested?\""},
+             {"Reina: \"The Emperor asked me to help with the northern campaign. I agreed, but on one condition.\"", "Reina: \"That we try to spare the monsters who surrender. That we don't kill indiscriminately.\"", "Reina: \"He agreed. Grudgingly, but he agreed. That's progress. That's the Strength Arcana at work.\""},
+             {"Reina: \"You've shown me that the world can be a better place. Not through power, but through understanding.\"", "Reina: \"The monsters and humans don't have to be enemies. We can coexist. We can thrive together.\"", "Reina: \"And when the dust settles, when peace finally comes... I hope you'll still visit. The creatures miss you already.\""},
+         }},
+        // Hermit - Old Zhang: elderly hermit who knows secrets
+        {"sl_npc_8",
+         {
+             {"Old Zhang: \"Heh, another young one lost in this world. Sit a while. The road is long.\"", "Old Zhang: \"The Hermit seeks truth in solitude. I've lived alone so long, the stones speak to me.\"", "Old Zhang: \"You smell like... no, it can't be. Not here. Not yellow-braised chicken? Impossible!\""},
+             {"Old Zhang: \"I knew someone like you, long ago. Came from nowhere, spoke of impossible things.\"", "Old Zhang: \"The answer you seek isn't in battle or magic. It's in the memories you hold dear.\"", "Old Zhang: \"Bring me something from the old world. Coffee, perhaps? It reminds me of better days.\""},
+             {"Old Zhang: \"I've seen 22 Arcana come and go. Each one is a lesson. Each one is a blessing.\"", "Old Zhang: \"The night monsters fear the light of memory. Hold your truth close, and they cannot harm you.\"", "Old Zhang: \"You're searching for a way home, aren't you? I've searched for fifty years. Maybe together...\""},
+             {"Old Zhang: \"You remind me of myself when I was young. Full of hope, full of fire. Don't lose that.\"", "Old Zhang: \"If you ever find that yellow-braised chicken, save a bite for an old man, will you?\"", "Old Zhang: \"The journey of a thousand miles begins with a single step. And yours... well, it's just getting interesting.\""},
+             {"Old Zhang: \"I've been watching the stars. They tell a story, if you know how to read them.\"", "Old Zhang: \"Your star... it's not from this sky. It fell here, just like you. Drawn by something. Or someone.\"", "Old Zhang: \"I think you were brought here for a reason. Not by accident. By design. By the very fabric of this world.\""},
+             {"Old Zhang: \"I've studied the 22 Arcana my whole life. And I know their secret now.\"", "Old Zhang: \"They're not just power sources. They're keys. Keys to a door that was sealed long ago.\"", "Old Zhang: \"And the keyhole? It's shaped like a heart. A heart full of longing for something lost. Like your chicken.\""},
+             {"Old Zhang: \"The ruins in the north... I've been there. Long ago, before the monsters came.\"", "Old Zhang: \"There was a temple. And in that temple, a door. And behind that door... well. I never found out.\"", "Old Zhang: \"But I felt something. A presence. Ancient, powerful, and somehow... familiar. Like a memory I couldn't place.\""},
+             {"Old Zhang: \"I've been teaching myself to cook, you know. Tried to recreate that chicken of yours.\"", "Old Zhang: \"Failed miserably, of course. But the trying... the trying was fun. It reminded me that it's never too late to learn.\"", "Old Zhang: \"And learning is the only thing that never gets old. Not even when you're as old as me.\""},
+             {"Old Zhang: \"I've had a vision. You, standing before that door in the northern temple.\"", "Old Zhang: \"And it's opening. Not because you found the key, but because you finally understood what the key was.\"", "Old Zhang: \"Your love for that dish. Your longing for home. That's the key. It always was.\""},
+             {"Old Zhang: \"I won't live forever. But I've lived long enough to see what matters.\"", "Old Zhang: \"It's not power. It's not knowledge. It's the bonds we forge. The memories we share. The love we give.\"", "Old Zhang: \"And when you finally return home, tell them about me. Tell them that somewhere, in a strange world, an old man remembers you. And wishes you well.\""},
+         }},
+        // Wheel of Fortune - Fortuna: mysterious merchant
+        {"sl_npc_9",
+         {
+             {"Fortuna: \"Welcome, welcome! Fortune favors the bold... and those with coin to spend!\"", "Fortuna: \"The Wheel turns for everyone, dearie. Today you may be up, tomorrow down. That's life!\"", "Fortuna: \"I trade in fate and fancy. Got any Star Shards? They're quite valuable, you know.\""},
+             {"Fortuna: \"I saw your arrival in my crystal ball. The Fool, wandering between worlds. How exciting!\"", "Fortuna: \"Everything has a price. Information, power, even memories... especially memories of home.\"", "Fortuna: \"The monsters hoard shiny things. I've made a fortune buying their trinkets from adventurers.\""},
+             {"Fortuna: \"Care to spin the wheel? No? Too bad. Your fortune would have been... interesting.\"", "Fortuna: \"I've met many travelers, but none who longed for chicken. You truly are unique.\"", "Fortuna: \"The Arcana are like cards in a game. Play them right, and you might just win your way home.\""},
+             {"Fortuna: \"Your luck is changing, dearie. I can feel it in my bones. Great things await you!\"", "Fortuna: \"Remember: the wheel always turns. No matter how dark it gets, dawn will come.\"", "Fortuna: \"And when it does, I'll be here. Ready to trade. Ready to play. Ready to see what fortune brings.\""},
+             {"Fortuna: \"I've been thinking about destiny. About whether anything is truly random.\"", "Fortuna: \"The Wheel of Fortune spins, yes. But what if it's not random? What if every spin is... guided?\"", "Fortuna: \"By memory. By longing. By the love of a simple dish that tastes like home. What if that's what spins the wheel?\""},
+             {"Fortuna: \"I had a customer yesterday. Sold him a Star Shard. He used it to power his Persona.\"", "Fortuna: \"But before he left, he said something strange. He said the shard smelled like... chicken?\"", "Fortuna: \"I laughed. But now I'm wondering. What if the Star Shards are crystallized memories? And what if YOUR memories are the most powerful of all?\""},
+             {"Fortuna: \"I've been tracking the market. Star Shard prices are skyrocketing. Everyone wants them.\"", "Fortuna: \"But you know what? I'm not selling mine. I'm saving them. For someone special.\"", "Fortuna: \"Someone who might need a little luck when they face the final challenge. Someone like... well. You know who.\""},
+             {"Fortuna: \"The other Arcana holders come to me for advice. They want to know their fortune.\"", "Fortuna: \"I tell them what they want to hear. But with you? I tell you the truth. Because you can handle it.\"", "Fortuna: \"The truth is: the wheel is rigged. Always has been. But the house doesn't always win. Not when the player has a heart as pure as yours.\""},
+             {"Fortuna: \"I've seen the final spin. The one that decides everything.\"", "Fortuna: \"It's not a game of chance. It's a game of choice. And the choice is yours.\"", "Fortuna: \"Stay and fight for this world, or return to your own. Both are valid. Both are brave. And neither is wrong.\""},
+             {"Fortuna: \"Whatever you choose, dearie, know this: the wheel is grateful for your presence.\"", "Fortuna: \"You brought something to this world that it didn't have before. A reason to spin. A reason to hope.\"", "Fortuna: \"And if you ever need a friend, a trader, or just someone to watch the wheel with... you know where to find me.\""},
+         }},
+    };
 
     for (SocialLink *link : socialLinkManager_.allLinks())
     {
         if (!link)
             continue;
-        for (int r = 0; r <= SocialLink::kMaxRank && r < static_cast<int>(kLines.size()); ++r)
+        auto it = kNpcDialogues.find(link->id());
+        if (it == kNpcDialogues.end())
+            continue;
+        const auto &rankLines = it->second;
+        for (int r = 0; r <= SocialLink::kMaxRank; ++r)
         {
             SocialLinkRankData data;
-            data.dialogue = link->name() + ": \"" + kLines[r] + "\"";
+            if (r < static_cast<int>(rankLines.size()))
+                data.dialogues = rankLines[r];
+            else if (!rankLines.empty())
+                data.dialogues = rankLines.back();
+            else
+                data.dialogues = {link->name() + ": \"...\""};
             // Every rank-up grants the current Persona one level.
             data.reward.personaLevels = 1;
             link->setRankData(r, std::move(data));
         }
     }
 }
-
 void GameManager::refreshDailyNpcs()
 {
     talkCountToday_.clear();
@@ -815,9 +974,7 @@ void GameManager::rebuildMapNpcs()
         for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
         {
             engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
-            const NpcDefinition *def = findNpc(todayNpcIds_[i]);
-            std::string spriteId = def ? def->spriteId : "";
-            map.addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i], spriteId));
+            map.addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i]));
         }
     }
 
@@ -837,9 +994,7 @@ void GameManager::rebuildMapNpcs()
         for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
         {
             engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
-            const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
-            std::string spriteId = def ? def->spriteId : "";
-            map.addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i], spriteId));
+            map.addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i]));
         }
     }
 }
@@ -872,6 +1027,13 @@ std::string GameManager::talkToNpc(const std::string &socialLinkId)
     int &count = talkCountToday_[socialLinkId];
     const SocialLink *link = socialLinkManager_.getLink(socialLinkId);
 
+    // Check daily total unique-NPC cap first.
+    if (totalTalksToday_ >= kMaxTalksPerDay)
+    {
+        std::string name = link ? link->name() : "...";
+        return name + " nods politely, but you've already talked to two people today. Rest and try again tomorrow.";
+    }
+
     // Hard cap: each NPC can be talked to kMaxTalksPerNpc times per day.
     if (count >= kMaxTalksPerNpc)
     {
@@ -882,6 +1044,7 @@ std::string GameManager::talkToNpc(const std::string &socialLinkId)
     int beforeRank = link ? link->rank() : 0;
     socialLinkManager_.addPoints(socialLinkId, kDailyPoints);
     ++count;
+    ++totalTalksToday_;
 
     const SocialLink *after = socialLinkManager_.getLink(socialLinkId);
     int afterRank = after ? after->rank() : beforeRank;
@@ -932,9 +1095,7 @@ void GameManager::initDefaultMap()
     for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
     {
         engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
-        const NpcDefinition *def = findNpc(todayNpcIds_[i]);
-        std::string spriteId = def ? def->spriteId : "";
-        currentMap_->addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i], spriteId));
+        currentMap_->addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i]));
     }
 }
 
@@ -948,9 +1109,7 @@ void GameManager::initSecondMap()
     for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
     {
         engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
-        const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
-        std::string spriteId = def ? def->spriteId : "";
-        secondMap_->addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i], spriteId));
+        secondMap_->addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i]));
     }
 }
 
