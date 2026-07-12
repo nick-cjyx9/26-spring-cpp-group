@@ -68,6 +68,12 @@ void QuestScene::handleInput(engine::IInput &input)
     else
         quests = qm.completedQuests();
 
+    // Sort by priority (lower value = higher in the list)
+    std::sort(quests.begin(), quests.end(), [](Quest *a, Quest *b) {
+        if (!a || !b) return false;
+        return a->priority() < b->priority();
+    });
+
     if (!quests.empty())
     {
         // Mouse wheel scrolling
@@ -199,6 +205,12 @@ void QuestScene::render(engine::IRenderer &renderer)
     else
         quests = qm.completedQuests();
 
+    // Sort by priority (lower value = higher in the list)
+    std::sort(quests.begin(), quests.end(), [](Quest *a, Quest *b) {
+        if (!a || !b) return false;
+        return a->priority() < b->priority();
+    });
+
     // Background
     renderer.drawTexture(GameManager::instance().onSecondMap() ? "town_bg2" : "town_bg", {0, 0, 800, 600});
     renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 0, 180));
@@ -266,7 +278,7 @@ void QuestScene::render(engine::IRenderer &renderer)
             drawQuestPanel(renderer, startX, y, panelW, panelH, selected,
                            q->name(), q->description(),
                            formatReward(q->rewardGold(), q->rewardExp()),
-                           status);
+                           status, q->textColor());
         }
     }
 
@@ -281,8 +293,8 @@ void QuestScene::render(engine::IRenderer &renderer)
 }
 
 void QuestScene::drawQuestPanel(engine::IRenderer &renderer, float x, float y, float w, float h,
-                                bool selected, const std::string &name, const std::string &desc,
-                                const std::string &reward, const std::string &status) const
+                                 bool selected, const std::string &name, const std::string &desc,
+                                 const std::string &reward, const std::string &status, int textColor) const
 {
     engine::Color fill = selected ? engine::Color(40, 35, 60, 240) : engine::Color(18, 18, 32, 220);
     engine::Color bright = selected ? engine::Color(255, 220, 80, 255) : engine::Color(80, 80, 110, 200);
@@ -290,8 +302,9 @@ void QuestScene::drawQuestPanel(engine::IRenderer &renderer, float x, float y, f
 
     drawPanel(renderer, x, y, w, h, fill, bright, dark);
 
-    // Quest name (bold/larger)
-    renderer.drawText(name, {x + 16.0f, y + 8.0f}, 16, engine::Color::white());
+    // Quest name (bold/larger) - use red if textColor == 1
+    engine::Color nameColor = (textColor == 1) ? engine::Color(255, 50, 50, 255) : engine::Color::white();
+    renderer.drawText(name, {x + 16.0f, y + 8.0f}, 16, nameColor);
 
     // Description
     renderer.drawText(desc, {x + 16.0f, y + 30.0f}, 12, engine::Color(180, 180, 180, 255));

@@ -788,6 +788,29 @@ void GameManager::initDefaultQuests()
                     "item_flower", 5, 100, 25, "sl_npc_9");
     addKillQuest("quest_lily_2", "Protect Lily", "Defeat 3 Slimes.",
                  "kill:3", 250, 40, "sl_npc_9");
+
+    // Chain quest 1: Defeat the third monster on the first map at night
+    {
+        Quest q1("quest_chain_1", "Defeat the Third Monster of the First Map",
+                 "Defeat the third monster on the first map at night.", "", 100, 50);
+        q1.setType(QuestType::Kill);
+        q1.setTargetCount(1);
+        q1.setTextColor(0);
+        q1.setPriority(0);
+        questManager_.addQuest(std::move(q1));
+    }
+
+    // Chain quest 2: Defeat the third monster on the second map at night (red, top priority)
+    {
+        Quest q2("quest_chain_2", "Defeat the Third Monster of the Second Map",
+                 "Defeat the third monster on the second map at night.", "", 200, 100);
+        q2.setType(QuestType::Kill);
+        q2.setTargetCount(1);
+        q2.setPrerequisiteId("quest_chain_1");
+        q2.setTextColor(1);
+        q2.setPriority(-1);
+        questManager_.addQuest(std::move(q2));
+    }
 }
 
 void GameManager::initDefaultEnemies()

@@ -533,7 +533,52 @@ void BattleScene::returnAfterBattle()
 
     sleepLeveledUp_ = false;
     if (battle.playerWon())
+    {
         sleepLeveledUp_ = processVictory();
+
+        // Update chain quest progress based on map and defeated enemy.
+        bool onSecond = gm.onSecondMap();
+        bool bossDefeated = false;
+        for (const auto &enemyPtr : battle.enemies())
+        {
+            if (enemyPtr && enemyPtr->id() == "enemy_boss")
+            {
+                bossDefeated = true;
+                break;
+            }
+        }
+        if (bossDefeated)
+        {
+            if (!onSecond)
+            {
+                // First map boss defeated - update quest_chain_1.
+                Quest *q1 = gm.questManager().getQuest("quest_chain_1");
+                if (q1 && q1->isAccepted() && !q1->isCompleted())
+                {
+                    q1->setCurrentProgress(q1->currentProgress() + 1);
+                    if (q1->currentProgress() >= q1->targetCount())
+                    {
+                        q1->complete();
+                        // Unlock the next quest in the chain.
+                        gm.questManager().unlockQuest("quest_chain_2");
+                    }
+                }
+            }
+            else
+            {
+                // Second map boss defeated - update quest_chain_2.
+                Quest *q2 = gm.questManager().getQuest("quest_chain_2");
+                if (q2 && q2->isAccepted() && !q2->isCompleted())
+                {
+                    q2->setCurrentProgress(q2->currentProgress() + 1);
+                    if (q2->currentProgress() >= q2->targetCount())
+                    {
+                        q2->complete();
+                    }
+                }
+            }
+        }
+    }
 
     postBattleHandled_ = true;
     beginSleepTransition();

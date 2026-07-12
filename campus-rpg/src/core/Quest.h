@@ -53,6 +53,18 @@ public:
     // For Collect quests, inventoryCount is the number of items in inventory.
     bool checkCompletion(int killCount = 0, int inventoryCount = 0) const;
 
+    // Chain quest: prerequisite quest id (empty = none)
+    const std::string &prerequisiteId() const { return prerequisiteId_; }
+    void setPrerequisiteId(std::string id) { prerequisiteId_ = std::move(id); }
+
+    // Display color for the quest name (0 = default, 1 = red)
+    int textColor() const { return textColor_; }
+    void setTextColor(int color) { textColor_ = color; }
+
+    // Priority for sorting (smaller = higher in the list)
+    int priority() const { return priority_; }
+    void setPriority(int priority) { priority_ = priority; }
+
 private:
     std::string id_;
     std::string name_;
@@ -70,4 +82,8 @@ private:
     std::string targetItemId_;
     int currentProgress_ = 0;
     int targetCount_ = 0;
+
+    std::string prerequisiteId_;
+    int textColor_ = 0;
+    int priority_ = 0;
 };

@@ -29,6 +29,6 @@ private:
     QuestTab currentTab_ = QuestTab::Available;
 
     void drawQuestPanel(engine::IRenderer &renderer, float x, float y, float w, float h,
-                        bool selected, const std::string &name, const std::string &desc,
-                        const std::string &reward, const std::string &status) const;
+                         bool selected, const std::string &name, const std::string &desc,
+                         const std::string &reward, const std::string &status, int textColor = 0) const;
 };
