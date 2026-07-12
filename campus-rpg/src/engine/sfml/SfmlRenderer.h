@@ -26,6 +26,7 @@ public:
     void drawTexture(const std::string &textureId, const Vec2 &pos) override;
     void drawTexture(const std::string &textureId, const Rect &dstRect) override;
     void drawText(const std::string &text, const Vec2 &pos, int size, Color color) override;
+    float textWidth(const std::string &text, int size) const override;
 
     // Resource management
     bool loadFont(const std::string &id, const std::string &path);
