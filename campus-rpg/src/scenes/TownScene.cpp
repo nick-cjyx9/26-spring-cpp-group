@@ -87,6 +87,17 @@ void TownScene::handleInput(engine::IInput &input)
     {
         GameManager::instance().enterScene(SceneType::SocialLink);
     }
+    if (input.wasKeyJustPressed(engine::Key::R))
+    {
+        TileMap &map = GameManager::instance().currentMap();
+        PlayerEntity *p = findPlayer(map);
+        if (p)
+        {
+            p->setPosition(mapDefaultSpawn(GameManager::instance().onSecondMap()));
+            stuckMessage_ = "Rescued!";
+            stuckMessageTimer_ = 3.0f;
+        }
+    }
 }
 
 void TownScene::update(float deltaTime)
@@ -100,16 +111,27 @@ void TownScene::update(float deltaTime)
             saveMessage_.clear();
         }
     }
+    if (stuckMessageTimer_ > 0.0f)
+    {
+        stuckMessageTimer_ -= deltaTime;
+        if (stuckMessageTimer_ <= 0.0f)
+        {
+            stuckMessageTimer_ = 0.0f;
+            stuckMessage_.clear();
+        }
+    }
 
     TileMap &map = GameManager::instance().currentMap();
     PlayerEntity *player = findPlayer(map);
     if (!player)
         return;
 
-    // Auto-rescue: if player is stuck inside a collision zone, teleport to default spawn.
+    // Auto-rescue: if player is stuck inside a collision zone, move to the
+    // nearest walkable position instead of jumping to the default spawn
+    // (which may itself be blocked).
     bool isSecond = GameManager::instance().onSecondMap();
     if (isInCollisionZone(player->position(), isSecond))
-        player->setPosition(mapDefaultSpawn(isSecond));
+        player->setPosition(findNearestWalkable(player->position(), isSecond));
 
     engine::Vec2 newPos = player->position();
     newPos.x += moveX_ * moveSpeed_ * deltaTime;
@@ -203,12 +225,22 @@ void TownScene::render(engine::IRenderer &renderer)
         if (entity->type() == "player")
         {
             auto b = entity->worldBounds();
-            renderer.drawTexture("player", {b.x, b.y, 48, 48});
+            std::string playerTex = "player_" + std::to_string(GameManager::instance().selectedHeroIndex());
+            float size = 96.0f;
+            float cx = b.x + b.width / 2.0f;
+            float cy = b.y + b.height / 2.0f;
+            renderer.drawTexture(playerTex, {cx - size / 2.0f, cy - size / 2.0f, size, size});
         }
         else if (entity->type() == "npc")
         {
             auto b = entity->worldBounds();
-            renderer.drawTexture("npc", {b.x, b.y, 48, 48});
+            auto npcEntity = static_cast<NpcEntity *>(entity.get());
+            std::string tex = npcEntity->spriteTextureId();
+            if (tex.empty()) tex = "npc";
+            float size = 96.0f;
+            float cx = b.x + b.width / 2.0f;
+            float cy = b.y + b.height / 2.0f;
+            renderer.drawTexture(tex, {cx - size / 2.0f, cy - size / 2.0f, size, size});
         }
     }
 
@@ -234,12 +266,12 @@ void TownScene::render(engine::IRenderer &renderer)
     // Interaction hint
     if (onSecond)
     {
-        renderer.drawText("E:Talk/Exit  I:Items  C:Status  L:Social  F5:Save  [School]",
+        renderer.drawText("E:Talk/Exit  I:Items  C:Status  L:Social  F5:Save  R:Rescue  [School]",
                           {40, 570}, 14, engine::Color::white());
     }
     else
     {
-        renderer.drawText("E:Talk/Shop/Home/WeaponShop  I:Items  C:Status  L:Social  F5:Save",
+        renderer.drawText("E:Talk/Shop/Home/WeaponShop  I:Items  C:Status  L:Social  F5:Save  R:Rescue",
                           {50, 570}, 14, engine::Color::white());
     }
 
@@ -248,6 +280,13 @@ void TownScene::render(engine::IRenderer &renderer)
     {
         renderer.drawRect({260, 510, 280, 36}, engine::Color(0, 0, 0, 200));
         renderer.drawText(saveMessage_, {280, 519}, 18, engine::Color::green());
+    }
+
+    // Stuck rescue feedback overlay.
+    if (!stuckMessage_.empty())
+    {
+        renderer.drawRect({300, 510, 200, 36}, engine::Color(0, 0, 0, 200));
+        renderer.drawText(stuckMessage_, {340, 519}, 18, engine::Color::cyan());
     }
 
     // Character coordinate debug.

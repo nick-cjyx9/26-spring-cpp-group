@@ -42,7 +42,7 @@ public:
 
     const std::vector<std::shared_ptr<Persona>> &ownedPersonas() const { return ownedPersonas_; }
     std::vector<std::shared_ptr<Persona>> &ownedPersonas() { return ownedPersonas_; }
-    static constexpr size_t kMaxOwnedPersonas = 6;
+    static constexpr size_t kMaxOwnedPersonas = 64;
     bool addPersona(std::shared_ptr<Persona> persona);
     bool removePersona(const std::string &id);
     void clearOwnedPersonas() { ownedPersonas_.clear(); }

@@ -37,7 +37,6 @@ namespace
 
         if (!item.textureId().empty())
             appendField("textureId", item.textureId());
-
         switch (item.type())
         {
         case ItemType::Food:
@@ -85,7 +84,6 @@ namespace
                 return 0;
             return std::stoi(val);
         };
-
         std::string id = itemId ? itemId : "";
         std::string n = name ? name : "";
         std::string desc = description ? description : "";
@@ -276,8 +274,8 @@ bool SaveRepository::saveInventory_(int slotId, const Inventory &inventory)
     sqlite3_finalize(delStmt);
 
     const char *sql = R"(
-        INSERT INTO inventory (slot_id, ord, item_id, item_type, name, description, value, extra_data)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO inventory (slot_id, ord, item_id, item_type, name, description, value, extra_data, texture_id, quantity)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )";
 
     sqlite3_stmt *stmt = nullptr;
@@ -299,6 +297,8 @@ bool SaveRepository::saveInventory_(int slotId, const Inventory &inventory)
         sqlite3_bind_int(stmt, 7, item->value());
         std::string extra = extraDataFromItem(*item);
         sqlite3_bind_text(stmt, 8, extra.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 9, item->textureId().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 10, item->quantity());
         sqlite3_step(stmt);
     }
 
@@ -313,7 +313,7 @@ bool SaveRepository::loadInventory_(int slotId, Inventory &inventory)
         return false;
 
     inventory.clear();
-    const char *sql = "SELECT item_id, item_type, name, description, value, extra_data "
+    const char *sql = "SELECT item_id, item_type, name, description, value, extra_data, texture_id, quantity "
                       "FROM inventory WHERE slot_id = ? ORDER BY ord";
     sqlite3_stmt *stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
@@ -331,7 +331,15 @@ bool SaveRepository::loadInventory_(int slotId, Inventory &inventory)
             reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1)),
             reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5)));
         if (item)
+        {
+            const char *texCol = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 6));
+            if (texCol && texCol[0] != '\0')
+                item->setTextureId(texCol);
+            int qty = sqlite3_column_int(stmt, 7);
+            if (qty > 0)
+                item->setQuantity(qty);
             inventory.addItem(std::move(item));
+        }
     }
 
     sqlite3_finalize(stmt);

@@ -169,7 +169,7 @@ void DialogueScene::render(engine::IRenderer &renderer)
     // ================================================================
     // RIGHT: NPC portrait panel
     // ================================================================
-    float npcX = 545.0f, npcY = 55.0f, npcW = 240.0f, npcH = 410.0f;
+    float npcX = 500.0f, npcY = 55.0f, npcW = 300.0f, npcH = 510.0f;
     drawPanel(renderer, npcX, npcY, npcW, npcH, panelFill, panelBright, panelDark);
 
     // NPC portrait image
@@ -202,7 +202,7 @@ void DialogueScene::render(engine::IRenderer &renderer)
     // ================================================================
     // LEFT: Protagonist portrait panel
     // ================================================================
-    float heroX = 15.0f, heroY = 175.0f, heroW = 175.0f, heroH = 290.0f;
+    float heroX = 0.0f, heroY = 55.0f, heroW = 200.0f, heroH = 340.0f;
     drawPanel(renderer, heroX, heroY, heroW, heroH, panelFill, panelBright, panelDark);
 
     // Hero portrait
@@ -227,7 +227,7 @@ void DialogueScene::render(engine::IRenderer &renderer)
     // ================================================================
     // CENTER: Dialogue box
     // ================================================================
-    float dlgX = 205.0f, dlgY = 365.0f, dlgW = 325.0f, dlgH = 210.0f;
+    float dlgX = 200.0f, dlgY = 365.0f, dlgW = 300.0f, dlgH = 210.0f;
     drawPanel(renderer, dlgX, dlgY, dlgW, dlgH, panelFill, panelBright, panelDark);
 
     // NPC name tag on top edge of dialogue box (straddling the border)
@@ -240,8 +240,8 @@ void DialogueScene::render(engine::IRenderer &renderer)
     renderer.drawText(npcName, {tagX + 12.0f, tagY + 6.0f}, 17, engine::Color::white());
 
     // Dialogue text (wrapped to fit the box width)
-    // Box is 325px wide, 32px padding total, font 16px (~8px/char) => ~36 chars/line
-    std::string wrapped = wrapText(dialogueText_.empty() ? "\"...\"" : dialogueText_, 36);
+    // Box is 300px wide, 32px padding total, font 16px (~8px/char) => ~33 chars/line
+    std::string wrapped = wrapText(dialogueText_.empty() ? "\"...\"" : dialogueText_, 33);
     renderer.drawText(wrapped, {dlgX + 16.0f, dlgY + 28.0f}, 16, engine::Color::white());
 
     // Continue hint at bottom of dialogue box

@@ -24,6 +24,7 @@
 #include "DebugCheatScene.h"
 
 #include <algorithm>
+#include <array>
 #include <map>
 #include <random>
 
@@ -77,22 +78,12 @@ void GameManager::seedDefaultState(const std::string &playerName)
     initSecondMap();           // build school map + today's NPCs
     initDefaultEquipment();
 
-    // All default personas are owned by the player.
+    // Start with a fixed Fool Persona. The full Persona registry is available
+    // for shop purchases and battle drops, but not owned at start.
     character_.clearOwnedPersonas();
-    for (const auto &p : personas_)
-    {
-        if (p)
-            character_.addPersona(p);
-    }
-
-    // Pick a random balanced starter Persona.
-    std::vector<std::string> starters = {
-        "persona_izanagi", "persona_pixie", "persona_orpheus"};
-    std::mt19937 rng(std::random_device{}());
-    std::uniform_int_distribution<size_t> dist(0, starters.size() - 1);
-    auto starter = findPersona(starters[dist(rng)]);
+    auto starter = findPersona("persona_orpheus");
     if (starter)
-        character_.setPersona(starter);
+        setPlayerPersona(starter);
 
     recomputeSocialLinkBonuses();
 }
@@ -123,7 +114,7 @@ bool GameManager::saveToSlot(int slotId)
         equippedGear_.weapon, equippedGear_.armor, equippedGear_.accessory, equippedGear_.relic};
 
     SaveRepository repo;
-    bool ok = repo.saveAll(slotId, character_, inventory_, personas_,
+    bool ok = repo.saveAll(slotId, character_, inventory_, character_.ownedPersonas(),
                            socialLinkManager_, questManager_, day_,
                            posX, posY, isNight_, onSecondMap_, equipped);
     if (ok)
@@ -152,7 +143,8 @@ bool GameManager::loadFromSlot(int slotId)
     // registry, so we re-apply the seeded skills to matching personas after
     // load. This restores gameplay state for the default personas.
     std::map<std::string, std::vector<std::shared_ptr<Skill>>> skillSnapshot;
-    for (const auto &p : personas_)
+    std::vector<std::shared_ptr<Persona>> defaultPersonaRegistry = personas_;
+    for (const auto &p : defaultPersonaRegistry)
     {
         if (!p)
             continue;
@@ -202,17 +194,25 @@ bool GameManager::loadFromSlot(int slotId)
             restoreEquipmentTexture(*eq);
     }
 
-    // Re-apply skills to the reconstructed Personas (loaded ones start empty).
+    // Re-apply skills to the reconstructed owned Personas (loaded ones start empty),
+    // then merge in default unowned Personas so shop/drop lookup still works.
+    std::vector<std::string> loadedOwnedPersonaIds;
     for (auto &p : personas_)
     {
         if (!p)
             continue;
+        loadedOwnedPersonaIds.push_back(p->id());
         auto it = skillSnapshot.find(p->id());
         if (it != skillSnapshot.end())
         {
             for (const auto &s : it->second)
                 p->learnSkill(s);
         }
+    }
+    for (const auto &defaultPersona : defaultPersonaRegistry)
+    {
+        if (defaultPersona && !findPersona(defaultPersona->id()))
+            personas_.push_back(defaultPersona);
     }
 
     currentSlotId_ = slotId;
@@ -240,10 +240,12 @@ bool GameManager::loadFromSlot(int slotId)
             character_.setPersona(p);
     }
 
-    // Sync owned personas after load.
+    // Sync only the saved owned Personas after load; the rest of personas_ is
+    // the global registry used by shop/drop lookup.
     character_.clearOwnedPersonas();
-    for (const auto &p : personas_)
+    for (const auto &ownedId : loadedOwnedPersonaIds)
     {
+        auto p = findPersona(ownedId);
         if (p)
             character_.addPersona(p);
     }
@@ -503,36 +505,115 @@ bool GameManager::unequipToInventory(EquipmentSlot slot)
 
 void GameManager::initDefaultPersonas()
 {
-    auto izanagi = std::make_shared<Persona>("persona_izanagi", "Izanagi", "Fool", 2,
-                                             6, 5, 5);
-    izanagi->setAffinity(Element::Electric, Affinity::Resist);
-    izanagi->setAffinity(Element::Wind, Affinity::Weak);
-    izanagi->learnSkill(std::make_shared<Skill>("skill_zio", "Zio", Element::Electric, 6, 4, SkillCostType::SP));
-    izanagi->learnSkill(std::make_shared<Skill>("skill_cleave", "Cleave", Element::Physical, 8, 0, SkillCostType::HP));
-    // Potential skills unlocked via Social Link rank-ups.
-    izanagi->addPotentialSkill(3, std::make_shared<Skill>("skill_zionga", "Zionga", Element::Electric, 12, 8, SkillCostType::SP));
-    izanagi->addPotentialSkill(6, std::make_shared<Skill>("skill_mazionga", "Mazionga", Element::Electric, 20, 14, SkillCostType::SP));
-    personas_.push_back(izanagi);
+    struct PersonaSeed
+    {
+        const char *id;
+        const char *name;
+        const char *arcana;
+        int level;
+        int strength;
+        int magic;
+        int speed;
+        Element resist;
+        Element weak;
+        const char *skill1;
+        const char *skill2;
+        const char *unlock1;
+        const char *unlock2;
+    };
 
-    auto pixie = std::make_shared<Persona>("persona_pixie", "Pixie", "Magician", 2,
-                                           4, 6, 5);
-    pixie->setAffinity(Element::Wind, Affinity::Resist);
-    pixie->setAffinity(Element::Electric, Affinity::Weak);
-    pixie->learnSkill(std::make_shared<Skill>("skill_garu", "Garu", Element::Wind, 6, 4, SkillCostType::SP));
-    pixie->learnSkill(std::make_shared<Skill>("skill_dia", "Dia", Element::Almighty, 15, 6, SkillCostType::SP, true));
-    pixie->addPotentialSkill(3, std::make_shared<Skill>("skill_garula", "Garula", Element::Wind, 12, 8, SkillCostType::SP));
-    pixie->addPotentialSkill(6, std::make_shared<Skill>("skill_diarama", "Diarama", Element::Almighty, 35, 12, SkillCostType::SP, true));
-    personas_.push_back(pixie);
+    auto skill = [](const std::string &id) -> std::shared_ptr<Skill>
+    {
+        static const std::map<std::string, std::tuple<const char *, Element, int, int, SkillCostType, bool>> kSkills = {
+            {"skill_agi", {"Agi", Element::Fire, 6, 4, SkillCostType::SP, false}},
+            {"skill_agilao", {"Agilao", Element::Fire, 12, 8, SkillCostType::SP, false}},
+            {"skill_maragi", {"Maragi", Element::Fire, 20, 12, SkillCostType::SP, false}},
+            {"skill_bufu", {"Bufu", Element::Ice, 6, 4, SkillCostType::SP, false}},
+            {"skill_bufula", {"Bufula", Element::Ice, 12, 8, SkillCostType::SP, false}},
+            {"skill_zio", {"Zio", Element::Electric, 6, 4, SkillCostType::SP, false}},
+            {"skill_zionga", {"Zionga", Element::Electric, 12, 8, SkillCostType::SP, false}},
+            {"skill_mazionga", {"Mazionga", Element::Electric, 20, 14, SkillCostType::SP, false}},
+            {"skill_garu", {"Garu", Element::Wind, 6, 4, SkillCostType::SP, false}},
+            {"skill_garula", {"Garula", Element::Wind, 12, 8, SkillCostType::SP, false}},
+            {"skill_magaru", {"Magaru", Element::Wind, 18, 12, SkillCostType::SP, false}},
+            {"skill_hama", {"Hama", Element::Light, 10, 8, SkillCostType::SP, false}},
+            {"skill_mahama", {"Mahama", Element::Light, 18, 14, SkillCostType::SP, false}},
+            {"skill_mudo", {"Mudo", Element::Dark, 10, 8, SkillCostType::SP, false}},
+            {"skill_mamudo", {"Mamudo", Element::Dark, 18, 14, SkillCostType::SP, false}},
+            {"skill_cleave", {"Cleave", Element::Physical, 8, 0, SkillCostType::HP, false}},
+            {"skill_slash", {"Slash", Element::Physical, 10, 0, SkillCostType::HP, false}},
+            {"skill_mighty_swing", {"Mighty Swing", Element::Physical, 20, 0, SkillCostType::HP, false}},
+            {"skill_dia", {"Dia", Element::Almighty, 15, 6, SkillCostType::SP, true}},
+            {"skill_diarama", {"Diarama", Element::Almighty, 35, 12, SkillCostType::SP, true}},
+            {"skill_megidola", {"Megidola", Element::Almighty, 25, 18, SkillCostType::SP, false}},
+        };
+        auto it = kSkills.find(id);
+        if (it == kSkills.end())
+            return nullptr;
+        const auto &[name, element, power, cost, costType, healing] = it->second;
+        return std::make_shared<Skill>(id, name, element, power, cost, costType, healing);
+    };
 
-    auto orpheus = std::make_shared<Persona>("persona_orpheus", "Orpheus", "Fool", 2,
-                                             5, 5, 5);
-    orpheus->setAffinity(Element::Fire, Affinity::Resist);
-    orpheus->setAffinity(Element::Ice, Affinity::Weak);
-    orpheus->learnSkill(std::make_shared<Skill>("skill_agi", "Agi", Element::Fire, 6, 4, SkillCostType::SP));
-    orpheus->learnSkill(std::make_shared<Skill>("skill_dia", "Dia", Element::Almighty, 15, 6, SkillCostType::SP, true));
-    orpheus->addPotentialSkill(3, std::make_shared<Skill>("skill_agilao", "Agilao", Element::Fire, 12, 8, SkillCostType::SP));
-    orpheus->addPotentialSkill(6, std::make_shared<Skill>("skill_diarama", "Diarama", Element::Almighty, 35, 12, SkillCostType::SP, true));
-    personas_.push_back(orpheus);
+    static const std::array<PersonaSeed, 44> kPersonas = {{
+        {"persona_orpheus", "Orpheus", "Fool", 1, 5, 5, 5, Element::Fire, Element::Ice, "skill_agi", "skill_dia", "skill_agilao", "skill_diarama"},
+        {"persona_sun_wukong", "Sun Wukong", "Fool", 4, 9, 6, 9, Element::Physical, Element::Ice, "skill_slash", "skill_garu", "skill_mighty_swing", "skill_megidola"},
+        {"persona_pixie", "Pixie", "Magician", 1, 4, 7, 6, Element::Wind, Element::Electric, "skill_garu", "skill_dia", "skill_garula", "skill_diarama"},
+        {"persona_merlin", "Merlin", "Magician", 4, 5, 12, 7, Element::Electric, Element::Dark, "skill_zio", "skill_diarama", "skill_zionga", "skill_megidola"},
+        {"persona_kikuri_hime", "Kikuri-Hime", "Priestess", 1, 4, 8, 5, Element::Light, Element::Dark, "skill_hama", "skill_dia", "skill_bufula", "skill_diarama"},
+        {"persona_chang_e", "Chang'e", "Priestess", 4, 5, 12, 7, Element::Ice, Element::Fire, "skill_bufu", "skill_diarama", "skill_bufula", "skill_mahama"},
+        {"persona_gaia", "Gaia", "Empress", 2, 5, 8, 4, Element::Wind, Element::Fire, "skill_garu", "skill_dia", "skill_garula", "skill_diarama"},
+        {"persona_nuwa", "Nuwa", "Empress", 4, 6, 12, 6, Element::Light, Element::Dark, "skill_hama", "skill_diarama", "skill_mahama", "skill_megidola"},
+        {"persona_ares", "Ares", "Emperor", 2, 8, 4, 5, Element::Physical, Element::Ice, "skill_cleave", "skill_agi", "skill_slash", "skill_agilao"},
+        {"persona_odin", "Odin", "Emperor", 4, 10, 8, 6, Element::Electric, Element::Wind, "skill_zionga", "skill_slash", "skill_mazionga", "skill_mighty_swing"},
+        {"persona_xuanwu", "Xuanwu", "Hierophant", 2, 5, 7, 5, Element::Ice, Element::Fire, "skill_bufu", "skill_dia", "skill_bufula", "skill_diarama"},
+        {"persona_thoth", "Thoth", "Hierophant", 4, 5, 12, 7, Element::Light, Element::Physical, "skill_hama", "skill_zio", "skill_mahama", "skill_megidola"},
+        {"persona_eros", "Eros", "Lovers", 1, 5, 6, 7, Element::Wind, Element::Electric, "skill_garu", "skill_dia", "skill_garula", "skill_diarama"},
+        {"persona_aphrodite", "Aphrodite", "Lovers", 4, 4, 12, 8, Element::Light, Element::Dark, "skill_hama", "skill_diarama", "skill_mahama", "skill_megidola"},
+        {"persona_guan_yu", "Guan Yu", "Chariot", 2, 9, 4, 5, Element::Physical, Element::Wind, "skill_cleave", "skill_slash", "skill_mighty_swing", "skill_zionga"},
+        {"persona_achilles", "Achilles", "Chariot", 4, 10, 5, 9, Element::Physical, Element::Electric, "skill_slash", "skill_garula", "skill_mighty_swing", "skill_magaru"},
+        {"persona_themis", "Themis", "Justice", 1, 5, 7, 5, Element::Light, Element::Dark, "skill_hama", "skill_dia", "skill_mahama", "skill_diarama"},
+        {"persona_athena", "Athena", "Justice", 4, 8, 9, 7, Element::Light, Element::Dark, "skill_hama", "skill_slash", "skill_mahama", "skill_mighty_swing"},
+        {"persona_heracles", "Heracles", "Strength", 2, 10, 3, 4, Element::Physical, Element::Ice, "skill_cleave", "skill_slash", "skill_mighty_swing", "skill_agilao"},
+        {"persona_thor", "Thor", "Strength", 4, 11, 6, 7, Element::Electric, Element::Wind, "skill_zio", "skill_mighty_swing", "skill_zionga", "skill_mazionga"},
+        {"persona_zhong_kui", "Zhong Kui", "Hermit", 3, 8, 8, 6, Element::Dark, Element::Light, "skill_mudo", "skill_slash", "skill_mamudo", "skill_mighty_swing"},
+        {"persona_prometheus", "Prometheus", "Hermit", 6, 7, 15, 10, Element::Fire, Element::Ice, "skill_agilao", "skill_megidola", "skill_maragi", "skill_diarama"},
+        {"persona_norn", "Norn", "Fortune", 3, 6, 10, 7, Element::Wind, Element::Electric, "skill_garula", "skill_dia", "skill_magaru", "skill_diarama"},
+        {"persona_fortuna", "Fortuna", "Fortune", 6, 7, 13, 13, Element::Wind, Element::Dark, "skill_garula", "skill_megidola", "skill_magaru", "skill_mahama"},
+        {"persona_odin_wanderer", "Odin Wanderer", "Hanged Man", 3, 7, 11, 6, Element::Electric, Element::Wind, "skill_zionga", "skill_dia", "skill_mazionga", "skill_megidola"},
+        {"persona_loki", "Loki", "Hanged Man", 6, 7, 14, 13, Element::Dark, Element::Light, "skill_mudo", "skill_garula", "skill_mamudo", "skill_magaru"},
+        {"persona_thanatos", "Thanatos", "Death", 3, 9, 10, 5, Element::Dark, Element::Light, "skill_mudo", "skill_slash", "skill_mamudo", "skill_mighty_swing"},
+        {"persona_hades", "Hades", "Death", 6, 9, 17, 8, Element::Dark, Element::Light, "skill_mamudo", "skill_megidola", "skill_diarama", "skill_mighty_swing"},
+        {"persona_iris", "Iris", "Temperance", 3, 5, 11, 8, Element::Wind, Element::Electric, "skill_garula", "skill_diarama", "skill_magaru", "skill_mahama"},
+        {"persona_guanyin", "Guanyin", "Temperance", 6, 6, 16, 10, Element::Light, Element::Dark, "skill_mahama", "skill_diarama", "skill_megidola", "skill_dia"},
+        {"persona_succubus", "Succubus", "Devil", 3, 5, 12, 8, Element::Dark, Element::Light, "skill_mudo", "skill_garula", "skill_mamudo", "skill_magaru"},
+        {"persona_mara", "Mara", "Devil", 6, 12, 13, 8, Element::Dark, Element::Light, "skill_mamudo", "skill_mighty_swing", "skill_megidola", "skill_slash"},
+        {"persona_minotaur", "Minotaur", "Tower", 3, 12, 5, 6, Element::Physical, Element::Light, "skill_mighty_swing", "skill_cleave", "skill_slash", "skill_agilao"},
+        {"persona_typhon", "Typhon", "Tower", 6, 14, 13, 6, Element::Fire, Element::Ice, "skill_maragi", "skill_mighty_swing", "skill_megidola", "skill_agilao"},
+        {"persona_astraea", "Astraea", "Star", 3, 6, 11, 8, Element::Light, Element::Dark, "skill_hama", "skill_garula", "skill_mahama", "skill_magaru"},
+        {"persona_amaterasu", "Amaterasu", "Star", 6, 7, 17, 10, Element::Light, Element::Dark, "skill_mahama", "skill_maragi", "skill_megidola", "skill_diarama"},
+        {"persona_artemis", "Artemis", "Moon", 3, 8, 9, 9, Element::Ice, Element::Fire, "skill_bufula", "skill_slash", "skill_mamudo", "skill_mighty_swing"},
+        {"persona_tsukuyomi", "Tsukuyomi", "Moon", 6, 8, 16, 10, Element::Ice, Element::Light, "skill_bufula", "skill_mamudo", "skill_megidola", "skill_diarama"},
+        {"persona_apollo", "Apollo", "Sun", 3, 7, 12, 8, Element::Fire, Element::Ice, "skill_agilao", "skill_hama", "skill_maragi", "skill_mahama"},
+        {"persona_hou_yi", "Hou Yi", "Sun", 6, 15, 10, 10, Element::Fire, Element::Dark, "skill_maragi", "skill_mighty_swing", "skill_megidola", "skill_slash"},
+        {"persona_anubis", "Anubis", "Judgement", 3, 7, 13, 7, Element::Dark, Element::Physical, "skill_hama", "skill_mudo", "skill_mahama", "skill_mamudo"},
+        {"persona_yama", "Yama", "Judgement", 6, 10, 16, 8, Element::Dark, Element::Light, "skill_mamudo", "skill_megidola", "skill_mahama", "skill_mighty_swing"},
+        {"persona_izanagi_no_okami", "Izanagi-no-Okami", "World", 5, 10, 12, 10, Element::Almighty, Element::Dark, "skill_zionga", "skill_megidola", "skill_mazionga", "skill_diarama"},
+        {"persona_pangu", "Pangu", "World", 7, 16, 14, 8, Element::Physical, Element::Dark, "skill_mighty_swing", "skill_megidola", "skill_maragi", "skill_mahama"},
+    }};
+
+    personas_.clear();
+    for (const auto &seed : kPersonas)
+    {
+        auto persona = std::make_shared<Persona>(seed.id, seed.name, seed.arcana, seed.level,
+                                                 seed.strength, seed.magic, seed.speed);
+        persona->setAffinity(seed.resist, Affinity::Resist);
+        persona->setAffinity(seed.weak, Affinity::Weak);
+        persona->learnSkill(skill(seed.skill1));
+        persona->learnSkill(skill(seed.skill2));
+        persona->addPotentialSkill(seed.level + 2, skill(seed.unlock1));
+        persona->addPotentialSkill(seed.level + 5, skill(seed.unlock2));
+        personas_.push_back(std::move(persona));
+    }
 }
 
 void GameManager::initDefaultShop()
@@ -540,8 +621,36 @@ void GameManager::initDefaultShop()
     shop_.addItem(std::make_unique<FoodItem>("food_bread", "Bread", "A loaf of campus bread.", 10, 20, "items/bread"));
     shop_.addItem(std::make_unique<PotionItem>("potion_hp", "HP Potion", "Restores a lot of HP.", 30, 50, "items/potion_red"));
     shop_.addItem(std::make_unique<SpItem>("item_coffee", "Coffee", "Restores a little SP.", 20, 15, "items/coffee"));
-    shop_.addItem(std::make_unique<PersonaItem>("item_pixie_contract", "Pixie Contract",
-                                                "Summons Pixie.", 150, "persona_pixie"));
+
+    auto priceFor = [](const Persona &persona)
+    {
+        int statTotal = persona.strength() + persona.magic() + persona.speed();
+        if (persona.level() <= 2)
+            return 80 + statTotal * 8;
+        if (statTotal <= 24)
+            return 160 + statTotal * 12;
+        return 420 + statTotal * 20;
+    };
+    auto arcanaTexture = [](std::string arcana)
+    {
+        std::transform(arcana.begin(), arcana.end(), arcana.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::replace(arcana.begin(), arcana.end(), ' ', '_');
+        if (arcana == "hanged_man")
+            return std::string("arcana_hanged_man");
+        if (arcana == "fortune")
+            return std::string("arcana_fortune");
+        return std::string("arcana_") + arcana;
+    };
+
+    for (const auto &persona : personas_)
+    {
+        if (!persona)
+            continue;
+        std::string itemId = "item_" + persona->id().substr(std::string("persona_").size()) + "_contract";
+        shop_.addItem(std::make_unique<PersonaItem>(itemId, persona->name() + " Contract",
+                                                    "Summons " + persona->name() + " of the " + persona->arcana() + " Arcana.",
+                                                    priceFor(*persona), persona->id(), arcanaTexture(persona->arcana())));
+    }
 }
 
 void GameManager::initDefaultQuests()
@@ -554,9 +663,33 @@ void GameManager::initDefaultQuests()
 
 void GameManager::initDefaultEnemies()
 {
-    enemyTemplates_.push_back(std::make_unique<Slime>());
-    enemyTemplates_.push_back(std::make_unique<Goblin>());
-    enemyTemplates_.push_back(std::make_unique<Boss>());
+    auto slime = std::make_unique<Slime>();
+    slime->addDropPersonaId("persona_pixie");
+    slime->addDropPersonaId("persona_orpheus");
+    slime->addDropPersonaId("persona_kikuri_hime");
+    slime->addDropPersonaId("persona_eros");
+    slime->addDropPersonaId("persona_themis");
+    enemyTemplates_.push_back(std::move(slime));
+
+    auto goblin = std::make_unique<Goblin>();
+    goblin->addDropPersonaId("persona_guan_yu");
+    goblin->addDropPersonaId("persona_ares");
+    goblin->addDropPersonaId("persona_xuanwu");
+    goblin->addDropPersonaId("persona_heracles");
+    goblin->addDropPersonaId("persona_norn");
+    goblin->addDropPersonaId("persona_zhong_kui");
+    enemyTemplates_.push_back(std::move(goblin));
+
+    auto boss = std::make_unique<Boss>();
+    boss->addDropPersonaId("persona_merlin");
+    boss->addDropPersonaId("persona_athena");
+    boss->addDropPersonaId("persona_thor");
+    boss->addDropPersonaId("persona_achilles");
+    boss->addDropPersonaId("persona_hades");
+    boss->addDropPersonaId("persona_amaterasu");
+    boss->addDropPersonaId("persona_yama");
+    boss->addDropPersonaId("persona_pangu");
+    enemyTemplates_.push_back(std::move(boss));
 }
 
 void GameManager::initDefaultSocialLinks()
@@ -576,7 +709,9 @@ void GameManager::generateNpcPool()
         "Ivan", "Julia", "Kevin", "Luna", "Mason", "Nora", "Oscar", "Piper",
         "Quinn", "Rita", "Sean", "Tina"};
     static const std::vector<std::string> kPortraits = {
-        "npc_yosuke", "npc_chie", "npc_yukiko"};
+        "npc_portrait_0", "npc_portrait_1", "npc_portrait_2", "npc_portrait_3"};
+    static const std::vector<std::string> kSprites = {
+        "npc_sprite_0", "npc_sprite_1", "npc_sprite_2", "npc_sprite_3"};
     static const std::vector<std::string> kArcanas = {
         "Magician", "Chariot", "Priestess", "Fool", "Hierophant"};
 
@@ -591,7 +726,8 @@ void GameManager::generateNpcPool()
         NpcDefinition def;
         def.id = "sl_npc_" + std::to_string(i);
         def.name = (i < static_cast<int>(names.size())) ? names[i] : ("NPC" + std::to_string(i));
-        def.portraitId = kPortraits[rng() % kPortraits.size()];
+        def.portraitId = kPortraits[i % kPortraits.size()];
+        def.spriteId = kSprites[i % kSprites.size()];
         def.arcana = kArcanas[i % kArcanas.size()];
         npcPool_.push_back(def);
 
@@ -679,7 +815,9 @@ void GameManager::rebuildMapNpcs()
         for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
         {
             engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
-            map.addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i]));
+            const NpcDefinition *def = findNpc(todayNpcIds_[i]);
+            std::string spriteId = def ? def->spriteId : "";
+            map.addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i], spriteId));
         }
     }
 
@@ -699,7 +837,9 @@ void GameManager::rebuildMapNpcs()
         for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
         {
             engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
-            map.addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i]));
+            const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
+            std::string spriteId = def ? def->spriteId : "";
+            map.addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i], spriteId));
         }
     }
 }
@@ -792,7 +932,9 @@ void GameManager::initDefaultMap()
     for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
     {
         engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
-        currentMap_->addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i]));
+        const NpcDefinition *def = findNpc(todayNpcIds_[i]);
+        std::string spriteId = def ? def->spriteId : "";
+        currentMap_->addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i], spriteId));
     }
 }
 
@@ -806,7 +948,9 @@ void GameManager::initSecondMap()
     for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
     {
         engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
-        secondMap_->addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i]));
+        const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
+        std::string spriteId = def ? def->spriteId : "";
+        secondMap_->addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i], spriteId));
     }
 }
 

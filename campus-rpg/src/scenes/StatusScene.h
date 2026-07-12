@@ -18,6 +18,7 @@ public:
 private:
     enum class Section
     {
+        Profile,
         Persona,
         Equipment
     };
@@ -33,10 +34,12 @@ private:
 
     std::vector<size_t> equipmentInventoryIndices() const;
 
-    Section section_ = Section::Persona;
+    Section section_ = Section::Profile;
+    int profilePage_ = 0;
     int personaIndex_ = 0;
     int equipmentIndex_ = 0; // 0..3 = equipped slots, 4+ = backpack equipment rows
     bool showSkillDetails_ = false;
     std::string message_;
     float messageTimer_ = 0.0f;
+    float animationTime_ = 0.0f;
 };

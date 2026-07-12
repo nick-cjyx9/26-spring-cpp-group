@@ -27,10 +27,12 @@ bool Entity::intersects(const Entity &other) const
 PlayerEntity::PlayerEntity(engine::Vec2 position)
     : Entity(position, {-16.0f, -16.0f, 32.0f, 32.0f}) {}
 
-NpcEntity::NpcEntity(engine::Vec2 position, std::string socialLinkId)
+NpcEntity::NpcEntity(engine::Vec2 position, std::string socialLinkId, std::string spriteTextureId)
     : Entity(position, {-16.0f, -16.0f, 32.0f, 32.0f}),
-      socialLinkId_(std::move(socialLinkId)) {}
+      socialLinkId_(std::move(socialLinkId)),
+      spriteTextureId_(std::move(spriteTextureId)) {}
 
-EnemyEntity::EnemyEntity(engine::Vec2 position, std::string enemyTemplateId)
+EnemyEntity::EnemyEntity(engine::Vec2 position, std::string enemyTemplateId, std::string textureId)
     : Entity(position, {-16.0f, -16.0f, 32.0f, 32.0f}),
-      enemyTemplateId_(std::move(enemyTemplateId)) {}
+      enemyTemplateId_(std::move(enemyTemplateId)),
+      textureId_(std::move(textureId)) {}
