@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IScene.h"
+#include <string>
 
 class NightScene : public engine::IScene
 {

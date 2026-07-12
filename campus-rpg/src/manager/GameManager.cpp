@@ -22,6 +22,7 @@
 #include "LevelUpScene.h"
 #include "RestConfirmScene.h"
 #include "DebugCheatScene.h"
+#include "PauseMenuScene.h"
 
 #include <algorithm>
 #include <array>
@@ -427,6 +428,9 @@ void GameManager::enterScene(SceneType type)
         break;
     case SceneType::DebugCheat:
         currentScene_ = std::make_unique<DebugCheatScene>();
+        break;
+    case SceneType::PauseMenu:
+        currentScene_ = std::make_unique<PauseMenuScene>();
         break;
     }
 }

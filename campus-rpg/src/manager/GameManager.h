@@ -34,7 +34,8 @@ enum class SceneType
     Armory,
     LevelUp,
     RestConfirm,
-    DebugCheat
+    DebugCheat,
+    PauseMenu
 };
 
 // Fired whenever a Social Link ranks up. The UI layer registers a callback

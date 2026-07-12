@@ -114,6 +114,10 @@ void TownScene::handleInput(engine::IInput &input)
             stuckMessageTimer_ = 3.0f;
         }
     }
+    if (input.wasKeyJustPressed(engine::Key::Escape))
+    {
+        GameManager::instance().enterScene(SceneType::PauseMenu);
+    }
 }
 
 void TownScene::update(float deltaTime)
@@ -282,13 +286,13 @@ void TownScene::render(engine::IRenderer &renderer)
     // Interaction hint
     if (onSecond)
     {
-        renderer.drawText("E:Talk/Exit  I:Items  C:Status  L:Social  F5:Save  R:Rescue  [School]",
-                          {40, 570}, 14, engine::Color::white());
+        renderer.drawText("E:Talk/Exit  I:Items  C:Status  L:Social  F5:Save  R:Rescue  Esc:Pause  [School]",
+                          {25, 570}, 14, engine::Color::white());
     }
     else
     {
-        renderer.drawText("E:Talk/Shop/Home/WeaponShop  I:Items  C:Status  L:Social  F5:Save  R:Rescue",
-                          {50, 570}, 14, engine::Color::white());
+        renderer.drawText("E:Talk/Shop/Home/WeaponShop  I:Items  C:Status  L:Social  F5:Save  R:Rescue  Esc:Pause",
+                          {30, 570}, 14, engine::Color::white());
     }
 
     // Save feedback overlay.

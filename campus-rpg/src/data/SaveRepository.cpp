@@ -37,7 +37,6 @@ namespace
 
         if (!item.textureId().empty())
             appendField("textureId", item.textureId());
-
         switch (item.type())
         {
         case ItemType::Food:

@@ -93,7 +93,6 @@ void NightScene::handleInput(engine::IInput &input)
 void NightScene::update(float deltaTime)
 {
     auraTimer_ += deltaTime;
-
     if (stuckMessageTimer_ > 0.0f)
     {
         stuckMessageTimer_ -= deltaTime;
@@ -154,9 +153,9 @@ void NightScene::update(float deltaTime)
         engine::Vec2 spawnPos = schoolDefaultSpawn();
         school.clearEntities();
         school.addEntity(std::make_unique<PlayerEntity>(spawnPos));
-        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 230}, "enemy_slime", "monsters/iceball"));
-        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{160, 400}, "enemy_goblin", "monsters/beetle"));
-        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{350, 230}, "enemy_boss", "monsters/rhino"));
+        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime", "monsters/iceball"));
+        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin", "monsters/beetle"));
+        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss", "monsters/rhino"));
     }
     else if (onSecond && pp.x <= 50.0f)
     {
@@ -166,7 +165,7 @@ void NightScene::update(float deltaTime)
         engine::Vec2 spawnPos = {640.0f, 430.0f};
         town.clearEntities();
         town.addEntity(std::make_unique<PlayerEntity>(spawnPos));
-        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 240}, "enemy_slime", "monsters/bunny"));
+        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime", "monsters/bunny"));
         town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin", "monsters/duck"));
         town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss", "monsters/treant"));
     }
