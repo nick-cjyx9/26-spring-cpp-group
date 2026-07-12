@@ -835,12 +835,12 @@ void GameManager::generateNpcPool()
         {"sl_npc_1", "Eric", "npc_portrait_1", "npc_sprite_1", "Magician"},
         {"sl_npc_2", "Selena", "npc_portrait_2", "npc_sprite_2", "High Priestess"},
         {"sl_npc_3", "Maria", "npc_portrait_3", "npc_sprite_3", "Empress"},
-        {"sl_npc_4", "Arthur", "npc_portrait_0", "npc_sprite_0", "Emperor"},
-        {"sl_npc_5", "Thomas", "npc_portrait_1", "npc_sprite_1", "Hierophant"},
-        {"sl_npc_6", "Maxim", "npc_portrait_2", "npc_sprite_2", "Chariot"},
-        {"sl_npc_7", "Reina", "npc_portrait_3", "npc_sprite_3", "Strength"},
-        {"sl_npc_8", "Zhang", "npc_portrait_0", "npc_sprite_0", "Hermit"},
-        {"sl_npc_9", "Lily", "npc_portrait_1", "npc_sprite_1", "Lovers"}};
+        {"sl_npc_4", "Arthur", "npc_portrait_4", "npc_sprite_4", "Emperor"},
+        {"sl_npc_5", "Thomas", "npc_portrait_5", "npc_sprite_5", "Hierophant"},
+        {"sl_npc_6", "Maxim", "npc_portrait_6", "npc_sprite_6", "Chariot"},
+        {"sl_npc_7", "Reina", "npc_portrait_7", "npc_sprite_7", "Strength"},
+        {"sl_npc_8", "Zhang", "npc_portrait_8", "npc_sprite_8", "Hermit"},
+        {"sl_npc_9", "Lily", "npc_portrait_9", "npc_sprite_9", "Lovers"}};
 
     npcPool_.clear();
     for (int i = 0; i < kNpcPoolSize && i < static_cast<int>(kFixedPool.size()); ++i)
