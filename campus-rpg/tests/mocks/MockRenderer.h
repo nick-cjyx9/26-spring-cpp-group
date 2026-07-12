@@ -55,6 +55,11 @@ public:
         textCalls_.push_back({text, pos, size, color});
     }
 
+    float textWidth(const std::string &text, int size) const override
+    {
+        return static_cast<float>(text.size()) * size * 0.5f;
+    }
+
     int clearCount() const { return clearCount_; }
     int presentCount() const { return presentCount_; }
     const std::vector<DrawRectCall> &rectCalls() const { return rectCalls_; }

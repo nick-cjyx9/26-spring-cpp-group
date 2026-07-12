@@ -105,6 +105,18 @@ void SfmlRenderer::drawText(const std::string &text, const Vec2 &pos, int size, 
     window_.draw(textShape_);
 }
 
+float SfmlRenderer::textWidth(const std::string &text, int size) const
+{
+    auto it = fonts_.find("default");
+    if (it == fonts_.end() || !it->second)
+        return 0.0f;
+    sf::Text measurer;
+    measurer.setFont(*it->second);
+    measurer.setString(text);
+    measurer.setCharacterSize(static_cast<unsigned int>(size));
+    return measurer.getLocalBounds().width;
+}
+
 bool SfmlRenderer::loadFont(const std::string &id, const std::string &path)
 {
     auto font = std::make_unique<sf::Font>();
