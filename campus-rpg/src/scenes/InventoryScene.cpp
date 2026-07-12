@@ -119,7 +119,7 @@ void InventoryScene::render(engine::IRenderer &renderer)
     }
 
     float cellW = 110.0f;
-    float cellH = 90.0f;
+    float cellH = 100.0f;
     int cols = 4;
     int rows = 4;
     float gridX = 170.0f;

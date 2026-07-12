@@ -22,6 +22,8 @@ public:
 
     const std::string &id() const { return id_; }
     const std::string &name() const { return name_; }
+    const std::string &textureId() const { return textureId_; }
+    void setTextureId(const std::string &id) { textureId_ = id; }
     int hp() const { return hp_; }
     int maxHp() const { return maxHp_; }
     int strength() const { return strength_; }
@@ -54,6 +56,7 @@ public:
 protected:
     std::string id_;
     std::string name_;
+    std::string textureId_;
     int hp_ = 0;
     int maxHp_ = 0;
     int strength_ = 0;

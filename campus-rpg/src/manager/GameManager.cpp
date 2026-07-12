@@ -709,7 +709,9 @@ void GameManager::generateNpcPool()
         "Ivan", "Julia", "Kevin", "Luna", "Mason", "Nora", "Oscar", "Piper",
         "Quinn", "Rita", "Sean", "Tina"};
     static const std::vector<std::string> kPortraits = {
-        "npc_yosuke", "npc_chie", "npc_yukiko"};
+        "npc_portrait_0", "npc_portrait_1", "npc_portrait_2", "npc_portrait_3"};
+    static const std::vector<std::string> kSprites = {
+        "npc_sprite_0", "npc_sprite_1", "npc_sprite_2", "npc_sprite_3"};
     static const std::vector<std::string> kArcanas = {
         "Magician", "Chariot", "Priestess", "Fool", "Hierophant"};
 
@@ -724,7 +726,8 @@ void GameManager::generateNpcPool()
         NpcDefinition def;
         def.id = "sl_npc_" + std::to_string(i);
         def.name = (i < static_cast<int>(names.size())) ? names[i] : ("NPC" + std::to_string(i));
-        def.portraitId = kPortraits[rng() % kPortraits.size()];
+        def.portraitId = kPortraits[i % kPortraits.size()];
+        def.spriteId = kSprites[i % kSprites.size()];
         def.arcana = kArcanas[i % kArcanas.size()];
         npcPool_.push_back(def);
 
@@ -812,7 +815,9 @@ void GameManager::rebuildMapNpcs()
         for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
         {
             engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
-            map.addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i]));
+            const NpcDefinition *def = findNpc(todayNpcIds_[i]);
+            std::string spriteId = def ? def->spriteId : "";
+            map.addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i], spriteId));
         }
     }
 
@@ -832,7 +837,9 @@ void GameManager::rebuildMapNpcs()
         for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
         {
             engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
-            map.addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i]));
+            const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
+            std::string spriteId = def ? def->spriteId : "";
+            map.addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i], spriteId));
         }
     }
 }
@@ -925,7 +932,9 @@ void GameManager::initDefaultMap()
     for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
     {
         engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
-        currentMap_->addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i]));
+        const NpcDefinition *def = findNpc(todayNpcIds_[i]);
+        std::string spriteId = def ? def->spriteId : "";
+        currentMap_->addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i], spriteId));
     }
 }
 
@@ -939,7 +948,9 @@ void GameManager::initSecondMap()
     for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
     {
         engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
-        secondMap_->addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i]));
+        const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
+        std::string spriteId = def ? def->spriteId : "";
+        secondMap_->addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i], spriteId));
     }
 }
 

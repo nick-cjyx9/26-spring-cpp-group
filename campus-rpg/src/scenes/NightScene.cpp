@@ -92,6 +92,7 @@ void NightScene::handleInput(engine::IInput &input)
 
 void NightScene::update(float deltaTime)
 {
+    auraTimer_ += deltaTime;
     if (stuckMessageTimer_ > 0.0f)
     {
         stuckMessageTimer_ -= deltaTime;
@@ -133,6 +134,7 @@ void NightScene::update(float deltaTime)
             auto enemy = GameManager::instance().createEnemyFromTemplate(enemyEntity->enemyTemplateId());
             if (enemy)
             {
+                GameManager::instance().setCurrentEnemyTextureId(enemyEntity->textureId());
                 GameManager::instance().battleSystem().startBattle(GameManager::instance().character(), *enemy);
                 GameManager::instance().enterScene(SceneType::Battle);
             }
@@ -151,9 +153,9 @@ void NightScene::update(float deltaTime)
         engine::Vec2 spawnPos = schoolDefaultSpawn();
         school.clearEntities();
         school.addEntity(std::make_unique<PlayerEntity>(spawnPos));
-        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 230}, "enemy_slime"));
-        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{160, 400}, "enemy_goblin"));
-        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{350, 230}, "enemy_boss"));
+        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime", "monsters/iceball"));
+        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin", "monsters/beetle"));
+        school.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss", "monsters/rhino"));
     }
     else if (onSecond && pp.x <= 50.0f)
     {
@@ -163,9 +165,9 @@ void NightScene::update(float deltaTime)
         engine::Vec2 spawnPos = {640.0f, 430.0f};
         town.clearEntities();
         town.addEntity(std::make_unique<PlayerEntity>(spawnPos));
-        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 240}, "enemy_slime"));
-        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin"));
-        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss"));
+        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{250, 150}, "enemy_slime", "monsters/bunny"));
+        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{400, 250}, "enemy_goblin", "monsters/duck"));
+        town.addEntity(std::make_unique<EnemyEntity>(engine::Vec2{500, 350}, "enemy_boss", "monsters/treant"));
     }
 }
 
@@ -197,12 +199,68 @@ void NightScene::render(engine::IRenderer &renderer)
         if (entity->type() == "player")
         {
             auto b = entity->worldBounds();
-            renderer.drawTexture("player", {b.x, b.y, 48, 48});
+            std::string playerTex = "player_" + std::to_string(GameManager::instance().selectedHeroIndex());
+            float size = 96.0f;
+            float cx = b.x + b.width / 2.0f;
+            float cy = b.y + b.height / 2.0f;
+            renderer.drawTexture(playerTex, {cx - size / 2.0f, cy - size / 2.0f, size, size});
         }
         else if (entity->type() == "enemy")
         {
             auto b = entity->worldBounds();
-            renderer.drawTexture("shadow", {b.x, b.y, 48, 48});
+            auto enemyEntity = static_cast<EnemyEntity *>(entity.get());
+            std::string tex = enemyEntity->textureId();
+            if (tex.empty()) tex = "shadow";
+            bool isBoss = (enemyEntity->enemyTemplateId() == "enemy_boss");
+            float size = isBoss ? 72.0f : 48.0f;
+            float offset = (48.0f - size) / 2.0f;
+            float bx = b.x + offset;
+            float by = b.y + offset;
+
+            if (isBoss)
+            {
+                // 危险气场：暗紫色底光
+                engine::Color darkAura(130, 0, 220, 65);
+                float pad = 10.0f;
+                renderer.drawRect({bx - pad, by - pad, size + pad * 2, size + pad * 2}, darkAura);
+            }
+
+            renderer.drawTexture(tex, {bx, by, size, size});
+
+            if (isBoss)
+            {
+                // 动态上升的邪气直线（直接画在身上）
+                engine::Color evilPurple(220, 0, 255, 190);
+                const int numLines = 10;
+                float lineH = 18.0f;
+                float speed = 50.0f;
+                float cycle = size + lineH;
+                for (int i = 0; i < numLines; ++i)
+                {
+                    float lx = bx + (size * (i + 0.5f) / numLines);
+                    float phase = auraTimer_ * speed + i * 16.0f;
+                    phase = phase - static_cast<int>(phase / cycle) * cycle;
+                    float ly = by + size - phase;
+                    float drawY = std::max(ly, by);
+                    float drawH = std::min(ly + lineH, by + size) - drawY;
+                    if (drawH > 0)
+                        renderer.drawRect({lx - 1.5f, drawY, 3.0f, drawH}, evilPurple);
+                }
+
+                // 更快的细线增加紧张感
+                engine::Color fastPurple(255, 0, 200, 150);
+                for (int i = 0; i < 6; ++i)
+                {
+                    float lx = bx + 8.0f + i * (size - 16.0f) / 5.0f;
+                    float phase = auraTimer_ * 75.0f + i * 24.0f;
+                    phase = phase - static_cast<int>(phase / cycle) * cycle;
+                    float ly = by + size - phase;
+                    float drawY = std::max(ly, by);
+                    float drawH = std::min(ly + lineH * 0.8f, by + size) - drawY;
+                    if (drawH > 0)
+                        renderer.drawRect({lx - 1.0f, drawY, 2.0f, drawH}, fastPurple);
+                }
+            }
         }
     }
 

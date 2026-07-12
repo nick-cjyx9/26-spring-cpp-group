@@ -125,6 +125,8 @@ public:
     bool shouldQuit() const { return shouldQuit_; }
     void quit() { shouldQuit_ = true; }
 
+    const std::string &currentEnemyTextureId() const { return currentEnemyTextureId_; }
+    void setCurrentEnemyTextureId(const std::string &id) { currentEnemyTextureId_ = id; }
     bool infiniteGoldEnabled() const { return infiniteGoldEnabled_; }
     void setInfiniteGoldEnabled(bool enabled);
     void toggleInfiniteGold() { setInfiniteGoldEnabled(!infiniteGoldEnabled_); }
@@ -166,6 +168,7 @@ public:
         std::string id;
         std::string name;
         std::string portraitId;
+        std::string spriteId;
         std::string arcana;
     };
     int day() const { return day_; }
@@ -234,6 +237,7 @@ private:
     bool infiniteGoldEnabled_ = false;
     int currentSlotId_ = 1;
     int selectedHeroIndex_ = 0;
+    std::string currentEnemyTextureId_;
 
     // Day & NPC pool system
     int day_ = 1;

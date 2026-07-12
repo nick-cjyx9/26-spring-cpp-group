@@ -99,6 +99,7 @@ Slime::Slime() : Enemy("enemy_slime", "Slime", 30, 6, 4, 3, 15, 5)
     setAffinity(Element::Ice, Affinity::Weak);
     addSkill(std::make_shared<Skill>("skill_slash", "Slash", Element::Physical, 8, 0, SkillCostType::HP));
     setAttackPattern({"skill_slash", "normal", "skill_slash"});
+    setTextureId("monsters/bunny");
 }
 
 Goblin::Goblin() : Enemy("enemy_goblin", "Goblin", 50, 10, 5, 5, 30, 10)
@@ -106,6 +107,7 @@ Goblin::Goblin() : Enemy("enemy_goblin", "Goblin", 50, 10, 5, 5, 30, 10)
     setAffinity(Element::Fire, Affinity::Resist);
     addSkill(std::make_shared<Skill>("skill_cleave", "Cleave", Element::Physical, 12, 0, SkillCostType::HP));
     setAttackPattern({"normal", "skill_cleave", "skill_cleave"});
+    setTextureId("monsters/duck");
 }
 
 Boss::Boss() : Enemy("enemy_boss", "Campus Guardian", 120, 16, 10, 6, 100, 50)
@@ -115,4 +117,5 @@ Boss::Boss() : Enemy("enemy_boss", "Campus Guardian", 120, 16, 10, 6, 100, 50)
     addSkill(std::make_shared<Skill>("skill_mighty_swing", "Mighty Swing", Element::Physical, 25, 0, SkillCostType::HP));
     addSkill(std::make_shared<Skill>("skill_maragi", "Maragi", Element::Fire, 20, 8, SkillCostType::SP));
     setAttackPattern({"skill_mighty_swing", "normal", "skill_maragi", "normal"});
+    setTextureId("shadow");
 }

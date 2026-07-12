@@ -36,21 +36,25 @@ public:
 class NpcEntity : public Entity
 {
 public:
-    NpcEntity(engine::Vec2 position, std::string socialLinkId);
+    NpcEntity(engine::Vec2 position, std::string socialLinkId, std::string spriteTextureId = "");
     std::string type() const override { return "npc"; }
     const std::string &socialLinkId() const { return socialLinkId_; }
+    const std::string &spriteTextureId() const { return spriteTextureId_; }
 
 private:
     std::string socialLinkId_;
+    std::string spriteTextureId_;
 };
 
 class EnemyEntity : public Entity
 {
 public:
-    EnemyEntity(engine::Vec2 position, std::string enemyTemplateId);
+    EnemyEntity(engine::Vec2 position, std::string enemyTemplateId, std::string textureId = "");
     std::string type() const override { return "enemy"; }
     const std::string &enemyTemplateId() const { return enemyTemplateId_; }
+    const std::string &textureId() const { return textureId_; }
 
 private:
     std::string enemyTemplateId_;
+    std::string textureId_;
 };
