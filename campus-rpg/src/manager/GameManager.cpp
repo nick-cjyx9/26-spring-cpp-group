@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <map>
 #include <random>
 
@@ -39,6 +40,41 @@ namespace
         std::uniform_real_distribution<float> xDist(z.x + 16.0f, z.x + z.width - 16.0f);
         std::uniform_real_distribution<float> yDist(z.y + 16.0f, z.y + z.height - 16.0f);
         return {xDist(rng), yDist(rng)};
+    }
+
+    float distance(const engine::Vec2 &a, const engine::Vec2 &b)
+    {
+        float dx = a.x - b.x;
+        float dy = a.y - b.y;
+        return std::sqrt(dx * dx + dy * dy);
+    }
+
+    // Pick a random spawn position that is at least minDist away from every
+    // position in existing. Falls back to the first valid attempt if no
+    // fully-satisfying spot is found within maxRetries.
+    engine::Vec2 randomSpawnInZones(const std::vector<engine::Rect> &zones, std::mt19937 &rng,
+                                    const std::vector<engine::Vec2> &existing, float minDist)
+    {
+        constexpr int kMaxRetries = 50;
+        engine::Vec2 bestPos = randomSpawnInZones(zones, rng);
+        for (int attempt = 0; attempt < kMaxRetries; ++attempt)
+        {
+            engine::Vec2 pos = randomSpawnInZones(zones, rng);
+            bool ok = true;
+            for (const auto &p : existing)
+            {
+                if (distance(pos, p) < minDist)
+                {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok)
+                return pos;
+            if (attempt == 0)
+                bestPos = pos;
+        }
+        return bestPos;
     }
 } // namespace
 
@@ -707,17 +743,21 @@ void GameManager::initDefaultSocialLinks()
 void GameManager::generateNpcPool()
 {
     // A persistent pool of kNpcPoolSize unique NPCs per save. Names are picked
-    // without replacement from a fixed English name list; portraits are chosen
-    // randomly (with replacement) from the 3 available textures; arcana is
+    // without replacement from a fixed English name list; each NPC gets a unique
+    // portrait and sprite so all 10 pool members have distinct visuals; arcana is
     // deterministic by index so stat-reward mapping stays stable across loads.
     static const std::vector<std::string> kNamePool = {
         "Aiden", "Bella", "Caleb", "Diana", "Ethan", "Fiona", "Gavin", "Hannah",
         "Ivan", "Julia", "Kevin", "Luna", "Mason", "Nora", "Oscar", "Piper",
         "Quinn", "Rita", "Sean", "Tina"};
     static const std::vector<std::string> kPortraits = {
-        "npc_portrait_0", "npc_portrait_1", "npc_portrait_2", "npc_portrait_3"};
+        "npc_portrait_0", "npc_portrait_1", "npc_portrait_2", "npc_portrait_3",
+        "npc_portrait_4", "npc_portrait_5", "npc_portrait_6", "npc_portrait_7",
+        "npc_portrait_8", "npc_portrait_9"};
     static const std::vector<std::string> kSprites = {
-        "npc_sprite_0", "npc_sprite_1", "npc_sprite_2", "npc_sprite_3"};
+        "npc_sprite_0", "npc_sprite_1", "npc_sprite_2", "npc_sprite_3",
+        "npc_sprite_4", "npc_sprite_5", "npc_sprite_6", "npc_sprite_7",
+        "npc_sprite_8", "npc_sprite_9"};
     static const std::vector<std::string> kArcanas = {
         "Magician", "Chariot", "Priestess", "Fool", "Hierophant"};
 
@@ -818,12 +858,14 @@ void GameManager::rebuildMapNpcs()
         map.clearEntities();
         map.addEntity(std::make_unique<PlayerEntity>(playerPos));
 
+        std::vector<engine::Vec2> placedPositions;
         for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
         {
-            engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
+            engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng, placedPositions, 200.0f);
             const NpcDefinition *def = findNpc(todayNpcIds_[i]);
             std::string spriteId = def ? def->spriteId : "";
             map.addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i], spriteId));
+            placedPositions.push_back(pos);
         }
     }
 
@@ -840,12 +882,14 @@ void GameManager::rebuildMapNpcs()
         map.clearEntities();
         map.addEntity(std::make_unique<PlayerEntity>(playerPos));
 
+        std::vector<engine::Vec2> placedPositions;
         for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
         {
-            engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
+            engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng, placedPositions, 200.0f);
             const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
             std::string spriteId = def ? def->spriteId : "";
             map.addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i], spriteId));
+            placedPositions.push_back(pos);
         }
     }
 }
@@ -935,12 +979,14 @@ void GameManager::initDefaultMap()
     currentMap_->addEntity(std::make_unique<PlayerEntity>(townDefaultSpawn()));
 
     std::mt19937 rng(std::random_device{}());
+    std::vector<engine::Vec2> placedPositions;
     for (size_t i = 0; i < todayNpcIds_.size() && i < kTownNpcsPerDay; ++i)
     {
-        engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng);
+        engine::Vec2 pos = randomSpawnInZones(townNpcSpawnZones(), rng, placedPositions, 200.0f);
         const NpcDefinition *def = findNpc(todayNpcIds_[i]);
         std::string spriteId = def ? def->spriteId : "";
         currentMap_->addEntity(std::make_unique<NpcEntity>(pos, todayNpcIds_[i], spriteId));
+        placedPositions.push_back(pos);
     }
 }
 
@@ -951,12 +997,14 @@ void GameManager::initSecondMap()
     secondMap_->addEntity(std::make_unique<PlayerEntity>(schoolDefaultSpawn()));
 
     std::mt19937 rng(std::random_device{}());
+    std::vector<engine::Vec2> placedPositions;
     for (size_t i = 0; i < todaySchoolNpcIds_.size() && i < kSchoolNpcsPerDay; ++i)
     {
-        engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng);
+        engine::Vec2 pos = randomSpawnInZones(schoolNpcSpawnZones(), rng, placedPositions, 200.0f);
         const NpcDefinition *def = findNpc(todaySchoolNpcIds_[i]);
         std::string spriteId = def ? def->spriteId : "";
         secondMap_->addEntity(std::make_unique<NpcEntity>(pos, todaySchoolNpcIds_[i], spriteId));
+        placedPositions.push_back(pos);
     }
 }
 
