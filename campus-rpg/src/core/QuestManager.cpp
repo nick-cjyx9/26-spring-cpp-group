@@ -59,6 +59,17 @@ std::vector<Quest *> QuestManager::completedQuests() const
     return result;
 }
 
+std::vector<Quest *> QuestManager::questsForNpc(const std::string &npcId) const
+{
+    std::vector<Quest *> result;
+    for (const auto &[id, quest] : quests_)
+    {
+        if (quest.npcId() == npcId)
+            result.push_back(const_cast<Quest *>(&quest));
+    }
+    return result;
+}
+
 bool QuestManager::acceptQuest(const std::string &id)
 {
     Quest *q = getQuest(id);

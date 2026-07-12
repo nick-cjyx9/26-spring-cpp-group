@@ -70,6 +70,7 @@ set(CORE_SOURCES
     src/core/SocialLinkManager.cpp
     src/core/Entity.cpp
     src/core/TileMap.cpp
+    src/core/MiscItem.cpp
 )
 
 add_library(CampusRPGCore STATIC ${CORE_SOURCES})
@@ -108,6 +109,7 @@ set(APP_LIB_SOURCES
     src/scenes/RestConfirmScene.cpp
     src/scenes/DebugCheatScene.cpp
     src/scenes/PauseMenuScene.cpp
+    src/scenes/QuestScene.cpp
 )
 
 add_library(CampusRPGAppLib STATIC ${APP_LIB_SOURCES})

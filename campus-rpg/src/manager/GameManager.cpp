@@ -1,4 +1,4 @@
-#include "GameManager.h"
+﻿#include "GameManager.h"
 #include "Enemy.h"
 #include "Item.h"
 #include "Persona.h"
@@ -23,6 +23,7 @@
 #include "RestConfirmScene.h"
 #include "DebugCheatScene.h"
 #include "PauseMenuScene.h"
+#include "QuestScene.h"
 
 #include <algorithm>
 #include <array>
@@ -432,6 +433,9 @@ void GameManager::enterScene(SceneType type)
     case SceneType::PauseMenu:
         currentScene_ = std::make_unique<PauseMenuScene>();
         break;
+    case SceneType::Quest:
+        currentScene_ = std::make_unique<QuestScene>();
+        break;
     }
 }
 
@@ -701,10 +705,89 @@ void GameManager::initDefaultShop()
 
 void GameManager::initDefaultQuests()
 {
-    questManager_.addQuest(Quest("quest_first", "First Steps",
-                                 "Defeat your first slime.", "kill:1", 20, 30));
-    questManager_.addQuest(Quest("quest_veteran", "Campus Veteran",
-                                 "Defeat 3 goblins.", "kill:3", 50, 80));
+    // Helper lambda to add kill quests
+    auto addKillQuest = [this](const std::string &id, const std::string &name,
+                                const std::string &desc, const std::string &condition,
+                                int gold, int exp, const std::string &npcId)
+    {
+        Quest q(id, name, desc, condition, gold, exp);
+        q.setType(QuestType::Kill);
+        q.setNpcId(npcId);
+        questManager_.addQuest(std::move(q));
+    };
+
+    // Helper lambda to add collect quests
+    auto addCollectQuest = [this](const std::string &id, const std::string &name,
+                                   const std::string &desc, const std::string &itemId,
+                                   int count, int gold, int exp, const std::string &npcId)
+    {
+        Quest q(id, name, desc, "", gold, exp);
+        q.setType(QuestType::Collect);
+        q.setNpcId(npcId);
+        q.setTargetItemId(itemId);
+        q.setTargetCount(count);
+        questManager_.addQuest(std::move(q));
+    };
+
+    // Zhou (Fool) - Yellow Braised Chicken Shop Owner
+    addCollectQuest("quest_zhou_1", "The Secret of the Golden Casserole", "Help Zhou collect 3 Shadow Mushrooms.",
+                    "item_shadow_mushroom", 3, 300, 50, "sl_npc_0");
+    addKillQuest("quest_zhou_2", "The Taste of Protection", "Defeat 5 Slimes to protect the ingredient delivery route.",
+                 "kill:5", 500, 80, "sl_npc_0");
+
+    // Eric (Magician) - Alchemist
+    addCollectQuest("quest_eric_1", "Alchemy Materials", "Help Eric collect 2 Crystal Shards.",
+                    "item_crystal_shard", 2, 200, 40, "sl_npc_1");
+    addKillQuest("quest_eric_2", "Monster Research", "Defeat 3 Goblins and collect their tissue samples.",
+                 "kill:3", 400, 60, "sl_npc_1");
+
+    // Selena (High Priestess) - Prophet
+    addCollectQuest("quest_selena_1", "Starlight Herbs", "Help Selena collect 3 Starlight Herbs.",
+                    "item_star_herb", 3, 250, 45, "sl_npc_2");
+    addKillQuest("quest_selena_2", "Threat of Shadows", "Defeat 2 Shadow monsters.",
+                 "kill:2", 350, 55, "sl_npc_2");
+
+    // Maria (Empress) - Restaurant Owner
+    addCollectQuest("quest_maria_1", "Fresh Wheat", "Help Maria collect 5 portions of Flour.",
+                    "item_flour", 5, 150, 30, "sl_npc_3");
+    addKillQuest("quest_maria_2", "Escort Mission", "Defeat 1 Boss to protect the bread delivery route.",
+                 "kill:1", 600, 100, "sl_npc_3");
+
+    // Arthur (Emperor) - Town Guard Captain
+    addKillQuest("quest_arthur_1", "Recruit Trial", "Defeat 3 Slimes.",
+                 "kill:3", 300, 50, "sl_npc_4");
+    addKillQuest("quest_arthur_2", "Source of Shadows", "Defeat 5 Goblins.",
+                 "kill:5", 500, 70, "sl_npc_4");
+
+    // Thomas (Hierophant) - History Professor
+    addCollectQuest("quest_thomas_1", "Ancient Book Collection", "Help Thomas collect 3 Ancient Books.",
+                    "item_book", 3, 200, 35, "sl_npc_5");
+    addKillQuest("quest_thomas_2", "The Price of Knowledge", "Defeat 4 Shadow monsters.",
+                 "kill:4", 450, 65, "sl_npc_5");
+
+    // Maxim (Chariot) - Hot-blooded Warrior
+    addKillQuest("quest_maxim_1", "Pre-Battle Warm-up", "Defeat 5 Slimes.",
+                 "kill:5", 250, 40, "sl_npc_6");
+    addKillQuest("quest_maxim_2", "Endless Challenge", "Defeat 10 Goblins.",
+                 "kill:10", 800, 120, "sl_npc_6");
+
+    // Reina (Strength) - Beast Tamer
+    addCollectQuest("quest_reina_1", "Healing Herbs", "Help Reina collect 3 Healing Herbs.",
+                    "item_herb", 3, 200, 40, "sl_npc_7");
+    addKillQuest("quest_reina_2", "Protect the Monsters", "Defeat 2 Shadow monsters.",
+                 "kill:2", 350, 55, "sl_npc_7");
+
+    // Zhang (Hermit) - Mysterious Old Man
+    addCollectQuest("quest_zhang_1", "Key Fragments", "Help Zhang collect 3 Key Fragments.",
+                    "item_key_fragment", 3, 500, 80, "sl_npc_8");
+    addKillQuest("quest_zhang_2", "The Final Test", "Defeat 1 Boss.",
+                 "kill:1", 1000, 150, "sl_npc_8");
+
+    // Lily (Lovers) - Dual-faced Girl
+    addCollectQuest("quest_lily_1", "Secret Garden", "Help Lily collect 5 Glowing Flowers.",
+                    "item_flower", 5, 100, 25, "sl_npc_9");
+    addKillQuest("quest_lily_2", "Protect Lily", "Defeat 3 Slimes.",
+                 "kill:3", 250, 40, "sl_npc_9");
 }
 
 void GameManager::initDefaultEnemies()
@@ -746,43 +829,25 @@ void GameManager::initDefaultSocialLinks()
 
 void GameManager::generateNpcPool()
 {
-    // A persistent pool of kNpcPoolSize unique NPCs per save. Names are picked
-    // without replacement from a fixed English name list; each NPC gets a unique
-    // portrait and sprite so all 10 pool members have distinct visuals; arcana is
-    // deterministic by index so stat-reward mapping stays stable across loads.
-    static const std::vector<std::string> kNamePool = {
-        "Aiden", "Bella", "Caleb", "Diana", "Ethan", "Fiona", "Gavin", "Hannah",
-        "Ivan", "Julia", "Kevin", "Luna", "Mason", "Nora", "Oscar", "Piper",
-        "Quinn", "Rita", "Sean", "Tina"};
-    static const std::vector<std::string> kPortraits = {
-        "npc_portrait_0", "npc_portrait_1", "npc_portrait_2", "npc_portrait_3",
-        "npc_portrait_4", "npc_portrait_5", "npc_portrait_6", "npc_portrait_7",
-        "npc_portrait_8", "npc_portrait_9"};
-    static const std::vector<std::string> kSprites = {
-        "npc_sprite_0", "npc_sprite_1", "npc_sprite_2", "npc_sprite_3",
-        "npc_sprite_4", "npc_sprite_5", "npc_sprite_6", "npc_sprite_7",
-        "npc_sprite_8", "npc_sprite_9"};
-    static const std::vector<std::string> kArcanas = {
-        "Magician", "Chariot", "Priestess", "Fool", "Hierophant"};
-
-    std::mt19937 rng(std::random_device{}());
-
-    std::vector<std::string> names = kNamePool;
-    std::shuffle(names.begin(), names.end(), rng);
+    // Fixed pool of 10 tarot-themed NPCs with English names.
+    static const std::vector<NpcDefinition> kFixedPool = {
+        {"sl_npc_0", "Zhou", "npc_portrait_0", "npc_sprite_0", "Fool"},
+        {"sl_npc_1", "Eric", "npc_portrait_1", "npc_sprite_1", "Magician"},
+        {"sl_npc_2", "Selena", "npc_portrait_2", "npc_sprite_2", "High Priestess"},
+        {"sl_npc_3", "Maria", "npc_portrait_3", "npc_sprite_3", "Empress"},
+        {"sl_npc_4", "Arthur", "npc_portrait_0", "npc_sprite_0", "Emperor"},
+        {"sl_npc_5", "Thomas", "npc_portrait_1", "npc_sprite_1", "Hierophant"},
+        {"sl_npc_6", "Maxim", "npc_portrait_2", "npc_sprite_2", "Chariot"},
+        {"sl_npc_7", "Reina", "npc_portrait_3", "npc_sprite_3", "Strength"},
+        {"sl_npc_8", "Zhang", "npc_portrait_0", "npc_sprite_0", "Hermit"},
+        {"sl_npc_9", "Lily", "npc_portrait_1", "npc_sprite_1", "Lovers"}};
 
     npcPool_.clear();
-    for (int i = 0; i < kNpcPoolSize; ++i)
+    for (int i = 0; i < kNpcPoolSize && i < static_cast<int>(kFixedPool.size()); ++i)
     {
-        NpcDefinition def;
-        def.id = "sl_npc_" + std::to_string(i);
-        def.name = (i < static_cast<int>(names.size())) ? names[i] : ("NPC" + std::to_string(i));
-        def.portraitId = kPortraits[i % kPortraits.size()];
-        def.spriteId = kSprites[i % kSprites.size()];
-        def.arcana = kArcanas[i % kArcanas.size()];
-        npcPool_.push_back(def);
-
-        SocialLink link(def.id, def.name, def.arcana);
-        link.setPortraitId(def.portraitId);
+        npcPool_.push_back(kFixedPool[i]);
+        SocialLink link(kFixedPool[i].id, kFixedPool[i].name, kFixedPool[i].arcana);
+        link.setPortraitId(kFixedPool[i].portraitId);
         socialLinkManager_.addLink(std::move(link));
     }
 
@@ -791,29 +856,178 @@ void GameManager::generateNpcPool()
 
 void GameManager::applyNpcDialogueTemplates()
 {
-    // Generic, name-agnostic dialogue shared by every pool NPC. The NPC's name
-    // is prepended at fill time so the displayed text matches the loaded identity.
-    static const std::vector<std::string> kLines = {
-        "Oh, hey! Good to see you around.",
-        "I was just thinking about our last chat.",
-        "You know, I really enjoy these little talks.",
-        "I feel like we're starting to click, you know?",
-        "Honestly, you're one of the few people I can be myself around.",
-        "Hey, whatever happens out there, I've got your back. Always.",
-        "I don't say this often, but... thanks for sticking with me.",
-        "You bring out a side of me I'd kind of forgotten existed.",
-        "This bond we're building... it means more than you think.",
-        "You're my truest friend. I hope you know that.",
-        "So this is what a real bond feels like. Let's keep going, together."};
+    // Per-NPC unique dialogues keyed by npc id.
+    // Each NPC has 11 entries (rank 0..10). Each entry is a vector of 3 dialogue lines.
+    static const std::map<std::string, std::vector<std::vector<std::string>>> kNpcDialogues = {
+        // Zhou - Fool: Yellow Braised Chicken Shop Owner
+        {"sl_npc_0",
+         {
+             {"Zhou: \"Welcome! The usual? A big bowl of Yellow Braised Chicken?\"", "Zhou: \"The secret recipe for this Yellow Braised Chicken came all the way from my hometown.\"", "Zhou: \"In this world, being able to taste the flavor of home is a real blessing.\""},
+             {"Zhou: \"I've been running low on ingredients lately. Could you grab me some fresh mushrooms?\"", "Zhou: \"You gotta pick the ones glistening with morning dew. That's how you get the real freshness.\"", "Zhou: \"With you around, this place finally feels alive again.\""},
+             {"Zhou: \"Heard the monsters at night drop some strange ingredients?\"", "Zhou: \"If you could get me those glowing mushrooms, they'd make for a killer dish.\"", "Zhou: \"You've got guts, kid, but stay safe out there.\""},
+             {"Zhou: \"Tried cooking something new yesterday. Wanna give it a taste?\"", "Zhou: \"It's not quite Yellow Braised Chicken, but it's got its own charm.\"", "Zhou: \"Feedback is important, so help me improve it.\""},
+             {"Zhou: \"Ever wonder why it was you who ended up in this world?\"", "Zhou: \"Maybe Yellow Braised Chicken is the bridge connecting our two worlds.\"", "Zhou: \"Anyway, since you're here, make the most of it.\""},
+             {"Zhou: \"The seasonings here aren't quite like back home, but they've got their own flavor.\"", "Zhou: \"I'm doing my best to recreate that authentic taste.\"", "Zhou: \"Whenever you feel homesick, come have a bowl of Yellow Braised Chicken.\""},
+             {"Zhou: \"Had some strange customers lately. They'd eat and just stare into space.\"", "Zhou: \"They say my Yellow Braised Chicken makes them remember the past.\"", "Zhou: \"Guess my cooking really is magical, huh?\""},
+             {"Zhou: \"When I was young, I wanted to be a hero too. Then I chose cooking.\"", "Zhou: \"Everyone's got their own battlefield. Mine is the kitchen.\"", "Zhou: \"Making food that brings people happiness is a kind of heroism too.\""},
+             {"Zhou: \"That tarot aura around you is getting stronger.\"", "Zhou: \"Personas... those are mysterious things.\"", "Zhou: \"But no matter what, remember to come back for a meal.\""},
+             {"Zhou: \"Been thinking about opening a branch near the school.\"", "Zhou: \"That way you could grab a bite on your way to and from school.\"", "Zhou: \"Haha, just kidding. Let's focus on keeping this place running first.\""},
+             {"Zhou: \"You're quite the celebrity around town now. Everyone says you're a hero.\"", "Zhou: \"But to me, you'll always be that kid who loves Yellow Braised Chicken.\"", "Zhou: \"No matter what happens, this place will always be your home.\""},
+         }},
+        // Eric - Magician: Alchemist
+        {"sl_npc_1",
+         {
+             {"Eric: \"Welcome to my lab. Careful with the bottles and jars.\"", "Eric: \"I'm studying the alchemy of this world. Fascinating stuff.\"", "Eric: \"Interested in alchemy? I could teach you a thing or two.\""},
+             {"Eric: \"Lately I've been trying to replicate the flavor of Yellow Braised Chicken, but something's always missing.\"", "Eric: \"Maybe it needs a magical catalyst?\"", "Eric: \"Or perhaps... a tear from another world?\""},
+             {"Eric: \"See this potion? It can temporarily boost your Persona.\"", "Eric: \"But the side effect is... temporary memory loss.\"", "Eric: \"Just kidding. At worst, you'll have some gas.\""},
+             {"Eric: \"I found an ancient alchemical formula in an old book.\"", "Eric: \"Supposedly it can summon a legendary Persona.\"", "Eric: \"But it requires 22 materials. Want to help me gather them?\""},
+             {"Eric: \"Notice those strange runes on the night monsters?\"", "Eric: \"I suspect they're some kind of alchemical creation.\"", "Eric: \"If we could decode those runes, we might create even more powerful Personas.\""},
+             {"Eric: \"Impatience is the enemy of good experiments. Alchemy requires patience.\"", "Eric: \"Just like Yellow Braised Chicken needs to simmer slowly.\"", "Eric: \"...Wait, why am I thinking about Yellow Braised Chicken?\""},
+             {"Eric: \"I discovered a new catalyst that can evolve a Persona.\"", "Eric: \"But there's only a 50% success rate. Feeling lucky?\"", "Eric: \"Don't worry. At worst, your Persona just drops a level.\""},
+             {"Eric: \"I'm running low on research funds. Could you help me gather some materials to sell?\"", "Eric: \"Those glowing mushrooms fetch a high price on the black market.\"", "Eric: \"Don't worry, I'll cut you in on the profits.\""},
+             {"Eric: \"I've been studying the relationships between the 22 tarot cards.\"", "Eric: \"There's a fascinating resonance between them.\"", "Eric: \"If we could make all Personas resonate... maybe we could open the door home.\""},
+             {"Eric: \"My latest invention: the portable Persona storage device!\"", "Eric: \"It can only store one Persona, but it's still convenient.\"", "Eric: \"...Okay, it's actually just a box. Forget I said anything.\""},
+             {"Eric: \"Since I met you, my experiments have made breakthrough progress.\"", "Eric: \"Maybe friendship itself is the greatest alchemy of all.\"", "Eric: \"Come on, let me treat you to Yellow Braised Chicken tonight... if Zhou approves.\""},
+         }},
+        // Selena - High Priestess: Prophet
+        {"sl_npc_2",
+         {
+             {"Selena: \"I saw your silhouette in the crystal ball.\"", "Selena: \"Surrounded by golden light, you fell from the sky.\"", "Selena: \"Your fate is deeply intertwined with the tarot of this world.\""},
+             {"Selena: \"The stars last night revealed that your Persona is about to awaken.\"", "Selena: \"Are you ready to embrace this new power?\"", "Selena: \"Remember, the greater the power, the greater the responsibility.\""},
+             {"Selena: \"I sense an unusual energy fluctuation in the northern forest.\"", "Selena: \"A rare Persona may be hidden there.\"", "Selena: \"But be cautious... shadows also lurk in those woods.\""},
+             {"Selena: \"A strange vision appeared in the crystal ball... a bowl of golden chicken?\"", "Selena: \"That is your past, and the source of your strength.\"", "Selena: \"Never forget who you are.\""},
+             {"Selena: \"The moon is especially full tonight, perfect for a divination ritual.\"", "Selena: \"Would you like a glimpse of the future?\"", "Selena: \"...No, some paths you must walk alone.\""},
+             {"Selena: \"I feel the confusion and homesickness in your heart.\"", "Selena: \"But believe that every journey has its meaning.\"", "Selena: \"When you gather all 22 tarot cards, the answers will reveal themselves.\""},
+             {"Selena: \"The prophecy foretells a powerful enemy appearing on the night of the full moon.\"", "Selena: \"It is your trial, and an opportunity for growth.\"", "Selena: \"Prepare yourself, but do not fear.\""},
+             {"Selena: \"Do you know? Each tarot card holds the potential of a Persona.\"", "Selena: \"As your bonds with others deepen, the corresponding mask awakens.\"", "Selena: \"Go and speak with the people of this town.\""},
+             {"Selena: \"I see two paths diverging before you.\"", "Selena: \"One leads home, the other to deeper bonds.\"", "Selena: \"Whichever you choose, it will not be wrong.\""},
+             {"Selena: \"My visions have grown clouded of late.\"", "Selena: \"Something seems to be interfering with the threads of fate.\"", "Selena: \"Perhaps it is time to investigate.\""},
+             {"Selena: \"You have finally reached this point.\"", "Selena: \"All 22 tarot cards are gathered. The path home lies before you.\"", "Selena: \"But remember, whether you stay or leave, there will always be a place for you here.\""},
+         }},
+        // Maria - Empress: Restaurant Owner
+        {"sl_npc_3",
+         {
+             {"Maria: \"Welcome! What can I get you?\"", "Maria: \"Zhou's Yellow Braised Chicken is the specialty, but my bread is pretty amazing too.\"", "Maria: \"Don't be shy, make yourself at home.\""},
+             {"Maria: \"Flour prices have gone up lately. I can barely afford to bake bread anymore.\"", "Maria: \"Could you help me find a cheaper source of ingredients?\"", "Maria: \"Of course, I'll repay you with delicious bread.\""},
+             {"Maria: \"Zhou is obsessed with his Yellow Braised Chicken and ignores the rest of the menu.\"", "Maria: \"I want to try some new dishes, but I need a taste tester.\"", "Maria: \"Would you be my taste tester?\""},
+             {"Maria: \"I heard there's a type of magical honey in the forest behind the school.\"", "Maria: \"Bread made with that honey would be absolutely divine.\"", "Maria: \"But those bees seem... a bit aggressive?\""},
+             {"Maria: \"You've really been looking like a hero lately.\"", "Maria: \"But don't forget, even heroes need to eat.\"", "Maria: \"Here, fresh out of the oven. Eat it while it's hot.\""},
+             {"Maria: \"I'm thinking of opening a dessert shop, selling cakes and cookies.\"", "Maria: \"What do you think of the idea?\"", "Maria: \"If it works out, you can have free cake every day.\""},
+             {"Maria: \"Zhou says you miss home.\"", "Maria: \"I don't know what 'Yellow Braised Chicken' is, but I can feel your longing.\"", "Maria: \"Here, have some bread. Consider this place your home.\""},
+             {"Maria: \"A mysterious guest gave me a strange key last night.\"", "Maria: \"They said it opens some treasure chest, but I don't know where it is.\"", "Maria: \"Interested in helping me find it?\""},
+             {"Maria: \"I found that using materials dropped by monsters in bread gives special effects!\"", "Maria: \"Like temporarily boosting your attack power.\"", "Maria: \"...Of course, I'll make sure it's safe. Probably.\""},
+             {"Maria: \"You adventurers are always in such a rush.\"", "Maria: \"But remember, no matter how far you go, come back for a meal.\"", "Maria: \"A warm meal is the best medicine for the soul.\""},
+             {"Maria: \"Watching you go from a confused newcomer to a hero has filled my heart with joy.\"", "Maria: \"It's like watching my own child grow up.\"", "Maria: \"Whatever you choose, Big Sis Maria will always support you.\""},
+         }},
+        // Arthur - Emperor: Town Guard Captain
+        {"sl_npc_4",
+         {
+             {"Arthur: \"Halt! Oh, it's you.\"", "Arthur: \"More monsters have been appearing around town. We need to increase patrols.\"", "Arthur: \"If you have time, help us clear them out.\""},
+             {"Arthur: \"Monsters breached the eastern wall again last night.\"", "Arthur: \"They were repelled quickly, but it's a bad sign.\"", "Arthur: \"Can you investigate why the monsters are getting stronger?\""},
+             {"Arthur: \"I hear you've made quite a few friends lately.\"", "Arthur: \"Good. In this world, allies are strength.\"", "Arthur: \"But remember, true strength comes from within.\""},
+             {"Arthur: \"I'm training new recruits, but they lack combat experience.\"", "Arthur: \"Could you take a few out into the field?\"", "Arthur: \"Don't worry, you'll be well compensated.\""},
+             {"Arthur: \"There's a rumor of a powerful boss in the northern forest.\"", "Arthur: \"Taking it down would greatly improve the town's safety.\"", "Arthur: \"...Of course, know your limits. Don't overdo it.\""},
+             {"Arthur: \"Do you know why this town still stands in such a dangerous world?\"", "Arthur: \"Because we stand united.\"", "Arthur: \"You are part of this family too. Never forget that.\""},
+             {"Arthur: \"There have been reports of suspicious figures at night.\"", "Arthur: \"It could be a new threat, or just a lost traveler.\"", "Arthur: \"Could you check it out?\""},
+             {"Arthur: \"I was a hot-blooded adventurer myself when I was young.\"", "Arthur: \"But I realized that protecting home is more important than adventuring.\"", "Arthur: \"What you're doing now is what I once dreamed of doing.\""},
+             {"Arthur: \"The town's granary is almost empty. We need supplies urgently.\"", "Arthur: \"Can you hunt some monsters and bring back meat?\"", "Arthur: \"Everyone needs to eat.\""},
+             {"Arthur: \"There are rumors of a 23rd tarot card being spotted.\"", "Arthur: \"I don't know if it's true, but if it is...\"", "Arthur: \"It might change the fate of this world.\""},
+             {"Arthur: \"You have become this town's hero.\"", "Arthur: \"But being a hero is not the end, it's the beginning.\"", "Arthur: \"More challenges await. Be ready, young hero.\""},
+         }},
+        // Thomas - Hierophant: History Professor
+        {"sl_npc_5",
+         {
+             {"Thomas: \"Welcome to the halls of knowledge.\"", "Thomas: \"I've been studying the history of this world and found many fascinating secrets.\"", "Thomas: \"Are you interested in history?\""},
+             {"Thomas: \"According to ancient texts, this world was once at peace.\"", "Thomas: \"Until one day, 22 beams of light fell from the sky, bringing forth Personas.\"", "Thomas: \"But with them came the shadow monsters.\""},
+             {"Thomas: \"I found records of 'visitors from another world' in an ancient tome.\"", "Thomas: \"Apparently, every few centuries, someone crosses over from another world.\"", "Thomas: \"And you... seem to be the chosen one this time.\""},
+             {"Thomas: \"Some strange books have appeared in the school library lately.\"", "Thomas: \"They appeared on their own, filled with deep secrets of the tarot.\"", "Thomas: \"Would you help me organize them?\""},
+             {"Thomas: \"Did you know? Each tarot card represents the pinnacle of a personality.\"", "Thomas: \"The Fool represents new beginnings, the Magician creation, the High Priestess wisdom...\"", "Thomas: \"And you... seem to carry the potential of all of them.\""},
+             {"Thomas: \"I'm studying an ancient ritual.\"", "Thomas: \"Supposedly, it can summon the legendary 'World' Persona.\"", "Thomas: \"But it requires the power of all 22 tarot cards. Interested?\""},
+             {"Thomas: \"Some students claim to have seen ghosts at night.\"", "Thomas: \"I believe it might be residual Persona energy.\"", "Thomas: \"Could you investigate? You might find a new Persona.\""},
+             {"Thomas: \"I've been organizing notes on Persona fusion.\"", "Thomas: \"When two Personas of different tarot cards fuse, unexpected effects occur.\"", "Thomas: \"If you have extra Personas, come give it a try.\""},
+             {"Thomas: \"Ancient texts mention that when the light of all 22 tarot cards converges, the 'Gate of Truth' appears.\"", "Thomas: \"That gate leads to the truth of the world, and perhaps to your homeland.\"", "Thomas: \"But be careful, truth often comes at a price.\""},
+             {"Thomas: \"I have spent my life pursuing knowledge.\"", "Thomas: \"But lately I've begun to wonder if some knowledge should remain unknown.\"", "Thomas: \"If it were you, would you choose to know the truth, or remain in blissful ignorance?\""},
+             {"Thomas: \"At last, you have gathered all the tarot cards.\"", "Thomas: \"Now, you may choose to open the 'Gate of Truth' and return home.\"", "Thomas: \"Or stay in this world and become a new legend. Whatever you choose, history will remember your name.\""},
+         }},
+        // Maxim - Chariot: Hot-blooded Warrior
+        {"sl_npc_6",
+         {
+             {"Maxim: \"Hey! Perfect timing, spar with me!\"", "Maxim: \"I've been itching for a fight but can't find anyone.\"", "Maxim: \"Don't worry, I'll go easy on you! Probably...\""},
+             {"Maxim: \"You know what? I think Yellow Braised Chicken boosts combat power!\"", "Maxim: \"Every time I eat Zhou's Yellow Braised Chicken, I feel my Persona getting stronger.\"", "Maxim: \"...Okay, maybe it's just in my head.\""},
+             {"Maxim: \"Went night hunting yesterday and fought an insanely strong monster!\"", "Maxim: \"Barely made it back alive, but that thrill of battle... incredible!\"", "Maxim: \"You should come too! I got your back!\""},
+             {"Maxim: \"I'm searching for the legendary strongest Persona.\"", "Maxim: \"They say it hides in the deepest shadows.\"", "Maxim: \"When I find it, I'm definitely fighting you!\""},
+             {"Maxim: \"Honestly, I envy you.\"", "Maxim: \"You come from a peaceful world with no monsters, no battles.\"", "Maxim: \"But maybe that's exactly why you were sent to a place that needs you.\""},
+             {"Maxim: \"I developed a new move recently!\"", "Maxim: \"It's called 'Yellow Braised Chicken Cyclone Slash'!\"", "Maxim: \"...Okay, it actually has nothing to do with Zhou's dish. I just thought it sounded cool.\""},
+             {"Maxim: \"Heard there are ancient warrior relics in the northern ruins.\"", "Maxim: \"If we found them, Persona power would increase dramatically.\"", "Maxim: \"Let's go explore together!\""},
+             {"Maxim: \"I realized that in battle, the deeper the bond between Persona and person, the stronger the power.\"", "Maxim: \"So I've decided we should be the best partners!\"", "Maxim: \"Come on, let's fight to build that bond!\""},
+             {"Maxim: \"Lately I've been feeling unmotivated...\"", "Maxim: \"Probably because I haven't had Yellow Braised Chicken in a while.\"", "Maxim: \"Let's go grab a meal at Zhou's, my treat!\""},
+             {"Maxim: \"I've been thinking about what true strength really is.\"", "Maxim: \"Is it defeating all enemies? Or protecting those who matter?\"", "Maxim: \"Now I get it. True strength is doing both.\""},
+             {"Maxim: \"You've become the strongest warrior.\"", "Maxim: \"But I know your journey isn't over yet.\"", "Maxim: \"Let's go, to the final battlefield! I'll be right by your side!\""},
+         }},
+        // Reina - Strength: Beast Tamer
+        {"sl_npc_7",
+         {
+             {"Reina: \"Shh... keep it down, you'll scare them.\"", "Reina: \"These monsters aren't really scary, just misunderstood.\"", "Reina: \"Want to pet one? They're very gentle.\""},
+             {"Reina: \"I'm studying the relationship between monsters and Personas.\"", "Reina: \"Turns out they're different expressions of the same energy.\"", "Reina: \"If we could communicate with monsters, we might avoid many battles.\""},
+             {"Reina: \"The forest monsters have been agitated lately.\"", "Reina: \"I sense they're afraid of something.\"", "Reina: \"Could you investigate? Remember, try not to hurt them.\""},
+             {"Reina: \"I found a way to form bonds with monsters.\"", "Reina: \"Just like forming bonds with Personas.\"", "Reina: \"They won't become partners, but at least they won't attack you.\""},
+             {"Reina: \"Did you know? Some monsters actually love Yellow Braised Chicken too.\"", "Reina: \"Last time Zhou dropped a piece, a little monster snatched it up.\"", "Reina: \"Watching it eat so happily made me hungry too.\""},
+             {"Reina: \"I'm caring for an injured monster cub.\"", "Reina: \"It needs a special herb to heal.\"", "Reina: \"Could you help me find it? It should be deep in the forest.\""},
+             {"Reina: \"Some people have been killing monsters just to collect materials.\"", "Reina: \"It makes me so sad...\"", "Reina: \"Could you help stop this? At least, don't become one of them.\""},
+             {"Reina: \"I discovered monsters have attributes similar to tarot cards.\"", "Reina: \"Some correspond to 'Strength', others to 'Justice'.\"", "Reina: \"Understanding their attributes would make battles easier.\""},
+             {"Reina: \"Last night I dreamed of a world where monsters and humans lived in peace.\"", "Reina: \"I know it was just a dream, but maybe...\"", "Reina: \"Maybe one day it can come true.\""},
+             {"Reina: \"Someone gave me a monster egg.\"", "Reina: \"I want to hatch it, but I don't know how to care for it.\"", "Reina: \"Could you help me gather knowledge on raising young creatures?\""},
+             {"Reina: \"Thank you for always supporting me.\"", "Reina: \"Because of you, I believe bonds between humans and monsters are truly possible.\"", "Reina: \"No matter what the future holds, I will continue to protect this belief.\""},
+         }},
+        // Zhang - Hermit: Mysterious Old Man
+        {"sl_npc_8",
+         {
+             {"Zhang: \"You're here? Sit.\"", "Zhang: \"I know you came from another world.\"", "Zhang: \"Only someone from another world would be so obsessed with Yellow Braised Chicken.\""},
+             {"Zhang: \"This world has 22 Personas, corresponding to 22 tarot cards.\"", "Zhang: \"But within you, there seems to be a 23rd possibility.\"", "Zhang: \"That might just be... the key to returning home.\""},
+             {"Zhang: \"Last night I observed the stars and found your destiny star shone exceptionally bright.\"", "Zhang: \"But it was also shrouded in shadow.\"", "Zhang: \"Be careful. The greatest enemy often comes from within.\""},
+             {"Zhang: \"I discovered an ancient ruin in the mountains.\"", "Zhang: \"It contains secrets about 'travelers from other worlds'.\"", "Zhang: \"But the guardian there is powerful. You must prepare.\""},
+             {"Zhang: \"Have you ever wondered why it was you who crossed into this world?\"", "Zhang: \"Perhaps it was due to some intense longing.\"", "Zhang: \"And your longing for Yellow Braised Chicken is the bond connecting you to this world.\""},
+             {"Zhang: \"In my youth I was also an adventurer, and dreamed of crossing to other worlds.\"", "Zhang: \"But I never imagined the one who would come would be you, from another world.\"", "Zhang: \"Fate is truly mysterious.\""},
+             {"Zhang: \"Recently I sensed a powerful shadow force gathering.\"", "Zhang: \"If it fully awakens, the entire town will be destroyed.\"", "Zhang: \"Can you stop it? Before it's too late.\""},
+             {"Zhang: \"I found a ritual in an ancient text.\"", "Zhang: \"It can temporarily open a passage to another world.\"", "Zhang: \"But it requires immense energy, and the gate will only remain open briefly.\""},
+             {"Zhang: \"You've gathered many tarot cards, but remember: power is a means, not an end.\"", "Zhang: \"What truly matters are the bonds and memories you've made along the way.\"", "Zhang: \"Those are your most precious treasures.\""},
+             {"Zhang: \"The final trial approaches.\"", "Zhang: \"Whether you choose to stay or leave, you must face the shadow within your own heart.\"", "Zhang: \"Remember, true strength is not defeating enemies, but conquering yourself.\""},
+             {"Zhang: \"You have finally reached this point.\"", "Zhang: \"All 22 tarot cards are gathered. The path home lies before you.\"", "Zhang: \"But before that, one last question: are you truly ready?\""},
+         }},
+        // Lily - Lovers: Dual-faced Girl
+        {"sl_npc_9",
+         {
+             {"Lily: \"Hey! You're here!\"", "Lily: \"The weather's great today. Want to go shopping?\"", "Lily: \"...Okay, I know you need to train your Persona.\""},
+             {"Lily: \"Is Zhou's Yellow Braised Chicken really that good?\"", "Lily: \"Hmph, it's just chicken. What's so special about it?\"", "Lily: \"...Okay, fine, I secretly tried it too. It actually smells pretty good.\""},
+             {"Lily: \"You've been spending so much time with other people lately...\"", "Lily: \"I was the one who met you first!\"", "Lily: \"...Just kidding! It's good that you have friends.\""},
+             {"Lily: \"I found a secret garden behind the school!\"", "Lily: \"It's filled with glowing flowers, absolutely beautiful.\"", "Lily: \"But monsters come out at night. Will you go with me?\""},
+             {"Lily: \"Actually, there are two sides to me.\"", "Lily: \"One is cheerful and lively during the day, the other... a bit dark at night.\"", "Lily: \"Which one do you like better?\""},
+             {"Lily: \"I had that dream again last night.\"", "Lily: \"I dreamed you were wearing strange clothes, standing in line at a place called the 'Cafeteria'.\"", "Lily: \"...Is that thing called 'Yellow Braised Chicken' really that important?\""},
+             {"Lily: \"Some strange people have been asking about you.\"", "Lily: \"They say they're your 'fellow townspeople', but something feels off.\"", "Lily: \"Be careful. I'll protect you!\""},
+             {"Lily: \"If I learned how to make Yellow Braised Chicken, would you like me more?\"", "Lily: \"...Wait, why am I asking this!?\"", "Lily: \"Don't laugh! I... I was just asking!\""},
+             {"Lily: \"You know, my Persona is 'The Lovers'.\"", "Lily: \"It represents bonds and choices.\"", "Lily: \"And my choice... has always been you.\""},
+             {"Lily: \"Lately I've felt a strange energy within you.\"", "Lily: \"Like something is about to awaken.\"", "Lily: \"No matter what happens, I'll be by your side.\""},
+             {"Lily: \"Finally... is it time to say goodbye?\"", "Lily: \"I know you have your own path to walk.\"", "Lily: \"But remember, no matter which world you're in, my heart goes with you. Safe travels, idiot.\""},
+         }},
+    };
 
     for (SocialLink *link : socialLinkManager_.allLinks())
     {
         if (!link)
             continue;
-        for (int r = 0; r <= SocialLink::kMaxRank && r < static_cast<int>(kLines.size()); ++r)
+        auto it = kNpcDialogues.find(link->id());
+        if (it == kNpcDialogues.end())
+            continue;
+        const auto &rankLines = it->second;
+        for (int r = 0; r <= SocialLink::kMaxRank; ++r)
         {
             SocialLinkRankData data;
-            data.dialogue = link->name() + ": \"" + kLines[r] + "\"";
+            if (r < static_cast<int>(rankLines.size()))
+                data.dialogues = rankLines[r];
+            else if (!rankLines.empty())
+                data.dialogues = rankLines.back();
+            else
+                data.dialogues = {link->name() + ": \"...\""};
             // Every rank-up grants the current Persona one level.
             data.reward.personaLevels = 1;
             link->setRankData(r, std::move(data));

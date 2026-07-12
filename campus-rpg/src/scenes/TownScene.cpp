@@ -103,6 +103,10 @@ void TownScene::handleInput(engine::IInput &input)
     {
         GameManager::instance().enterScene(SceneType::SocialLink);
     }
+    if (input.wasKeyJustPressed(engine::Key::U))
+    {
+        GameManager::instance().enterScene(SceneType::Quest);
+    }
     if (input.wasKeyJustPressed(engine::Key::R))
     {
         TileMap &map = GameManager::instance().currentMap();

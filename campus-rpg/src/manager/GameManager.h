@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "BattleSystem.h"
 #include "Character.h"
@@ -35,7 +35,8 @@ enum class SceneType
     LevelUp,
     RestConfirm,
     DebugCheat,
-    PauseMenu
+    PauseMenu,
+    Quest
 };
 
 // Fired whenever a Social Link ranks up. The UI layer registers a callback
