@@ -116,6 +116,7 @@
     {
       "name": "windows-mingw-release",
       "configurePreset": "windows-mingw-release",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
@@ -123,6 +124,7 @@
     {
       "name": "windows-msvc-release",
       "configurePreset": "windows-msvc-release",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
@@ -130,6 +132,7 @@
     {
       "name": "linux-gcc-release",
       "configurePreset": "linux-gcc-release",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
@@ -137,6 +140,7 @@
     {
       "name": "macos-clang-release",
       "configurePreset": "macos-clang-release",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
