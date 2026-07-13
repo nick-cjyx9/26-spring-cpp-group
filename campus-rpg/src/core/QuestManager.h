@@ -27,6 +27,9 @@ public:
     bool rewardQuest(const std::string &id);
     void addKillProgress(int defeatedCount);
 
+    // Unlock a quest whose prerequisite has been completed.
+    bool unlockQuest(const std::string &id);
+
     // Find quests associated with a specific NPC.
     std::vector<Quest *> questsForNpc(const std::string &npcId) const;
 

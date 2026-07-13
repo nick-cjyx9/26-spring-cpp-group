@@ -31,7 +31,7 @@ std::vector<Quest *> QuestManager::availableQuests() const
     std::vector<Quest *> result;
     for (const auto &[id, quest] : quests_)
     {
-        if (!quest.isAccepted())
+        if (!quest.isAccepted() && quest.prerequisiteId().empty())
             result.push_back(const_cast<Quest *>(&quest));
     }
     return result;
@@ -98,6 +98,21 @@ bool QuestManager::rewardQuest(const std::string &id)
     if (!q || !q->isCompleted() || q->isRewarded())
         return false;
     q->reward();
+    return true;
+}
+
+bool QuestManager::unlockQuest(const std::string &id)
+{
+    Quest *q = getQuest(id);
+    if (!q)
+        return false;
+    if (!q->prerequisiteId().empty())
+    {
+        Quest *prereq = getQuest(q->prerequisiteId());
+        if (!prereq || !prereq->isCompleted())
+            return false;
+    }
+    q->accept();
     return true;
 }
 

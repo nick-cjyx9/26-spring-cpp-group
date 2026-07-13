@@ -4,6 +4,8 @@
 #include "Item.h"
 #include "Inventory.h"
 
+#include <algorithm>
+
 namespace
 {
     const char *categoryName(int idx)

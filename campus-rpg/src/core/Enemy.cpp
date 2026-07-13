@@ -110,12 +110,26 @@ Goblin::Goblin() : Enemy("enemy_goblin", "Goblin", 50, 10, 5, 5, 30, 10)
     setTextureId("monsters/duck");
 }
 
-Boss::Boss() : Enemy("enemy_boss", "Campus Guardian", 120, 16, 10, 6, 100, 50)
+Boss::Boss() : Enemy("enemy_boss", "Campus Guardian", 200, 20, 14, 8, 150, 80)
 {
     setAffinity(Element::Physical, Affinity::Resist);
     setAffinity(Element::Fire, Affinity::Null);
     addSkill(std::make_shared<Skill>("skill_mighty_swing", "Mighty Swing", Element::Physical, 25, 0, SkillCostType::HP));
     addSkill(std::make_shared<Skill>("skill_maragi", "Maragi", Element::Fire, 20, 8, SkillCostType::SP));
     setAttackPattern({"skill_mighty_swing", "normal", "skill_maragi", "normal"});
-    setTextureId("shadow");
+    setTextureId("monsters/treant");
+}
+
+FinalBoss::FinalBoss() : Enemy("enemy_final_boss", "Shadow Overlord", 300, 24, 18, 15, 500, 200)
+{
+    setAffinity(Element::Physical, Affinity::Resist);
+    setAffinity(Element::Fire, Affinity::Null);
+    setAffinity(Element::Ice, Affinity::Null);
+    setAffinity(Element::Electric, Affinity::Resist);
+    setAffinity(Element::Dark, Affinity::Drain);
+    addSkill(std::make_shared<Skill>("skill_mighty_swing", "Mighty Swing", Element::Physical, 35, 0, SkillCostType::HP));
+    addSkill(std::make_shared<Skill>("skill_maragi", "Maragi", Element::Fire, 30, 10, SkillCostType::SP));
+    addSkill(std::make_shared<Skill>("skill_mudo", "Mudo", Element::Dark, 40, 15, SkillCostType::SP));
+    setAttackPattern({"skill_mighty_swing", "skill_maragi", "skill_mudo", "normal", "skill_mighty_swing"});
+    setTextureId("boss_pixel");
 }

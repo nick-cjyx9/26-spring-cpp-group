@@ -104,3 +104,11 @@ public:
     std::string battleCry() const override { return "You dare challenge me?"; }
     std::unique_ptr<Enemy> clone() const override { return cloneWithFullHp(std::make_unique<Boss>(*this)); }
 };
+
+class FinalBoss : public Enemy
+{
+public:
+    FinalBoss();
+    std::string battleCry() const override { return "I am your end!"; }
+    std::unique_ptr<Enemy> clone() const override { return std::make_unique<FinalBoss>(*this); }
+};

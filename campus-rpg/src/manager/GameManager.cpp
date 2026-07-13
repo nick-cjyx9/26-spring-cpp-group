@@ -24,6 +24,8 @@
 #include "DebugCheatScene.h"
 #include "PauseMenuScene.h"
 #include "QuestScene.h"
+#include "FinalBossIntroScene.h"
+#include "GameCompleteScene.h"
 
 #include <algorithm>
 #include <array>
@@ -463,6 +465,12 @@ void GameManager::enterScene(SceneType type)
     case SceneType::Quest:
         currentScene_ = std::make_unique<QuestScene>();
         break;
+    case SceneType::FinalBossIntro:
+        currentScene_ = std::make_unique<FinalBossIntroScene>();
+        break;
+    case SceneType::GameComplete:
+        currentScene_ = std::make_unique<GameCompleteScene>();
+        break;
     }
 }
 
@@ -804,6 +812,41 @@ void GameManager::initDefaultQuests()
                  2, 220, 35, "sl_npc_9");
     addKillQuest("quest_lily_2", "Protect Lily", "Defeat 3 shadows that have been following Lily.",
                  3, 250, 40, "sl_npc_9");
+
+    // Chain quest 1: Defeat the third monster on the first map at night (red text)
+    {
+        Quest q1("quest_chain_1", "Defeat the Third Monster of the First Map",
+                 "Defeat the third monster on the first map at night.", "", 300, 150);
+        q1.setType(QuestType::Kill);
+        q1.setTargetCount(1);
+        q1.setTextColor(1);
+        q1.setPriority(-1);
+        questManager_.addQuest(std::move(q1));
+    }
+
+    // Chain quest 2: Defeat the third monster on the second map at night (red, top priority)
+    {
+        Quest q2("quest_chain_2", "Defeat the Third Monster of the Second Map",
+                 "Defeat the third monster on the second map at night.", "", 500, 250);
+        q2.setType(QuestType::Kill);
+        q2.setTargetCount(1);
+        q2.setPrerequisiteId("quest_chain_1");
+        q2.setTextColor(1);
+        q2.setPriority(-2);
+        questManager_.addQuest(std::move(q2));
+    }
+
+    // Chain quest 3: Defeat the final boss (auto-accepted after quest_chain_2)
+    {
+        Quest q3("quest_chain_3", "Defeat the Shadow Overlord",
+                 "Defeat the final boss: the Shadow Overlord.", "", 1000, 500);
+        q3.setType(QuestType::Kill);
+        q3.setTargetCount(1);
+        q3.setPrerequisiteId("quest_chain_2");
+        q3.setTextColor(1);
+        q3.setPriority(-3);
+        questManager_.addQuest(std::move(q3));
+    }
 }
 
 void GameManager::initDefaultEnemies()
@@ -835,6 +878,11 @@ void GameManager::initDefaultEnemies()
     boss->addDropPersonaId("persona_yama");
     boss->addDropPersonaId("persona_pangu");
     enemyTemplates_.push_back(std::move(boss));
+
+    auto finalBoss = std::make_unique<FinalBoss>();
+    finalBoss->addDropPersonaId("persona_izanagi_no_okami");
+    finalBoss->addDropPersonaId("persona_pangu");
+    enemyTemplates_.push_back(std::move(finalBoss));
 }
 
 void GameManager::initDefaultSocialLinks()
@@ -847,16 +895,16 @@ void GameManager::generateNpcPool()
 {
     // Fixed pool of 10 tarot-themed NPCs with English names.
     static const std::vector<NpcDefinition> kFixedPool = {
-        {"sl_npc_0", "Zhou", "npc_sprite_0", "npc_sprite_0", "Fool, World, Sun"},
-        {"sl_npc_1", "Eric", "npc_sprite_1", "npc_sprite_1", "Magician, Fortune"},
-        {"sl_npc_2", "Selena", "npc_sprite_2", "npc_sprite_2", "Priestess, Moon"},
-        {"sl_npc_3", "Maria", "npc_sprite_3", "npc_sprite_3", "Empress, Temperance"},
-        {"sl_npc_4", "Arthur", "npc_sprite_4", "npc_sprite_4", "Emperor, Justice"},
-        {"sl_npc_5", "Thomas", "npc_sprite_5", "npc_sprite_5", "Hierophant, Hanged Man"},
-        {"sl_npc_6", "Maxim", "npc_sprite_6", "npc_sprite_6", "Chariot, Tower"},
-        {"sl_npc_7", "Reina", "npc_sprite_7", "npc_sprite_7", "Strength, Star"},
-        {"sl_npc_8", "Zhang", "npc_sprite_8", "npc_sprite_8", "Hermit, Death, Judgement"},
-        {"sl_npc_9", "Lily", "npc_sprite_9", "npc_sprite_9", "Lovers, Devil"}};
+        {"sl_npc_0", "Zhou", "npc_portrait_0", "npc_sprite_0", "Fool, World, Sun"},
+        {"sl_npc_1", "Eric", "npc_portrait_1", "npc_sprite_1", "Magician, Fortune"},
+        {"sl_npc_2", "Selena", "npc_portrait_2", "npc_sprite_2", "Priestess, Moon"},
+        {"sl_npc_3", "Maria", "npc_portrait_3", "npc_sprite_3", "Empress, Temperance"},
+        {"sl_npc_4", "Arthur", "npc_portrait_4", "npc_sprite_4", "Emperor, Justice"},
+        {"sl_npc_5", "Thomas", "npc_portrait_5", "npc_sprite_5", "Hierophant, Hanged Man"},
+        {"sl_npc_6", "Maxim", "npc_portrait_6", "npc_sprite_6", "Chariot, Tower"},
+        {"sl_npc_7", "Reina", "npc_portrait_7", "npc_sprite_7", "Strength, Star"},
+        {"sl_npc_8", "Zhang", "npc_portrait_8", "npc_sprite_8", "Hermit, Death, Judgement"},
+        {"sl_npc_9", "Lily", "npc_portrait_9", "npc_sprite_9", "Lovers, Devil"}};
 
     npcPool_.clear();
     for (int i = 0; i < kNpcPoolSize && i < static_cast<int>(kFixedPool.size()); ++i)

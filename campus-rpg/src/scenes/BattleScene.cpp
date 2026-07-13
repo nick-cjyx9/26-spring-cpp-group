@@ -553,9 +553,78 @@ void BattleScene::returnAfterBattle()
     sleepLeveledUp_ = false;
     resultVictory_ = battle.playerWon();
     if (battle.playerWon())
+    {
         sleepLeveledUp_ = processVictory();
+
+        // Check for final boss defeat first
+        bool finalBossDefeated = false;
+        bool bossDefeated = false;
+        for (const auto &enemyPtr : battle.enemies())
+        {
+            if (enemyPtr)
+            {
+                if (enemyPtr->id() == "enemy_final_boss")
+                    finalBossDefeated = true;
+                else if (enemyPtr->id() == "enemy_boss")
+                    bossDefeated = true;
+            }
+        }
+
+        if (finalBossDefeated)
+        {
+            // Final boss defeated - complete quest_chain_3 and show game complete
+            Quest *q3 = gm.questManager().getQuest("quest_chain_3");
+            if (q3 && q3->isAccepted() && !q3->isCompleted())
+            {
+                q3->complete();
+            }
+            postBattleHandled_ = true;
+            gm.enterScene(SceneType::GameComplete);
+            return;
+        }
+
+        if (bossDefeated)
+        {
+            bool onSecond = gm.onSecondMap();
+            if (!onSecond)
+            {
+                // First map boss defeated - update quest_chain_1.
+                Quest *q1 = gm.questManager().getQuest("quest_chain_1");
+                if (q1 && q1->isAccepted() && !q1->isCompleted())
+                {
+                    q1->setCurrentProgress(q1->currentProgress() + 1);
+                    if (q1->currentProgress() >= q1->targetCount())
+                    {
+                        q1->complete();
+                        // Unlock the next quest in the chain.
+                        gm.questManager().unlockQuest("quest_chain_2");
+                    }
+                }
+            }
+            else
+            {
+                // Second map boss defeated - update quest_chain_2 if accepted.
+                Quest *q2 = gm.questManager().getQuest("quest_chain_2");
+                if (q2 && q2->isAccepted() && !q2->isCompleted())
+                {
+                    q2->setCurrentProgress(q2->currentProgress() + 1);
+                    if (q2->currentProgress() >= q2->targetCount())
+                    {
+                        q2->complete();
+                    }
+                }
+                // Always enter final boss intro regardless of quest status
+                gm.questManager().unlockQuest("quest_chain_3");
+                postBattleHandled_ = true;
+                gm.enterScene(SceneType::FinalBossIntro);
+                return;
+            }
+        }
+    }
     else if (battle.playerLost())
+    {
         processDefeat();
+    }
 
     postBattleHandled_ = true;
     showingResult_ = true;
