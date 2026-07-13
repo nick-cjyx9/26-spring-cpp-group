@@ -24,6 +24,8 @@
 #include "DebugCheatScene.h"
 #include "PauseMenuScene.h"
 #include "QuestScene.h"
+#include "FinalBossIntroScene.h"
+#include "GameCompleteScene.h"
 
 #include <algorithm>
 #include <array>
@@ -463,6 +465,12 @@ void GameManager::enterScene(SceneType type)
     case SceneType::Quest:
         currentScene_ = std::make_unique<QuestScene>();
         break;
+    case SceneType::FinalBossIntro:
+        currentScene_ = std::make_unique<FinalBossIntroScene>();
+        break;
+    case SceneType::GameComplete:
+        currentScene_ = std::make_unique<GameCompleteScene>();
+        break;
     }
 }
 
@@ -805,29 +813,40 @@ void GameManager::initDefaultQuests()
     addKillQuest("quest_lily_2", "Protect Lily", "Defeat 3 shadows that have been following Lily.",
                  3, 250, 40, "sl_npc_9");
 
-    // Chain quest 1: Defeat the third monster on the first map at night
+    // Chain quest 1: Defeat the third monster on the first map at night (red text)
     {
         Quest q1("quest_chain_1", "Defeat the Third Monster of the First Map",
-                 "Defeat the third monster on the first map at night.", "", 100, 50);
+                 "Defeat the third monster on the first map at night.", "", 300, 150);
         q1.setType(QuestType::Kill);
         q1.setTargetCount(1);
-        q1.setTextColor(0);
-        q1.setPriority(0);
+        q1.setTextColor(1);
+        q1.setPriority(-1);
         questManager_.addQuest(std::move(q1));
     }
 
     // Chain quest 2: Defeat the third monster on the second map at night (red, top priority)
     {
         Quest q2("quest_chain_2", "Defeat the Third Monster of the Second Map",
-                 "Defeat the third monster on the second map at night.", "", 200, 100);
+                 "Defeat the third monster on the second map at night.", "", 500, 250);
         q2.setType(QuestType::Kill);
         q2.setTargetCount(1);
         q2.setPrerequisiteId("quest_chain_1");
         q2.setTextColor(1);
-        q2.setPriority(-1);
+        q2.setPriority(-2);
         questManager_.addQuest(std::move(q2));
     }
-}
+
+    // Chain quest 3: Defeat the final boss (auto-accepted after quest_chain_2)
+    {
+        Quest q3("quest_chain_3", "Defeat the Shadow Overlord",
+                 "Defeat the final boss: the Shadow Overlord.", "", 1000, 500);
+        q3.setType(QuestType::Kill);
+        q3.setTargetCount(1);
+        q3.setPrerequisiteId("quest_chain_2");
+        q3.setTextColor(1);
+        q3.setPriority(-3);
+        questManager_.addQuest(std::move(q3));
+    }
 }
 
 void GameManager::initDefaultEnemies()
@@ -859,6 +878,11 @@ void GameManager::initDefaultEnemies()
     boss->addDropPersonaId("persona_yama");
     boss->addDropPersonaId("persona_pangu");
     enemyTemplates_.push_back(std::move(boss));
+
+    auto finalBoss = std::make_unique<FinalBoss>();
+    finalBoss->addDropPersonaId("persona_izanagi_no_okami");
+    finalBoss->addDropPersonaId("persona_pangu");
+    enemyTemplates_.push_back(std::move(finalBoss));
 }
 
 void GameManager::initDefaultSocialLinks()

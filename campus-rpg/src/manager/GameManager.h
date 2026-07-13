@@ -36,7 +36,9 @@ enum class SceneType
     RestConfirm,
     DebugCheat,
     PauseMenu,
-    Quest
+    Quest,
+    FinalBossIntro,
+    GameComplete
 };
 
 // Fired whenever a Social Link ranks up. The UI layer registers a callback

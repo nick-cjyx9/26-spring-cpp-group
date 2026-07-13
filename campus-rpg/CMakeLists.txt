@@ -110,6 +110,8 @@ set(APP_LIB_SOURCES
     src/scenes/DebugCheatScene.cpp
     src/scenes/PauseMenuScene.cpp
     src/scenes/QuestScene.cpp
+    src/scenes/FinalBossIntroScene.cpp
+    src/scenes/GameCompleteScene.cpp
 )
 
 add_library(CampusRPGAppLib STATIC ${APP_LIB_SOURCES})

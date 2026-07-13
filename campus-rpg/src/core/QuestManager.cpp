@@ -132,4 +132,3 @@ void QuestManager::addKillProgress(int defeatedCount)
             quest.complete();
     }
 }
-}
