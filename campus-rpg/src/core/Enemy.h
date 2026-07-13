@@ -72,6 +72,13 @@ protected:
     std::vector<std::shared_ptr<Skill>> skills_;
     std::vector<std::string> attackPattern_;
     std::vector<std::string> dropPersonaIds_;
+
+    // Helper: copies are spawned with full HP so battles start fresh.
+    std::unique_ptr<Enemy> cloneWithFullHp(std::unique_ptr<Enemy> clone) const
+    {
+        clone->hp_ = clone->maxHp_;
+        return clone;
+    }
 };
 
 class Slime : public Enemy
@@ -79,7 +86,7 @@ class Slime : public Enemy
 public:
     Slime();
     std::string battleCry() const override { return "Bloop bloop!"; }
-    std::unique_ptr<Enemy> clone() const override { return std::make_unique<Slime>(*this); }
+    std::unique_ptr<Enemy> clone() const override { return cloneWithFullHp(std::make_unique<Slime>(*this)); }
 };
 
 class Goblin : public Enemy
@@ -87,7 +94,7 @@ class Goblin : public Enemy
 public:
     Goblin();
     std::string battleCry() const override { return "Grrr, shiny things!"; }
-    std::unique_ptr<Enemy> clone() const override { return std::make_unique<Goblin>(*this); }
+    std::unique_ptr<Enemy> clone() const override { return cloneWithFullHp(std::make_unique<Goblin>(*this)); }
 };
 
 class Boss : public Enemy
@@ -95,7 +102,7 @@ class Boss : public Enemy
 public:
     Boss();
     std::string battleCry() const override { return "You dare challenge me?"; }
-    std::unique_ptr<Enemy> clone() const override { return std::make_unique<Boss>(*this); }
+    std::unique_ptr<Enemy> clone() const override { return cloneWithFullHp(std::make_unique<Boss>(*this)); }
 };
 
 class FinalBoss : public Enemy

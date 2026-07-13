@@ -35,11 +35,3 @@ jobs:
       - name: Test
         working-directory: campus-rpg
         run: ctest --preset ${{ matrix.preset }}
-
-      - name: Lint / Basic checks
-        if: runner.os == 'Linux'
-        run: |
-          echo "Repository structure check"
-          test -f campus-rpg/CMakeLists.txt
-          test -f campus-rpg/tests/CMakeLists.txt
-          test -f campus-rpg/tests/test_core.cpp

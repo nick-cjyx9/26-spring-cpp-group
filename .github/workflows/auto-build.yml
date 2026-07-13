@@ -40,7 +40,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item campus-rpg/build/windows-msvc-release/Release/CampusRPG.exe dist/
-          Copy-Item campus-rpg/build/windows-msvc-release/Release/tests/CampusRPGTests.exe dist/
+          Copy-Item campus-rpg/build/windows-msvc-release/tests/Release/CampusRPGTests.exe dist/
+          Copy-Item campus-rpg/build/windows-msvc-release/tests/Release/CampusRPGSaveTests.exe dist/ -ErrorAction SilentlyContinue
+          Copy-Item campus-rpg/build/windows-msvc-release/tests/Release/CampusRPGLevelUpTests.exe dist/ -ErrorAction SilentlyContinue
           Copy-Item campus-rpg/build/windows-msvc-release/_deps/sfml-build/lib/Release/*.dll dist/ -ErrorAction SilentlyContinue
           Copy-Item campus-rpg/build/windows-msvc-release/Release/*.dll dist/ -ErrorAction SilentlyContinue
           Copy-Item campus-rpg/resources dist/ -Recurse -Force

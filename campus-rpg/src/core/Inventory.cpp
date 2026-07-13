@@ -91,8 +91,9 @@ bool Inventory::removeItemById(const std::string &id, int quantity)
 {
     if (quantity <= 0)
         return false;
-    for (auto &item : items_)
+    for (auto it = items_.begin(); it != items_.end(); ++it)
     {
+        auto &item = *it;
         if (!item || item->id() != id)
             continue;
         if (item->quantity() > quantity)
@@ -102,17 +103,12 @@ bool Inventory::removeItemById(const std::string &id, int quantity)
         }
         if (item->quantity() == quantity)
         {
-            // Mark for removal by setting quantity to 0, then erase.
-            item->setQuantity(0);
-            break;
+            items_.erase(it);
+            return true;
         }
         return false; // not enough
     }
-    // Erase items with zero quantity.
-    auto it = std::remove_if(items_.begin(), items_.end(),
-                             [](const std::unique_ptr<Item> &item) { return item->quantity() <= 0; });
-    items_.erase(it, items_.end());
-    return true;
+    return false; // not found
 }
 
 int Inventory::countItem(const std::string &id) const
