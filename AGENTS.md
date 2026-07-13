@@ -125,6 +125,7 @@ With **multi-config generators** (e.g., Visual Studio) the executable still land
   ```
 
 - **MSVC missing**: run from **Developer PowerShell for VS 2022** or execute `& "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"` before configuring.
+- **CTest with multi-config generators**: `testPresets` must include `"configuration": "Release"` (or the matching build config). Without it, `ctest --preset windows-msvc-release` fails with `Missing "-C <config>"?` on Visual Studio generators.
 - **Test framework**: tests use a lightweight pure-C++ runner (`tests/test_core.cpp`). The core-only test executable links `CampusRPGCore` + mock implementations, so it runs without a GUI event loop in headless/CI environments.
 - **CI**: GitHub Actions (`.github/workflows/{auto-build.yml, pr-check.yml}`) build and test on `windows-latest` and `ubuntu-latest`.
 
@@ -176,3 +177,5 @@ General rule: prefer **small, focused PRs over long-lived feature branches**, an
 6. **Compile classes into a library**: `CampusRPGCore` is a static lib so the test target links it.
 7. **Break dependencies**: the pure-C++ core has no SFML/SQLite coupling, so it can be unit-tested in isolation.
 8. **Avoid debug spam**: do not leave `std::cout` in committed autotests.
+9. **Test the object the system actually mutates**: `BattleSystem::startBattle` clones the enemy template, so battle assertions must inspect `battle.enemyAt(0)` / `battle.enemies()` rather than the original `Enemy` instance.
+10. **Account for auto-processed enemy turns**: after a player action that consumes a turn, `processEnemyTurns()` runs immediately. With a single enemy the initiative queue may cycle back to the player, so do not assume `!isPlayerTurn()` right after such an action.
