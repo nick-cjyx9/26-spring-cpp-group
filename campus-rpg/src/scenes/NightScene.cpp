@@ -4,6 +4,8 @@
 #include "Entity.h"
 #include "TownMapData.h"
 
+#include <algorithm>
+
 namespace
 {
     bool canMoveTo(engine::Vec2 pos, const TileMap & /*map*/)

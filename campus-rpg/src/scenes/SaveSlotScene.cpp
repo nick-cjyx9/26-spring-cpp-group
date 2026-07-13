@@ -1,6 +1,8 @@
 #include "SaveSlotScene.h"
 #include "GameManager.h"
 
+#include <algorithm>
+
 namespace
 {
     constexpr int kVisibleRows = 7;

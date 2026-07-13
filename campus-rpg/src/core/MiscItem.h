@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "Item.h"
 
 // Miscellaneous item used for quest collectibles (e.g. monster drops, tarot fragments).

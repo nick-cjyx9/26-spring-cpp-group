@@ -5,6 +5,7 @@
 #include "Character.h"
 #include "Inventory.h"
 
+#include <algorithm>
 #include <sstream>
 
 namespace
