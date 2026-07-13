@@ -25,6 +25,7 @@ public:
     bool acceptQuest(const std::string &id);
     bool completeQuest(const std::string &id, int killCount = 0);
     bool rewardQuest(const std::string &id);
+    void addKillProgress(int defeatedCount);
 
     // Unlock a quest whose prerequisite has been completed.
     bool unlockQuest(const std::string &id);

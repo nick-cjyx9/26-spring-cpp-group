@@ -2,6 +2,9 @@
 
 #include "IScene.h"
 
+#include <string>
+#include <vector>
+
 class BattleScene : public engine::IScene
 {
 public:
@@ -20,6 +23,7 @@ private:
 
     bool processVictory();
     void processDefeat();
+    void drawResultOverlay(engine::IRenderer &renderer) const;
     void handleMainMenu(engine::IInput &input);
     void handleSkillMenu(engine::IInput &input);
     void handleItemMenu(engine::IInput &input);
@@ -39,4 +43,9 @@ private:
     bool sleepLeveledUp_ = false;
     bool sleepStartedOnSecondMap_ = false;
     bool postBattleHandled_ = false;
+    bool showingResult_ = false;
+    bool resultVictory_ = false;
+    int resultExp_ = 0;
+    int resultGold_ = 0;
+    std::vector<std::string> resultPersonas_;
 };

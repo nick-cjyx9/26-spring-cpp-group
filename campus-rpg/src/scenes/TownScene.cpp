@@ -219,12 +219,6 @@ void TownScene::render(engine::IRenderer &renderer)
 
     TileMap &map = GameManager::instance().currentMap();
 
-    // Debug: draw red rectangles around collision zones (both maps).
-    {
-        for (const auto &wall : mapCollisionZones(onSecond))
-            renderer.drawRect(wall, engine::Color(255, 0, 0, 100));
-    }
-
     if (!onSecond)
     {
         // Labels at building centers.
@@ -290,13 +284,13 @@ void TownScene::render(engine::IRenderer &renderer)
     // Interaction hint
     if (onSecond)
     {
-        renderer.drawText("E:Talk/Exit  I:Items  C:Status  L:Social  F5:Save  R:Rescue  Esc:Pause  [School]",
-                          {25, 570}, 14, engine::Color::white());
+        renderer.drawText("E Talk/Exit   I Items   C Status   L Social   U Quests   Esc Pause",
+                          {80, 570}, 14, engine::Color::white());
     }
     else
     {
-        renderer.drawText("E:Talk/Shop/Home/WeaponShop  I:Items  C:Status  L:Social  F5:Save  R:Rescue  Esc:Pause",
-                          {30, 570}, 14, engine::Color::white());
+        renderer.drawText("E Interact   I Items   C Status   L Social   U Quests   Esc Pause",
+                          {105, 570}, 14, engine::Color::white());
     }
 
     // Save feedback overlay.
@@ -313,15 +307,6 @@ void TownScene::render(engine::IRenderer &renderer)
         renderer.drawText(stuckMessage_, {340, 519}, 18, engine::Color::cyan());
     }
 
-    // Character coordinate debug.
-    PlayerEntity *debugPlayer = findPlayer(map);
-    if (debugPlayer)
-    {
-        engine::Vec2 pp = debugPlayer->position();
-        renderer.drawText("(" + std::to_string(static_cast<int>(pp.x)) +
-                              ", " + std::to_string(static_cast<int>(pp.y)) + ")",
-                          {10, 555}, 14, engine::Color(255, 255, 0, 180));
-    }
 }
 
 void TownScene::tryInteract()

@@ -33,9 +33,8 @@
     {
       "name": "windows-msvc-release",
       "displayName": "Windows MSVC Release",
-      "description": "Build with Visual Studio 2022 (MSVC) in Release mode.",
+      "description": "Build with the latest installed Visual Studio (MSVC) in Release mode.",
       "inherits": "base",
-      "generator": "Visual Studio 17 2022",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -117,6 +116,7 @@
     {
       "name": "windows-mingw-release",
       "configurePreset": "windows-mingw-release",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
@@ -124,6 +124,7 @@
     {
       "name": "windows-msvc-release",
       "configurePreset": "windows-msvc-release",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
@@ -131,6 +132,7 @@
     {
       "name": "linux-gcc-release",
       "configurePreset": "linux-gcc-release",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
@@ -138,6 +140,7 @@
     {
       "name": "macos-clang-release",
       "configurePreset": "macos-clang-release",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }

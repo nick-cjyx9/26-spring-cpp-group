@@ -50,6 +50,11 @@ void NightScene::handleInput(engine::IInput &input)
         GameManager::instance().enterScene(SceneType::Status);
         return;
     }
+    if (input.wasKeyJustPressed(engine::Key::U))
+    {
+        GameManager::instance().enterScene(SceneType::Quest);
+        return;
+    }
 
     // Home area interaction: only on the town map (not the school/second map).
     if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E))
@@ -293,13 +298,13 @@ void NightScene::render(engine::IRenderer &renderer)
 
     if (onSecond)
     {
-        renderer.drawText("Night [School] - touch shadows to fight   C: status   R: rescue   <: exit   Esc: next day",
-                          {90, 570}, 14, engine::Color::white());
+        renderer.drawText("Touch shadows to fight   C Status   U Quests   R Rescue   Esc Next day",
+                          {120, 570}, 14, engine::Color::white());
     }
     else
     {
-        renderer.drawText("Night - touch shadows to fight   C: status   R: rescue   Home: E   >: school   Esc: next day",
-                          {50, 570}, 14, engine::Color::white());
+        renderer.drawText("Touch shadows to fight   E Home   C Status   U Quests   R Rescue   Esc Next day",
+                          {85, 570}, 14, engine::Color::white());
     }
 
     // Stuck rescue feedback overlay.
