@@ -82,6 +82,7 @@ classDiagram
     class SpItem
     class EquipmentItem
     class PersonaItem
+    class MiscItem
     class Inventory {
         -items
         +add/remove/use
@@ -143,6 +144,7 @@ classDiagram
     Item <|-- SpItem
     Item <|-- EquipmentItem
     Item <|-- PersonaItem
+    Item <|-- MiscItem
     Inventory *-- Item
     Enemy <|-- Slime
     Enemy <|-- Goblin
@@ -169,6 +171,7 @@ classDiagram
     SaveRepository ..> Inventory
     SaveRepository ..> SocialLinkManager
     SaveRepository ..> QuestManager
+    SaveRepository ..> Persona
 
     %% Manager
     class GameManager {
@@ -197,6 +200,15 @@ classDiagram
     class CharacterScene
     class DialogueScene
     class LevelUpScene
+    class SaveSlotScene
+    class SocialLinkScene
+    class HeroSelectScene
+    class StatusScene
+    class ArmoryScene
+    class RestConfirmScene
+    class DebugCheatScene
+    class PauseMenuScene
+    class QuestScene
 
     IScene <|-- TitleScene
     IScene <|-- TownScene
@@ -207,6 +219,15 @@ classDiagram
     IScene <|-- CharacterScene
     IScene <|-- DialogueScene
     IScene <|-- LevelUpScene
+    IScene <|-- SaveSlotScene
+    IScene <|-- SocialLinkScene
+    IScene <|-- HeroSelectScene
+    IScene <|-- StatusScene
+    IScene <|-- ArmoryScene
+    IScene <|-- RestConfirmScene
+    IScene <|-- DebugCheatScene
+    IScene <|-- PauseMenuScene
+    IScene <|-- QuestScene
 
     TitleScene ..> GameManager
     TownScene ..> GameManager
@@ -216,3 +237,13 @@ classDiagram
     InventoryScene ..> GameManager
     CharacterScene ..> GameManager
     DialogueScene ..> GameManager
+    LevelUpScene ..> GameManager
+    SaveSlotScene ..> GameManager
+    SocialLinkScene ..> GameManager
+    HeroSelectScene ..> GameManager
+    StatusScene ..> GameManager
+    ArmoryScene ..> GameManager
+    RestConfirmScene ..> GameManager
+    DebugCheatScene ..> GameManager
+    PauseMenuScene ..> GameManager
+    QuestScene ..> GameManager

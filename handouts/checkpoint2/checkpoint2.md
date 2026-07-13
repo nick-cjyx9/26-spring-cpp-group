@@ -15,11 +15,12 @@
   - 多态：`item->use()`、`enemy->battleCry()`、`renderer->drawRect()`、`scene->update()` 运行时绑定。
   - 关联：`GameManager` 组合 `Character`、`Inventory`、`Shop`、`QuestManager`、`SocialLinkManager`、`TileMap`。
 - **STL 应用**：
-  - `std::vector<std::unique_ptr<Item>>` 管理背包/商店物品。
+  - `std::vector<std::unique_ptr<Item>>` 管理背包/商店物品（含 `MiscItem` 任务杂物）。
   - `std::map<std::string, Quest>` 管理任务。
   - `std::map<std::string, SocialLink>` 管理社群。
   - `std::vector<std::unique_ptr<Enemy>>` 保存敌人模板。
   - `std::vector<std::string>` 记录战斗日志。
+- `std::vector<std::unique_ptr<Entity>>` 管理地图实体。
 - **可测试性**：引擎层通过 `IRenderer`/`IWindow`/`IInput` 抽象接口与 SFML 解耦；`CampusRPGCore` 纯 C++ 静态库供单元测试链接；测试使用 Mock 实现验证场景行为。
 
 ## 2. 代码模块完成情况
@@ -34,11 +35,12 @@
 
 **开发中模块（检查点 3 前完成）**：
 - [x] SFML 引擎具体实现。
-- [x] 场景代码实现。
+- [x] 场景代码实现（已扩展 SaveSlot / SocialLink / HeroSelect / Status / Armory / RestConfirm / DebugCheat / PauseMenu / Quest 等场景）。
 - [x] SQLite3 持久化代码迁移（已改用 SQLite3 C API）。
-- [x] 单元测试与 Mock 场景测试。
+- [x] 单元测试与 Mock 场景测试，PR Check 已集成并强制 100% 通过。
+- [x] 任务条件扩展：击杀进度自动推进，默认任务均为可完成的 `kill:N`。
+- [x] 战斗掉落与结算界面联动。
 - [ ] UI 美术资源精调与瓦片地图正式化。
-- [ ] 更多任务条件与战斗掉落联动。
 
 **已完成的软件工程/挑战任务（规划）**：
 - 数据库技术：SQLite3 持久化。

@@ -28,12 +28,11 @@ namespace
         drawBorder(r, x, y, w, h, bright, dark);
     }
 
-    // Convert social link id "sl_yosuke" -> texture id "npc_yosuke"
-    std::string npcTexId(const std::string &socialLinkId)
+    std::string npcSpriteId(const SocialLink &link)
     {
-        if (socialLinkId.size() > 3 && socialLinkId.substr(0, 3) == "sl_")
-            return "npc_" + socialLinkId.substr(3);
-        return "npc_" + socialLinkId;
+        if (const auto *npcDef = GameManager::instance().findNpc(link.id()))
+            return npcDef->spriteId.empty() ? "npc" : npcDef->spriteId;
+        return link.portraitId().empty() ? "npc" : link.portraitId();
     }
 } // namespace
 
@@ -116,8 +115,8 @@ void SocialLinkScene::render(engine::IRenderer &renderer)
         float portX = 55.0f, portY = y + 8.0f, portW = 85.0f, portH = 95.0f;
         // Portrait background
         renderer.drawRect({portX, portY, portW, portH}, engine::Color(35, 30, 50, 200));
-        // Draw NPC texture, fitted into the portrait frame
-        std::string texId = !link->portraitId().empty() ? link->portraitId() : npcTexId(link->id());
+        // Draw the same sprite used on the map, fitted into the portrait frame.
+        std::string texId = npcSpriteId(*link);
         renderer.drawTexture(texId, {portX + 3.0f, portY + 3.0f, portW - 6.0f, portH - 6.0f});
         // Portrait border
         drawBorder(renderer, portX, portY, portW, portH,

@@ -100,3 +100,20 @@ bool QuestManager::rewardQuest(const std::string &id)
     q->reward();
     return true;
 }
+
+void QuestManager::addKillProgress(int defeatedCount)
+{
+    if (defeatedCount <= 0)
+        return;
+    for (auto &[id, quest] : quests_)
+    {
+        if (quest.type() != QuestType::Kill || !quest.isAccepted() || quest.isCompleted())
+            continue;
+        int next = quest.currentProgress() + defeatedCount;
+        if (quest.targetCount() > 0 && next > quest.targetCount())
+            next = quest.targetCount();
+        quest.setCurrentProgress(next);
+        if (quest.targetCount() > 0 && quest.currentProgress() >= quest.targetCount())
+            quest.complete();
+    }
+}

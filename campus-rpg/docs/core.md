@@ -20,12 +20,14 @@ std::vector<std::shared_ptr<Persona>> ownedPersonas_;
 
 ### 关键行为
 
-- `takeDamage(int damage)`：直接扣减 HP（无独立防御值，以 HP 为生存缓冲）。
+- `takeDamage(int damage)`：直接扣减 HP（无独立防御值，以 HP 为生存缓冲），HP 不会低于 0。
 - `heal(int amount)`：治疗至 `maxHp_` 上限。
 - `consumeSp(int amount)` / `recoverSp(int amount)`：SP 管理。
 - `gainExp(int amount)`：累计经验，达到阈值后升级；经验来源 90% 任务、10% 杀怪。
-- `levelUp()`：提升 HP/SP 上限。
+- `levelUp()`：提升 HP/SP 上限并记录 `LevelUpSnapshot`。
 - `setPersona(std::shared_ptr<Persona>)`：切换当前 Persona。
+- `addPersona()` / `removePersona()` / `ownsPersona()` / `clearOwnedPersonas()`：管理已拥有的 Persona 列表。
+- `equip()` / `setEquipmentBonuses()`：累加装备提供的三维加成。
 - 持有 `ownedPersonas_` 列表，战斗中可切换已拥有的 Persona。
 
 ## Persona（人格面具）
@@ -57,10 +59,13 @@ levelMultiplier = 1 + (level_ - 1) × 0.05
 
 ### 关键行为
 
+- `stat(PersonaStat)` / `setStat()`：访问/修改基础三维。
 - `affinity(Element e)`：查询元素抗性。
 - `learnSkill(std::shared_ptr<Skill>)`：学习技能。
 - `findSkill(const std::string& id)`：按 ID 查找技能。
-- `gainExp(int amount)` / `levelUp()`：升级成长。
+- `addPotentialSkill(level, skill)`：登记在指定等级自动解锁的技能。
+- `checkSkillUnlocks(currentLevel)`：解锁所有满足等级要求的潜在技能。
+- `gainExp(int amount)` / `levelUp()`：升级成长（`growBaseStats(1.05)` + 技能解锁）。
 
 ## Skill（技能）
 
@@ -130,9 +135,17 @@ public:
     virtual ~Enemy() = default;
     virtual std::string battleCry() const = 0;
     virtual std::unique_ptr<Enemy> clone() const = 0;
-    // strength_, magic_, speed_, affinity, skills, attackPattern_
+    // hp, strength, magic, speed, affinity, skills, attackPattern_, dropPersonaIds_
 };
 ```
+
+### 关键行为
+
+- `battleCry()` / `clone()`：派生类实现。
+- `setTextureId()` / `textureId()`：设置/读取敌人战斗贴图 ID。
+- `scaleToLevel(playerLevel, extraMultiplier = 1.0)`：按玩家等级缩放三维与 HP；`extraMultiplier > 1` 用于强化二图夜间敌人。
+- `chooseSkill(turnIndex)`：按固定循环返回技能或普通攻击。
+- `addDropPersonaId()` / `dropPersonaIds()`：配置/读取战斗胜利时的 Persona 掉落池。
 
 ### 派生类
 
@@ -183,8 +196,9 @@ dodgeRate = clamp((defender.speed - attacker.speed) / attacker.speed × 0.5, 0.0
 
 ### 战斗结束
 
-- 一方全灭或逃跑成功时结束。
-- 胜利后角色获得经验 / 金币，敌人可能直接掉落 Persona。
+- 一方全灭、逃跑成功或玩家战败时结束。
+- 胜利后角色获得经验 / 金币，敌人可能直接掉落 Persona；UI 层在结算界面展示战利品。
+- 战败后玩家被救回并恢复 HP/SP。
 - 战斗结束后 SP 回满。
 
 ## Shop（商店）
@@ -199,36 +213,44 @@ class SocialLink {
 public:
     SocialLink(std::string id, std::string name, std::string arcana);
     int rank() const;
-    void addPoints(int points);
+    int points() const;
+    int pointsToNextRank() const;
     bool canRankUp() const;
+    bool isMaxRank() const;
+    int addPoints(int points);       // 返回本次升的 Rank 数
     void rankUp();
+    void setRankData(int rank, SocialLinkRankData data);
+    const SocialLinkRankData *rankData(int rank) const;
+    const SocialLinkRankData *currentRankData() const;
+    const SocialLinkReward *currentReward() const;
+    std::string currentDialogue() const;
 private:
-    std::string id_, name_, arcana_;
+    std::string id_, name_, arcana_, portraitId_;
     int rank_ = 0;
     int points_ = 0;
+    std::vector<SocialLinkRankData> rankData_;
 };
 ```
 
-`SocialLinkManager` 用 `std::map<std::string, SocialLink>` 管理所有 NPC 羁绊。
+`SocialLinkManager` 用 `std::map<std::string, SocialLink>` 管理所有 NPC 羁绊，并提供 `addPoints()`、`dialogueFor()`、`currentSkillReward()`、`pendingRankUps()` 等聚合接口。
 
 ### Rank 奖励
 
-- Rank 提升时，**当前 Persona 升 1 级**。
-- 特定 Rank 可能让**当前 Persona 学会新技能**。
+- Rank 提升时，GameManager 会给所有 Arcana 匹配的已拥有 Persona 各升 1 级（无匹配则回退到当前 Persona）。
+- 特定 Rank 的 `SocialLinkReward::newSkill` 非空时，让**当前 Persona 学会新技能**。
 - Persona 等级暂时无上限。
 
 ## TileMap / Entity
 
-- `TileMap`：瓦片地图，包含不可通过的墙、可交互对象位置。
-- `Entity`：地图上实体的抽象基类。
+- `TileMap`：瓦片地图，包含不可通过的墙、可交互对象位置；管理 `entities_` 并提供 `entitiesAt()` / `firstEntityAt()` / `removeEntity()` / `clearEntities()`。
+- `Entity`：地图上实体的抽象基类，记录 `position_` 与局部 `bounds_`，提供 `worldBounds()` 与 `intersects()`。
   - `PlayerEntity`
-  - `NpcEntity`（带 Social Link）
-  - `EnemyEntity`（夜晚出现，碰撞触发战斗）
+  - `NpcEntity`（带 socialLinkId 与 spriteTextureId）
+  - `EnemyEntity`（带 enemyTemplateId 与 textureId，夜晚出现，碰撞触发战斗）
 
 ## Quest / QuestManager
 
-保留现有设计：
-
-- `Quest`：id、name、description、condition、reward。
-- `QuestManager`：accept / complete / reward。
-- 条件支持 `kill:N`，可扩展 `collect:id:N`、`level:N`。
+- `Quest`：id、name、description、condition、reward、type（Kill / Collect）、targetItemId、targetCount、currentProgress。
+- `QuestManager`：accept / complete / reward / questsForNpc / addKillProgress。
+- 条件支持 `kill:N`；默认任务均为击杀类，战斗胜利后调用 `addKillProgress()` 自动推进。
+- 仍保留 `collect:id:N`、`level:N` 扩展点，供后续内容使用。

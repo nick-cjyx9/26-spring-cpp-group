@@ -114,9 +114,9 @@ public:
 Social Link 的奖励不再直接加在 `Character` 上，而是转化为 **当前 Persona 的等级成长**。
 
 - `Character` 移除 Social Link 属性加成字段。
-- `Persona` 新增等级 / 经验字段：`level_`、`exp_`、`expToNextLevel_`。
-- Rank 提升时，GameManager 调用 `currentPersona->gainExp(expToNextLevel_)` 使其直接升 1 级。
-- Persona 升级后基础三维按固定倍率成长（如 `baseStat *= 1.05`）。
+- `Persona` 新增等级 / 经验字段：`level_`、`exp_`、`expToNextLevel_`，以及潜在技能表 `potentialSkills_`。
+- Rank 提升时，GameManager 找出所有已拥有且 Arcana 与 NPC 任一 Arcana 匹配的 Persona，对每个调用 `gainExp(expToNextLevel_)` 使其直接升 1 级；若无匹配，则回退到当前 Persona 升 1 级。
+- Persona 升级后基础三维按固定倍率成长（如 `baseStat *= 1.05`），并触发 `checkSkillUnlocks()` 学习潜在技能。
 
 最终属性计算（供 BattleSystem 使用）：
 
@@ -170,15 +170,22 @@ void GameManager::setRankUpCallback(RankUpCallback cb);
 
 **这是机制层给 UI 层预留的音效 / 特效接入点。** 机制层本身不依赖 SFML audio，UI 层（`main.cpp` 或场景）注册回调后即可在 rank up 时播奶龙笑 / 火舞音效、弹 Rank Up 横幅。
 
-默认 NPC 设计（3 个，满足 issue「至少 3 个 NPC」要求）：
+默认 NPC 设计（10 名，覆盖全部 22 张大阿卡纳）：
 
 | id | name | arcana | 奖励设计 |
 | --- | --- | --- | --- |
-| `sl_yosuke` | Yosuke | Magician | 每升 1 rank，当前 Persona 升 1 级；rank 3 / 6 / 9 额外学会新技能 |
-| `sl_chie` | Chie | Chariot | 同上 |
-| `sl_yukiko` | Yukiko | Priestess | 同上 |
+| `sl_npc_0` | Zhou | Fool, World, Sun | 每升 1 rank，所有匹配 Arcana 的已拥有 Persona 升 1 级 |
+| `sl_npc_1` | Eric | Magician, Fortune | 同上 |
+| `sl_npc_2` | Selena | Priestess, Moon | 同上 |
+| `sl_npc_3` | Maria | Empress, Temperance | 同上 |
+| `sl_npc_4` | Arthur | Emperor, Justice | 同上 |
+| `sl_npc_5` | Thomas | Hierophant, Hanged Man | 同上 |
+| `sl_npc_6` | Maxim | Chariot, Tower | 同上 |
+| `sl_npc_7` | Reina | Strength, Star | 同上 |
+| `sl_npc_8` | Zhang | Hermit, Death, Judgement | 同上 |
+| `sl_npc_9` | Lily | Lovers, Devil | 同上 |
 
-每条 link 的 rank 0..10 均填有独立对话文本（见 `GameManager::initSocialLinkRankData`）。
+如果玩家尚未拥有任何匹配 Arcana 的 Persona，奖励会回退到当前 Persona 升 1 级。每条 link 的 rank 0..10 均填有独立多行对话文本（见 `GameManager::applyNpcDialogueTemplates`）。
 
 ## 5. 数据持久化（已存在，未改动）
 
@@ -268,9 +275,9 @@ for (const SocialLink *link : GameManager::instance().socialLinkManager().allLin
 | --- | --- | --- | --- |
 | `src/core/SocialLink.*` | 扩展 reward/rankData/pending | nick-cjyx9（core） | ✅ 已改 |
 | `src/core/SocialLinkManager.*` | 扩展 progression/dialogue/聚合 API | nick-cjyx9 | ✅ 已改 |
-| `src/core/Character.*` | 移除 sl bonus 字段；持有 ownedPersonas_ | **nick-cjyx9（coordination）** | ⏳ 待实现 |
-| `src/core/Persona.*` | 新增 level/exp/三维成长 / 技能学习 | nick-cjyx9（core） | ⏳ 待实现 |
-| `src/manager/GameManager.*` | talkToNpc 改奖励为 Persona 升级 + 学技能 | **nick-cjyx9（coordination）** | ⏳ 待实现 |
+| `src/core/Character.*` | 移除 sl bonus 字段；持有 ownedPersonas_ | **nick-cjyx9（coordination）** | ✅ 已改 |
+| `src/core/Persona.*` | 新增 level/exp/三维成长 / 技能学习 | nick-cjyx9（core） | ✅ 已改 |
+| `src/manager/GameManager.*` | talkToNpc 改奖励为匹配 Arcana 的 Persona 升级 + 学技能 | **nick-cjyx9（coordination）** | ✅ 已改 |
 | `src/scenes/DialogueScene.*` | 改用 talkToNpc（最小改动） | 场景 owner | ✅ 已改（仅一行调用替换 + 一个成员） |
 | `src/data/SaveRepository.*` | **未改动** | W0606 | 无需 PR |
 | `CMakeLists.txt` | 链接 `sfml-audio` | UI 实现 | ⏳ UI 层再做 |

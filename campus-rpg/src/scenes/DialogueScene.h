@@ -1,7 +1,6 @@
 #pragma once
 
 #include "IScene.h"
-#include "Quest.h"
 
 #include <string>
 #include <vector>
@@ -23,7 +22,7 @@ private:
     float rankUpTimer_ = 0.0f;
     static constexpr float kRankUpDuration = 2.5f;
 
-    // NPC texture
+    // NPC texture (uses the same sprite as the map NPC)
     std::string npcTexId_;
     bool hasNpcTex_ = false;
 
@@ -31,23 +30,6 @@ private:
     std::string heroTexId_;
     bool hasHeroTex_ = false;
     std::string playerName_;
-
-    // Quest UI state
-    struct NpcQuestInfo
-    {
-        Quest *quest = nullptr;
-        enum class State { None, Available, InProgress, Completable, Rewarded };
-        State state = State::None;
-    };
-    std::vector<NpcQuestInfo> npcQuests_;
-    int questSelection_ = 0;
-    bool showQuestUi_ = false;
-    bool questSubmitted_ = false; // true after player accepts/completes a quest this session
-
-    void refreshNpcQuests();
-    void tryAcceptQuest(size_t index);
-    void tryCompleteQuest(size_t index);
-    std::string questStatusText(const NpcQuestInfo &info) const;
 
     // Multi-line dialogue support
     std::vector<std::string> currentDialogues_;

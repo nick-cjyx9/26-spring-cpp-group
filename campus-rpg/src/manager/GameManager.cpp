@@ -33,6 +33,33 @@
 
 namespace
 {
+    std::vector<std::string> splitArcanaList(const std::string &arcanaList)
+    {
+        std::vector<std::string> result;
+        size_t pos = 0;
+        while (pos < arcanaList.size())
+        {
+            size_t comma = arcanaList.find(',', pos);
+            std::string token = arcanaList.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
+            size_t first = token.find_first_not_of(" \t");
+            size_t last = token.find_last_not_of(" \t");
+            if (first != std::string::npos)
+                result.push_back(token.substr(first, last - first + 1));
+            if (comma == std::string::npos)
+                break;
+            pos = comma + 1;
+        }
+        return result;
+    }
+
+    bool arcanaMatches(const std::string &arcanaList, const std::string &arcana)
+    {
+        for (const auto &candidate : splitArcanaList(arcanaList))
+            if (candidate == arcana)
+                return true;
+        return false;
+    }
+
     engine::Vec2 randomSpawnInZones(const std::vector<engine::Rect> &zones, std::mt19937 &rng)
     {
         if (zones.empty())
@@ -705,89 +732,78 @@ void GameManager::initDefaultShop()
 
 void GameManager::initDefaultQuests()
 {
-    // Helper lambda to add kill quests
+    // Helper lambda to add kill quests. Kill progress is updated after every
+    // battle victory, so keep all default quests in the supported kill:N form.
     auto addKillQuest = [this](const std::string &id, const std::string &name,
-                                const std::string &desc, const std::string &condition,
+                                const std::string &desc, int count,
                                 int gold, int exp, const std::string &npcId)
     {
-        Quest q(id, name, desc, condition, gold, exp);
+        Quest q(id, name, desc, "kill:" + std::to_string(count), gold, exp);
         q.setType(QuestType::Kill);
         q.setNpcId(npcId);
-        questManager_.addQuest(std::move(q));
-    };
-
-    // Helper lambda to add collect quests
-    auto addCollectQuest = [this](const std::string &id, const std::string &name,
-                                   const std::string &desc, const std::string &itemId,
-                                   int count, int gold, int exp, const std::string &npcId)
-    {
-        Quest q(id, name, desc, "", gold, exp);
-        q.setType(QuestType::Collect);
-        q.setNpcId(npcId);
-        q.setTargetItemId(itemId);
         q.setTargetCount(count);
         questManager_.addQuest(std::move(q));
     };
 
-    // Zhou (Fool) - Yellow Braised Chicken Shop Owner
-    addCollectQuest("quest_zhou_1", "The Secret of the Golden Casserole", "Help Zhou collect 3 Shadow Mushrooms.",
-                    "item_shadow_mushroom", 3, 300, 50, "sl_npc_0");
-    addKillQuest("quest_zhou_2", "The Taste of Protection", "Defeat 5 Slimes to protect the ingredient delivery route.",
-                 "kill:5", 500, 80, "sl_npc_0");
+    // Zhou (Fool / World / Sun) - Yellow Braised Chicken Shop Owner
+    addKillQuest("quest_zhou_1", "Kitchen Pest Control", "Defeat 2 shadows so Zhou's deliveries stay safe.",
+                 2, 240, 45, "sl_npc_0");
+    addKillQuest("quest_zhou_2", "The Taste of Protection", "Defeat 5 shadows to protect the ingredient route.",
+                 5, 500, 80, "sl_npc_0");
 
-    // Eric (Magician) - Alchemist
-    addCollectQuest("quest_eric_1", "Alchemy Materials", "Help Eric collect 2 Crystal Shards.",
-                    "item_crystal_shard", 2, 200, 40, "sl_npc_1");
-    addKillQuest("quest_eric_2", "Monster Research", "Defeat 3 Goblins and collect their tissue samples.",
-                 "kill:3", 400, 60, "sl_npc_1");
+    // Eric (Magician / Fortune) - Alchemist
+    addKillQuest("quest_eric_1", "Alchemy Field Notes", "Defeat 2 shadows for Eric's monster research.",
+                 2, 220, 40, "sl_npc_1");
+    addKillQuest("quest_eric_2", "Monster Research", "Defeat 4 shadows and report the results.",
+                 4, 420, 65, "sl_npc_1");
 
-    // Selena (High Priestess) - Prophet
-    addCollectQuest("quest_selena_1", "Starlight Herbs", "Help Selena collect 3 Starlight Herbs.",
-                    "item_star_herb", 3, 250, 45, "sl_npc_2");
-    addKillQuest("quest_selena_2", "Threat of Shadows", "Defeat 2 Shadow monsters.",
-                 "kill:2", 350, 55, "sl_npc_2");
+    // Selena (Priestess / Moon) - Prophet
+    addKillQuest("quest_selena_1", "Starlit Omen", "Defeat 2 shadows seen in Selena's vision.",
+                 2, 250, 45, "sl_npc_2");
+    addKillQuest("quest_selena_2", "Threat of Shadows", "Defeat 3 shadows before the omen spreads.",
+                 3, 360, 60, "sl_npc_2");
 
-    // Maria (Empress) - Restaurant Owner
-    addCollectQuest("quest_maria_1", "Fresh Wheat", "Help Maria collect 5 portions of Flour.",
-                    "item_flour", 5, 150, 30, "sl_npc_3");
-    addKillQuest("quest_maria_2", "Escort Mission", "Defeat 1 Boss to protect the bread delivery route.",
-                 "kill:1", 600, 100, "sl_npc_3");
+    // Maria (Empress / Temperance) - Restaurant Owner
+    addKillQuest("quest_maria_1", "Bread Route Escort", "Defeat 2 shadows around the delivery road.",
+                 2, 230, 40, "sl_npc_3");
+    addKillQuest("quest_maria_2", "Escort Mission", "Defeat 1 powerful shadow to protect the bread route.",
+                 1, 600, 100, "sl_npc_3");
 
-    // Arthur (Emperor) - Town Guard Captain
-    addKillQuest("quest_arthur_1", "Recruit Trial", "Defeat 3 Slimes.",
-                 "kill:3", 300, 50, "sl_npc_4");
-    addKillQuest("quest_arthur_2", "Source of Shadows", "Defeat 5 Goblins.",
-                 "kill:5", 500, 70, "sl_npc_4");
+    // Arthur (Emperor / Justice) - Town Guard Captain
+    addKillQuest("quest_arthur_1", "Recruit Trial", "Defeat 3 shadows for the guard trial.",
+                 3, 300, 50, "sl_npc_4");
+    addKillQuest("quest_arthur_2", "Source of Shadows", "Defeat 5 shadows threatening the walls.",
+                 5, 500, 70, "sl_npc_4");
 
-    // Thomas (Hierophant) - History Professor
-    addCollectQuest("quest_thomas_1", "Ancient Book Collection", "Help Thomas collect 3 Ancient Books.",
-                    "item_book", 3, 200, 35, "sl_npc_5");
-    addKillQuest("quest_thomas_2", "The Price of Knowledge", "Defeat 4 Shadow monsters.",
-                 "kill:4", 450, 65, "sl_npc_5");
+    // Thomas (Hierophant / Hanged Man) - History Professor
+    addKillQuest("quest_thomas_1", "Library Ghost Story", "Defeat 2 shadows near the school library.",
+                 2, 220, 40, "sl_npc_5");
+    addKillQuest("quest_thomas_2", "The Price of Knowledge", "Defeat 4 shadows haunting the old records.",
+                 4, 450, 65, "sl_npc_5");
 
-    // Maxim (Chariot) - Hot-blooded Warrior
-    addKillQuest("quest_maxim_1", "Pre-Battle Warm-up", "Defeat 5 Slimes.",
-                 "kill:5", 250, 40, "sl_npc_6");
-    addKillQuest("quest_maxim_2", "Endless Challenge", "Defeat 10 Goblins.",
-                 "kill:10", 800, 120, "sl_npc_6");
+    // Maxim (Chariot / Tower) - Hot-blooded Warrior
+    addKillQuest("quest_maxim_1", "Pre-Battle Warm-up", "Defeat 5 shadows as a warm-up.",
+                 5, 250, 40, "sl_npc_6");
+    addKillQuest("quest_maxim_2", "Endless Challenge", "Defeat 8 shadows for Maxim's challenge.",
+                 8, 800, 120, "sl_npc_6");
 
-    // Reina (Strength) - Beast Tamer
-    addCollectQuest("quest_reina_1", "Healing Herbs", "Help Reina collect 3 Healing Herbs.",
-                    "item_herb", 3, 200, 40, "sl_npc_7");
-    addKillQuest("quest_reina_2", "Protect the Monsters", "Defeat 2 Shadow monsters.",
-                 "kill:2", 350, 55, "sl_npc_7");
+    // Reina (Strength / Star) - Beast Tamer
+    addKillQuest("quest_reina_1", "Calm the Wilds", "Defeat 2 aggressive shadows without harming the town.",
+                 2, 220, 40, "sl_npc_7");
+    addKillQuest("quest_reina_2", "Protect the Monsters", "Defeat 3 violent shadows frightening the small creatures.",
+                 3, 350, 55, "sl_npc_7");
 
-    // Zhang (Hermit) - Mysterious Old Man
-    addCollectQuest("quest_zhang_1", "Key Fragments", "Help Zhang collect 3 Key Fragments.",
-                    "item_key_fragment", 3, 500, 80, "sl_npc_8");
-    addKillQuest("quest_zhang_2", "The Final Test", "Defeat 1 Boss.",
-                 "kill:1", 1000, 150, "sl_npc_8");
+    // Zhang (Hermit / Death / Judgement) - Mysterious Old Man
+    addKillQuest("quest_zhang_1", "Ruin Trial", "Defeat 4 shadows to prove you can enter the ruins.",
+                 4, 500, 80, "sl_npc_8");
+    addKillQuest("quest_zhang_2", "The Final Test", "Defeat 1 powerful shadow for Zhang's final test.",
+                 1, 1000, 150, "sl_npc_8");
 
-    // Lily (Lovers) - Dual-faced Girl
-    addCollectQuest("quest_lily_1", "Secret Garden", "Help Lily collect 5 Glowing Flowers.",
-                    "item_flower", 5, 100, 25, "sl_npc_9");
-    addKillQuest("quest_lily_2", "Protect Lily", "Defeat 3 Slimes.",
-                 "kill:3", 250, 40, "sl_npc_9");
+    // Lily (Lovers / Devil) - Dual-faced Girl
+    addKillQuest("quest_lily_1", "Secret Garden Guard", "Defeat 2 shadows near Lily's secret garden.",
+                 2, 220, 35, "sl_npc_9");
+    addKillQuest("quest_lily_2", "Protect Lily", "Defeat 3 shadows that have been following Lily.",
+                 3, 250, 40, "sl_npc_9");
 }
 
 void GameManager::initDefaultEnemies()
@@ -831,16 +847,16 @@ void GameManager::generateNpcPool()
 {
     // Fixed pool of 10 tarot-themed NPCs with English names.
     static const std::vector<NpcDefinition> kFixedPool = {
-        {"sl_npc_0", "Zhou", "npc_portrait_0", "npc_sprite_0", "Fool"},
-        {"sl_npc_1", "Eric", "npc_portrait_1", "npc_sprite_1", "Magician"},
-        {"sl_npc_2", "Selena", "npc_portrait_2", "npc_sprite_2", "High Priestess"},
-        {"sl_npc_3", "Maria", "npc_portrait_3", "npc_sprite_3", "Empress"},
-        {"sl_npc_4", "Arthur", "npc_portrait_4", "npc_sprite_4", "Emperor"},
-        {"sl_npc_5", "Thomas", "npc_portrait_5", "npc_sprite_5", "Hierophant"},
-        {"sl_npc_6", "Maxim", "npc_portrait_6", "npc_sprite_6", "Chariot"},
-        {"sl_npc_7", "Reina", "npc_portrait_7", "npc_sprite_7", "Strength"},
-        {"sl_npc_8", "Zhang", "npc_portrait_8", "npc_sprite_8", "Hermit"},
-        {"sl_npc_9", "Lily", "npc_portrait_9", "npc_sprite_9", "Lovers"}};
+        {"sl_npc_0", "Zhou", "npc_sprite_0", "npc_sprite_0", "Fool, World, Sun"},
+        {"sl_npc_1", "Eric", "npc_sprite_1", "npc_sprite_1", "Magician, Fortune"},
+        {"sl_npc_2", "Selena", "npc_sprite_2", "npc_sprite_2", "Priestess, Moon"},
+        {"sl_npc_3", "Maria", "npc_sprite_3", "npc_sprite_3", "Empress, Temperance"},
+        {"sl_npc_4", "Arthur", "npc_sprite_4", "npc_sprite_4", "Emperor, Justice"},
+        {"sl_npc_5", "Thomas", "npc_sprite_5", "npc_sprite_5", "Hierophant, Hanged Man"},
+        {"sl_npc_6", "Maxim", "npc_sprite_6", "npc_sprite_6", "Chariot, Tower"},
+        {"sl_npc_7", "Reina", "npc_sprite_7", "npc_sprite_7", "Strength, Star"},
+        {"sl_npc_8", "Zhang", "npc_sprite_8", "npc_sprite_8", "Hermit, Death, Judgement"},
+        {"sl_npc_9", "Lily", "npc_sprite_9", "npc_sprite_9", "Lovers, Devil"}};
 
     npcPool_.clear();
     for (int i = 0; i < kNpcPoolSize && i < static_cast<int>(kFixedPool.size()); ++i)
@@ -1154,22 +1170,37 @@ std::string GameManager::talkToNpc(const std::string &socialLinkId)
     const SocialLink *after = socialLinkManager_.getLink(socialLinkId);
     int afterRank = after ? after->rank() : beforeRank;
 
-    // Apply Social Link rewards: each rank gained gives current Persona levels
-    // and may teach a new skill.
-    Persona *persona = character_.currentPersona();
-    if (persona && afterRank > beforeRank)
+    // Apply Social Link rewards: each rank gained levels owned Personas whose
+    // Arcana matches one of this NPC's 2-3 assigned Arcana values. If none are
+    // owned yet, fall back to the current Persona so early talks still reward.
+    Persona *currentPersona = character_.currentPersona();
+    if (after && afterRank > beforeRank)
     {
+        std::vector<Persona *> matchingPersonas;
+        for (const auto &owned : character_.ownedPersonas())
+        {
+            if (owned && arcanaMatches(after->arcana(), owned->arcana()))
+                matchingPersonas.push_back(owned.get());
+        }
+        if (matchingPersonas.empty() && currentPersona)
+            matchingPersonas.push_back(currentPersona);
+
         for (int r = beforeRank + 1; r <= afterRank; ++r)
         {
             const SocialLinkRankData *data = after->rankData(r);
             if (!data)
                 continue;
 
-            for (int i = 0; i < data->reward.personaLevels; ++i)
-                persona->gainExp(persona->expToNextLevel());
+            for (Persona *persona : matchingPersonas)
+            {
+                if (!persona)
+                    continue;
+                for (int i = 0; i < data->reward.personaLevels; ++i)
+                    persona->gainExp(persona->expToNextLevel());
+            }
 
-            if (data->reward.newSkill)
-                persona->learnSkill(data->reward.newSkill);
+            if (currentPersona && data->reward.newSkill)
+                currentPersona->learnSkill(data->reward.newSkill);
         }
     }
 

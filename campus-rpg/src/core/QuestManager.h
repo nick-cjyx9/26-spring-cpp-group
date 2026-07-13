@@ -25,6 +25,7 @@ public:
     bool acceptQuest(const std::string &id);
     bool completeQuest(const std::string &id, int killCount = 0);
     bool rewardQuest(const std::string &id);
+    void addKillProgress(int defeatedCount);
 
     // Find quests associated with a specific NPC.
     std::vector<Quest *> questsForNpc(const std::string &npcId) const;

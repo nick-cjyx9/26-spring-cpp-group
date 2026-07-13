@@ -112,8 +112,14 @@ void BattleScene::handleInput(engine::IInput &input)
 
     if (battle.isOver())
     {
-        if (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::Escape))
+        if (!postBattleHandled_)
             returnAfterBattle();
+        if (showingResult_ && (input.wasKeyJustPressed(engine::Key::Enter) || input.wasKeyJustPressed(engine::Key::E) ||
+                               input.wasKeyJustPressed(engine::Key::Escape)))
+        {
+            showingResult_ = false;
+            beginSleepTransition();
+        }
         return;
     }
 
@@ -486,6 +492,8 @@ void BattleScene::render(engine::IRenderer &renderer)
     {
         if (!postBattleHandled_)
             returnAfterBattle();
+        if (showingResult_)
+            drawResultOverlay(renderer);
         return;
     }
 }
@@ -496,26 +504,34 @@ bool BattleScene::processVictory()
     auto &character = GameManager::instance().character();
     int totalExp = 0;
     int totalGold = 0;
+    resultPersonas_.clear();
 
     for (const auto &enemyPtr : battle.enemies())
     {
         if (!enemyPtr)
             continue;
         totalExp += enemyPtr->rewardExp();
-        totalGold += enemyPtr->rewardGold();
+        int statTotal = enemyPtr->strength() + enemyPtr->magic() + enemyPtr->speed();
+        totalGold += std::max(enemyPtr->rewardGold(), statTotal * 3);
         for (const auto &pid : enemyPtr->dropPersonaIds())
         {
             auto dropped = GameManager::instance().findPersona(pid);
             if (dropped)
             {
                 if (GameManager::instance().addPersonaToPlayer(dropped))
+                {
                     battle.appendLog("Obtained Persona: " + dropped->name());
+                    resultPersonas_.push_back(dropped->name());
+                }
             }
         }
     }
 
     character.gainExp(totalExp);
     character.addGold(totalGold);
+    GameManager::instance().questManager().addKillProgress(static_cast<int>(battle.enemies().size()));
+    resultExp_ = totalExp;
+    resultGold_ = totalGold;
     return character.hasLevelUpSnapshot();
 }
 
@@ -524,6 +540,9 @@ void BattleScene::processDefeat()
     auto &character = GameManager::instance().character();
     character.heal(character.maxHp());
     character.recoverSp(character.maxSp());
+    resultExp_ = 0;
+    resultGold_ = 0;
+    resultPersonas_.clear();
 }
 
 void BattleScene::returnAfterBattle()
@@ -532,11 +551,47 @@ void BattleScene::returnAfterBattle()
     auto &battle = gm.battleSystem();
 
     sleepLeveledUp_ = false;
+    resultVictory_ = battle.playerWon();
     if (battle.playerWon())
         sleepLeveledUp_ = processVictory();
+    else if (battle.playerLost())
+        processDefeat();
 
     postBattleHandled_ = true;
-    beginSleepTransition();
+    showingResult_ = true;
+}
+
+void BattleScene::drawResultOverlay(engine::IRenderer &renderer) const
+{
+    renderer.drawRect({0, 0, 800, 600}, engine::Color(0, 0, 0, 155));
+    renderer.drawRect({180, 115, 440, 330}, engine::Color(18, 18, 32, 240));
+    renderer.drawRect({184, 119, 432, 322}, engine::Color(40, 35, 60, 230));
+
+    if (resultVictory_)
+    {
+        renderer.drawText("VICTORY", {320, 140}, 34, engine::Color::yellow());
+        renderer.drawText("Loot", {220, 195}, 22, engine::Color::cyan());
+        renderer.drawText("Gold: " + std::to_string(resultGold_) + " G", {240, 230}, 18, engine::Color(255, 220, 120, 255));
+        renderer.drawText("EXP:  " + std::to_string(resultExp_), {240, 258}, 18, engine::Color(120, 220, 120, 255));
+        renderer.drawText("Personas:", {240, 292}, 18, engine::Color::white());
+        if (resultPersonas_.empty())
+        {
+            renderer.drawText("No new Persona", {270, 320}, 16, engine::Color::gray());
+        }
+        else
+        {
+            for (size_t i = 0; i < resultPersonas_.size() && i < 4; ++i)
+                renderer.drawText("- " + resultPersonas_[i], {270, 320.0f + static_cast<float>(i) * 24.0f}, 16, engine::Color::white());
+        }
+    }
+    else
+    {
+        renderer.drawText("DEFEAT", {330, 150}, 34, engine::Color(255, 100, 100, 255));
+        renderer.drawText("You were rescued and brought home.", {235, 225}, 18, engine::Color::white());
+        renderer.drawText("HP and SP have been restored.", {260, 255}, 16, engine::Color::gray());
+    }
+
+    renderer.drawText("Enter / E / Esc: continue", {295, 405}, 16, engine::Color::gray());
 }
 
 void BattleScene::beginSleepTransition()
