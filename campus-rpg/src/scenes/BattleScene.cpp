@@ -44,15 +44,24 @@ namespace
     {
         switch (e)
         {
-        case Element::Physical: return "Phys";
-        case Element::Fire: return "Fire";
-        case Element::Ice: return "Ice";
-        case Element::Electric: return "Elec";
-        case Element::Wind: return "Wind";
-        case Element::Light: return "Light";
-        case Element::Dark: return "Dark";
-        case Element::Almighty: return "Almighty";
-        default: return "?";
+        case Element::Physical:
+            return "Phys";
+        case Element::Fire:
+            return "Fire";
+        case Element::Ice:
+            return "Ice";
+        case Element::Electric:
+            return "Elec";
+        case Element::Wind:
+            return "Wind";
+        case Element::Light:
+            return "Light";
+        case Element::Dark:
+            return "Dark";
+        case Element::Almighty:
+            return "Almighty";
+        default:
+            return "?";
         }
     }
 
@@ -356,7 +365,8 @@ void BattleScene::render(engine::IRenderer &renderer)
     if (enemy)
     {
         std::string enemyTex = GameManager::instance().currentEnemyTextureId();
-        if (enemyTex.empty()) enemyTex = "shadow";
+        if (enemyTex.empty())
+            enemyTex = "shadow";
         renderer.drawTexture(enemyTex, {520, 95, 96, 96});
         renderer.drawText(enemy->name(), {500, 60}, 22, engine::Color::white());
         renderer.drawText("HP " + std::to_string(enemy->hp()) + "/" + std::to_string(enemy->maxHp()),

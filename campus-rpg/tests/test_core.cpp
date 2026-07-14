@@ -480,9 +480,9 @@ void testEnemyScaleToLevel()
 void testEnemyChooseSkillFollowsPattern()
 {
     Slime slime;
-    CHECK(slime.chooseSkill(0) != nullptr);          // skill_slash
-    CHECK(slime.chooseSkill(1) == nullptr);          // "normal"
-    CHECK(slime.chooseSkill(2) != nullptr);          // skill_slash again
+    CHECK(slime.chooseSkill(0) != nullptr); // skill_slash
+    CHECK(slime.chooseSkill(1) == nullptr); // "normal"
+    CHECK(slime.chooseSkill(2) != nullptr); // skill_slash again
 }
 
 void testEnemyDropPersonaIds()

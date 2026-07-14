@@ -24,8 +24,8 @@ struct SocialLinkReward
 // Per-rank data: multiple dialogue lines shown at this rank + reward unlocked upon reaching it.
 struct SocialLinkRankData
 {
-    std::string dialogue;                    // Legacy single dialogue (kept for backward compatibility)
-    std::vector<std::string> dialogues;      // Multi-line dialogue sequence
+    std::string dialogue;               // Legacy single dialogue (kept for backward compatibility)
+    std::vector<std::string> dialogues; // Multi-line dialogue sequence
     SocialLinkReward reward;
 };
 

@@ -172,9 +172,11 @@ enemyStat = baseStat × (1 + (playerLevel - 1) × 0.1)
 ### 行动顺序
 
 1. 战斗开始时，所有参战单位 roll initiative：
+
    ```text
    initiative = speed × (1 + random(-10%, +10%))
    ```
+
 2. 按 initiative 排序生成固定行动队列，整局按队列循环。
 3. 轮到玩家时选择行动；轮到敌人时执行其固定循环中的下一动作。
 

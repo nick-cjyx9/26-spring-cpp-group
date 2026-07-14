@@ -34,7 +34,8 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
     }
 
     // Helper: does `table` have a column named `col`?
-    auto hasColumn = [this](const char *table, const char *col) -> bool {
+    auto hasColumn = [this](const char *table, const char *col) -> bool
+    {
         std::string pragma = std::string("PRAGMA table_info(") + table + ")";
         sqlite3_stmt *info = nullptr;
         if (sqlite3_prepare_v2(db_, pragma.c_str(), -1, &info, nullptr) != SQLITE_OK)
@@ -218,7 +219,8 @@ bool DatabaseManager::initDatabase(const std::string &dbPath)
     // Schema v2: ensure social_link has name/portrait columns (persistent NPC
     // identity). Fresh DBs already get them from CREATE TABLE above; existing
     // v1 DBs need an in-place ALTER. Idempotent via PRAGMA table_info check.
-    auto addColumnIfMissing = [this](const char *table, const char *col, const char *typeDef) {
+    auto addColumnIfMissing = [this](const char *table, const char *col, const char *typeDef)
+    {
         sqlite3_stmt *info = nullptr;
         std::string pragma = std::string("PRAGMA table_info(") + table + ")";
         if (sqlite3_prepare_v2(db_, pragma.c_str(), -1, &info, nullptr) != SQLITE_OK)

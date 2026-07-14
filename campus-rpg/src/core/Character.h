@@ -58,7 +58,11 @@ public:
     };
     bool hasLevelUpSnapshot() const { return hasSnapshot_; }
     const LevelUpSnapshot &levelUpSnapshot() const { return snapshot_; }
-    void clearLevelUpSnapshot() { hasSnapshot_ = false; snapshot_ = LevelUpSnapshot(); }
+    void clearLevelUpSnapshot()
+    {
+        hasSnapshot_ = false;
+        snapshot_ = LevelUpSnapshot();
+    }
 
     // Setters / mutations
     void setName(const std::string &name) { name_ = name; }

@@ -862,16 +862,15 @@ class: text-center
 | **STL** | `vector`/`map`/`shared_ptr`/`unique_ptr`/`sort`/`clamp` | `src/core/*.h`、`src/core/*.cpp` |
 | **软件工程实践** | Git 协同、单元测试、自动化构建、持续集成 | `tests/*`、`.github/workflows/*`、CMake Presets |
 
-
 ---
 
 # 系统演示
 
-| a | b | c |
+| ![a](./images/battle.png) | ![a](./images/char.png) | ![a](./images/quest.png) |
 | --- | --- | --- |
-| a | b | c |
-| a | b | c |
-| a | b | c |
+| 战斗 | 角色 | 任务 |
+| ![a](./images/shop.png) | ![a](./images/social.png) | ![a](./images/weapon.png) |
+| 商店 | 羁绊 | 装备 |
 
 ---
 layout: center

@@ -254,7 +254,8 @@ void TownScene::render(engine::IRenderer &renderer)
             auto b = entity->worldBounds();
             auto npcEntity = static_cast<NpcEntity *>(entity.get());
             std::string tex = npcEntity->spriteTextureId();
-            if (tex.empty()) tex = "npc";
+            if (tex.empty())
+                tex = "npc";
             float size = 96.0f;
             float cx = b.x + b.width / 2.0f;
             float cy = b.y + b.height / 2.0f;
@@ -306,7 +307,6 @@ void TownScene::render(engine::IRenderer &renderer)
         renderer.drawRect({300, 510, 200, 36}, engine::Color(0, 0, 0, 200));
         renderer.drawText(stuckMessage_, {340, 519}, 18, engine::Color::cyan());
     }
-
 }
 
 void TownScene::tryInteract()

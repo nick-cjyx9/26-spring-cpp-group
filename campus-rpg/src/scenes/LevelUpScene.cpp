@@ -108,7 +108,7 @@ void LevelUpScene::render(engine::IRenderer &renderer)
         if (delta > 0)
         {
             renderer.drawText("(+" + std::to_string(delta) + ")",
-                               {rightX + 275, rowY}, rowSize, engine::Color(0, 255, 100, 255));
+                              {rightX + 275, rowY}, rowSize, engine::Color(0, 255, 100, 255));
         }
         rowY += rowStep;
     };
@@ -120,5 +120,5 @@ void LevelUpScene::render(engine::IRenderer &renderer)
     float hintY = panelY + panelH - 36;
     renderer.drawRect({panelX + 200, hintY, 320, 28}, engine::Color(0, 0, 0, 180));
     renderer.drawText("Press Enter or Space to continue",
-                       {panelX + 235, hintY + 6}, 16, engine::Color(200, 200, 200, 255));
+                      {panelX + 235, hintY + 6}, 16, engine::Color(200, 200, 200, 255));
 }

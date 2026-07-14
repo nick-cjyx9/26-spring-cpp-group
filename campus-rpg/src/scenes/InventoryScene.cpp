@@ -13,11 +13,16 @@ namespace
     {
         switch (s)
         {
-        case EquipmentSlot::Weapon: return "Weapon";
-        case EquipmentSlot::Armor: return "Armor";
-        case EquipmentSlot::Accessory: return "Accessory";
-        case EquipmentSlot::Relic: return "Relic";
-        default: return "None";
+        case EquipmentSlot::Weapon:
+            return "Weapon";
+        case EquipmentSlot::Armor:
+            return "Armor";
+        case EquipmentSlot::Accessory:
+            return "Accessory";
+        case EquipmentSlot::Relic:
+            return "Relic";
+        default:
+            return "None";
         }
     }
 
@@ -25,11 +30,16 @@ namespace
     {
         switch (key)
         {
-        case 1: return EquipmentSlot::Weapon;
-        case 2: return EquipmentSlot::Armor;
-        case 3: return EquipmentSlot::Accessory;
-        case 4: return EquipmentSlot::Relic;
-        default: return EquipmentSlot::None;
+        case 1:
+            return EquipmentSlot::Weapon;
+        case 2:
+            return EquipmentSlot::Armor;
+        case 3:
+            return EquipmentSlot::Accessory;
+        case 4:
+            return EquipmentSlot::Relic;
+        default:
+            return EquipmentSlot::None;
         }
     }
 

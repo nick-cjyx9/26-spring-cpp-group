@@ -109,9 +109,11 @@
 #### 先攻与行动顺序
 
 - 战斗开始时，所有参战单位按速度 roll 一次 initiative：
+
   ```text
   initiative = speed × (1 + random(-10%, +10%))
   ```
+
 - 按 initiative 从高到低排成固定顺序，整场战斗按此顺序循环行动。
 - 速度相同时，玩家优先于敌人。
 
@@ -129,14 +131,19 @@
 #### 伤害公式
 
 - **物理攻击伤害**：
+
   ```text
   damage = basePhysicalPower × (1 + attacker.strength / 10) × (1 ± 5%)
   ```
-  可被目标闪避。
+
+可被目标闪避。
+
 - **技能伤害**：
+
   ```text
   damage = skillPower × (1 + attacker.magic / 10) × affinityMultiplier × (1 ± 5%)
   ```
+
   技能不会被闪避（命中由设计决定）。
 - **Affinity 倍率**（保留但无 1 More）：
   - Weak：1.5 倍伤害
@@ -147,9 +154,11 @@
 
 - 仅**物理攻击**可能被闪避。
 - 闪避率基于速度差：
+
   ```text
   dodgeRate = clamp((defender.speed - attacker.speed) / attacker.speed × 0.5, 0.05, 0.50)
   ```
+
   即速度相等时基础闪避率 5%，defender 速度达到 attacker 两倍时达到上限 50%。
 - 敌人同样适用闪避。
 
@@ -158,6 +167,7 @@
 - 每个敌人实例拥有一套**固定的出招循环**（技能 ID 序列 + 普通攻击占位）。
 - 按循环顺序每回合执行下一个动作，循环往复。
 - 敌人随玩家等级成长，属性按公式缩放：
+
   ```text
   enemyStat = baseStat × (1 + (playerLevel - 1) × 0.1)
   ```
@@ -351,17 +361,3 @@ CREATE TABLE quest_progress (
     accepted INTEGER, completed INTEGER, rewarded INTEGER
 );
 ```
-
----
-
-## 8. 课程要求覆盖
-
-| 要求 | 说明 |
-| --- | --- |
-| 六点基础功能 | 角色/背包/商店/任务/战斗/成长全部覆盖 |
-| OOP 四项特征 | 封装、继承、多态、关联均体现 |
-| 至少六个类 | Character/Item/Quest/Enemy/Shop/GameManager |
-| 至少两种 STL | vector、map 大量使用 |
-| 数据持久化 | SQLite3 |
-| 人机交互 | SFML 图形界面 + 清晰场景流程 |
-| 挑战任务 | 数据库、图形界面、STL 高级应用、软件工程实践 |

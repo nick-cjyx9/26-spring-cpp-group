@@ -140,9 +140,9 @@ void GameManager::seedDefaultState(const std::string &playerName)
     initDefaultQuests();
     initDefaultEnemies();
     initDefaultSocialLinks(); // builds the 10-NPC pool + dialogue
-    refreshDailyNpcs();        // pick today's 2+2 NPCs, reset talk counts
-    initDefaultMap();          // place player + today's NPCs on town map
-    initSecondMap();           // build school map + today's NPCs
+    refreshDailyNpcs();       // pick today's 2+2 NPCs, reset talk counts
+    initDefaultMap();         // place player + today's NPCs on town map
+    initSecondMap();          // build school map + today's NPCs
     initDefaultEquipment();
 
     // Start with a fixed Fool Persona. The full Persona registry is available
@@ -718,7 +718,8 @@ void GameManager::initDefaultShop()
     };
     auto arcanaTexture = [](std::string arcana)
     {
-        std::transform(arcana.begin(), arcana.end(), arcana.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::transform(arcana.begin(), arcana.end(), arcana.begin(), [](unsigned char c)
+                       { return static_cast<char>(std::tolower(c)); });
         std::replace(arcana.begin(), arcana.end(), ' ', '_');
         if (arcana == "hanged_man")
             return std::string("arcana_hanged_man");
@@ -743,8 +744,8 @@ void GameManager::initDefaultQuests()
     // Helper lambda to add kill quests. Kill progress is updated after every
     // battle victory, so keep all default quests in the supported kill:N form.
     auto addKillQuest = [this](const std::string &id, const std::string &name,
-                                const std::string &desc, int count,
-                                int gold, int exp, const std::string &npcId)
+                               const std::string &desc, int count,
+                               int gold, int exp, const std::string &npcId)
     {
         Quest q(id, name, desc, "kill:" + std::to_string(count), gold, exp);
         q.setType(QuestType::Kill);
@@ -1442,7 +1443,6 @@ void GameManager::unequipItem(EquipmentSlot slot)
         character_.equipmentStrengthBonus() - item->strengthBonus(),
         character_.equipmentMagicBonus() - item->magicBonus(),
         character_.equipmentSpeedBonus() - item->speedBonus());
-
 }
 
 bool GameManager::equipFromInventory(size_t index)

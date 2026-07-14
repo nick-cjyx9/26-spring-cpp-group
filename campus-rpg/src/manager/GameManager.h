@@ -213,10 +213,10 @@ private:
     void seedDefaultState(const std::string &playerName);
 
     // NPC pool helpers.
-    void generateNpcPool();        // create kNpcPoolSize random NPCs + dialogue.
+    void generateNpcPool();           // create kNpcPoolSize random NPCs + dialogue.
     void applyNpcDialogueTemplates(); // (re)fill generic dialogue + rewards.
-    void refreshDailyNpcs();       // pick kNpcsPerDay random ids for both maps, reset counts.
-    void rebuildMapNpcs();         // clear non-player entities, place today's NPCs on both maps.
+    void refreshDailyNpcs();          // pick kNpcsPerDay random ids for both maps, reset counts.
+    void rebuildMapNpcs();            // clear non-player entities, place today's NPCs on both maps.
 
     Character character_;
     Inventory inventory_;

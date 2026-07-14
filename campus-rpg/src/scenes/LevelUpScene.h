@@ -19,5 +19,5 @@ private:
     std::string returnTextureId_;
 
     void drawStatLine(engine::IRenderer &renderer, const std::string &label,
-                        int oldVal, int newVal, float x, float y, int size) const;
+                      int oldVal, int newVal, float x, float y, int size) const;
 };

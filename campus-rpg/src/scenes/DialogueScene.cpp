@@ -199,7 +199,6 @@ void DialogueScene::update(float /*deltaTime*/)
                 }
             }
         }
-
     }
 
     if (showRankUpBanner_)
@@ -290,7 +289,7 @@ void DialogueScene::render(engine::IRenderer &renderer)
     drawPanel(renderer, heroX + 14.0f, pNameY, heroW - 28.0f, 30.0f,
               nameFill, accent, accentDark);
     renderer.drawText(playerName_.empty() ? "Hero" : playerName_,
-                        {heroX + 24.0f, pNameY + 6.0f}, 16, engine::Color::white());
+                      {heroX + 24.0f, pNameY + 6.0f}, 16, engine::Color::white());
 
     // ================================================================
     // CENTER: Dialogue box

@@ -11,7 +11,8 @@ namespace
 {
     std::string arcanaTextureId(std::string arcana)
     {
-        std::transform(arcana.begin(), arcana.end(), arcana.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::transform(arcana.begin(), arcana.end(), arcana.begin(), [](unsigned char c)
+                       { return static_cast<char>(std::tolower(c)); });
         std::replace(arcana.begin(), arcana.end(), ' ', '_');
         return "arcana_" + arcana;
     }

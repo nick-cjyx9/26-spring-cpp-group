@@ -14,7 +14,7 @@ void RestConfirmScene::drawShadow(engine::IRenderer &r, float x, float y, float 
 }
 
 void RestConfirmScene::drawBorder(engine::IRenderer &r, float x, float y, float w, float h,
-                                   engine::Color bright, engine::Color dark)
+                                  engine::Color bright, engine::Color dark)
 {
     r.drawRect({x, y, w, 2}, bright);
     r.drawRect({x, y + h - 2, w, 2}, bright);
@@ -27,7 +27,7 @@ void RestConfirmScene::drawBorder(engine::IRenderer &r, float x, float y, float 
 }
 
 void RestConfirmScene::drawPanel(engine::IRenderer &r, float x, float y, float w, float h,
-                                  engine::Color fill, engine::Color bright, engine::Color dark)
+                                 engine::Color fill, engine::Color bright, engine::Color dark)
 {
     drawShadow(r, x, y, w, h);
     r.drawRect({x, y, w, h}, fill);
@@ -120,8 +120,8 @@ void RestConfirmScene::render(engine::IRenderer &renderer)
     renderer.drawText("Home", {tagX + 35.0f, tagY + 6.0f}, 17, engine::Color::white());
 
     std::string prompt = nightMode_
-        ? "Do you want to rest? (advance to next day, restore 30% HP)"
-        : "Do you want to rest? (go directly to night)";
+                             ? "Do you want to rest? (advance to next day, restore 30% HP)"
+                             : "Do you want to rest? (go directly to night)";
     renderer.drawText(prompt,
                       {boxX + 30.0f, boxY + 50.0f}, 18, engine::Color::white());
 

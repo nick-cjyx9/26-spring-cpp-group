@@ -24,7 +24,7 @@ namespace
     const MenuItem *menuItems()
     {
         static const MenuItem items[] = {
-            {"exit",   {200, 175, 400, 90}},
+            {"exit", {200, 175, 400, 90}},
             {"change", {200, 300, 400, 90}},
         };
         return items;

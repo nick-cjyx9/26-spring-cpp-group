@@ -370,7 +370,7 @@ void testNextSlotIdIsMaxPlusOne()
     CHECK_EQ(repo.nextSlotId(), 2);
 
     CHECK(repo.saveAll(4, a, inv, ps, slm, qm)); // create a gap (slots 1 and 4)
-    CHECK_EQ(repo.nextSlotId(), 5); // max + 1, gap preserved
+    CHECK_EQ(repo.nextSlotId(), 5);              // max + 1, gap preserved
 
     repo.deleteSlot(4);
     CHECK_EQ(repo.nextSlotId(), 2);
@@ -391,18 +391,18 @@ void testStaleV1SchemaIsRebuilt()
     sqlite3 *raw = nullptr;
     CHECK(sqlite3_open(path, &raw) == SQLITE_OK);
     CHECK(sqlite3_exec(raw,
-        "CREATE TABLE character (slot_id INTEGER PRIMARY KEY, name TEXT, "
-        "level INTEGER, hp INTEGER, max_hp INTEGER, sp INTEGER, max_sp INTEGER, "
-        "exp INTEGER, exp_to_next INTEGER, gold INTEGER, "
-        "st INTEGER, ma INTEGER, en INTEGER, ag INTEGER, lu INTEGER, "
-        "eq_atk INTEGER, eq_def INTEGER, eq_spd INTEGER, "
-        "pos_x REAL, pos_y REAL, is_night INTEGER, current_persona_id TEXT);"
-        "INSERT INTO character (slot_id, name) VALUES (1, 'StaleHero');"
-        "CREATE TABLE save_meta (slot_id INTEGER PRIMARY KEY, character_name TEXT, "
-        "level INTEGER, updated_at TEXT);"
-        "INSERT INTO save_meta (slot_id, character_name, level) VALUES (1, 'StaleHero', 5);"
-        "PRAGMA user_version = 1;",
-        nullptr, nullptr, nullptr) == SQLITE_OK);
+                       "CREATE TABLE character (slot_id INTEGER PRIMARY KEY, name TEXT, "
+                       "level INTEGER, hp INTEGER, max_hp INTEGER, sp INTEGER, max_sp INTEGER, "
+                       "exp INTEGER, exp_to_next INTEGER, gold INTEGER, "
+                       "st INTEGER, ma INTEGER, en INTEGER, ag INTEGER, lu INTEGER, "
+                       "eq_atk INTEGER, eq_def INTEGER, eq_spd INTEGER, "
+                       "pos_x REAL, pos_y REAL, is_night INTEGER, current_persona_id TEXT);"
+                       "INSERT INTO character (slot_id, name) VALUES (1, 'StaleHero');"
+                       "CREATE TABLE save_meta (slot_id INTEGER PRIMARY KEY, character_name TEXT, "
+                       "level INTEGER, updated_at TEXT);"
+                       "INSERT INTO save_meta (slot_id, character_name, level) VALUES (1, 'StaleHero', 5);"
+                       "PRAGMA user_version = 1;",
+                       nullptr, nullptr, nullptr) == SQLITE_OK);
     sqlite3_close(raw);
 
     // initDatabase must rebuild the schema (drop + recreate).

@@ -81,8 +81,8 @@ EquipmentItem::EquipmentItem(std::string id, std::string name, std::string descr
 std::unique_ptr<Item> EquipmentItem::clone() const
 {
     auto item = std::make_unique<EquipmentItem>(id_, name_, description_, value_,
-                                               strengthBonus_, magicBonus_, speedBonus_,
-                                               slot_, textureId_);
+                                                strengthBonus_, magicBonus_, speedBonus_,
+                                                slot_, textureId_);
     item->setQuantity(quantity_);
     return item;
 }
@@ -90,12 +90,12 @@ std::unique_ptr<Item> EquipmentItem::clone() const
 void EquipmentItem::use(Character &character)
 {
     character.equip(std::make_shared<EquipmentItem>(id_, name_, description_, value_,
-                                                     strengthBonus_, magicBonus_, speedBonus_,
-                                                     slot_, textureId_));
+                                                    strengthBonus_, magicBonus_, speedBonus_,
+                                                    slot_, textureId_));
 }
 
 PersonaItem::PersonaItem(std::string id, std::string name, std::string description, int value,
-                          std::string personaId, std::string textureId)
+                         std::string personaId, std::string textureId)
     : Item(std::move(id), std::move(name), std::move(description), value, ItemType::Persona, std::move(textureId)),
       personaId_(std::move(personaId)) {}
 

@@ -53,7 +53,7 @@ void QuestScene::handleInput(engine::IInput &input)
         else
         {
             currentTab_ = (currentTab_ == QuestTab::Completed) ? QuestTab::Available
-                                                                : static_cast<QuestTab>(static_cast<int>(currentTab_) + 1);
+                                                               : static_cast<QuestTab>(static_cast<int>(currentTab_) + 1);
         }
         selectedIndex_ = 0;
         scrollOffset_ = 0;
@@ -247,7 +247,8 @@ void QuestScene::render(engine::IRenderer &renderer)
                 continue;
 
             Quest *q = quests[questIdx];
-            if (!q) continue;
+            if (!q)
+                continue;
 
             float y = startY + i * (panelH + 8.0f);
             bool selected = (questIdx == selectedIndex_);
@@ -288,7 +289,7 @@ void QuestScene::render(engine::IRenderer &renderer)
     {
         renderer.drawRect({200, 260, 400, 80}, engine::Color(20, 20, 30, 230));
         drawBorder(renderer, 200, 260, 400, 80,
-                     engine::Color(255, 220, 80, 255), engine::Color(40, 10, 10, 200));
+                   engine::Color(255, 220, 80, 255), engine::Color(40, 10, 10, 200));
         renderer.drawText(message_, {220, 290}, 18, engine::Color::yellow());
     }
 }

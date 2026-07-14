@@ -31,7 +31,8 @@ void TileMap::addEntity(std::unique_ptr<Entity> entity)
 bool TileMap::removeEntity(Entity *entity)
 {
     auto it = std::find_if(entities_.begin(), entities_.end(),
-                           [entity](const auto &e) { return e.get() == entity; });
+                           [entity](const auto &e)
+                           { return e.get() == entity; });
     if (it == entities_.end())
         return false;
     entities_.erase(it);

@@ -132,7 +132,7 @@ void NightScene::update(float deltaTime)
     if (canMoveTo(newPos, map))
         player->setPosition({player->position().x, newPos.y});
 
-        // Check collision with enemy entities.
+    // Check collision with enemy entities.
     for (const auto &entity : map.entities())
     {
         if (entity && entity->type() == "enemy" && player->intersects(*entity))
@@ -217,7 +217,8 @@ void NightScene::render(engine::IRenderer &renderer)
             auto b = entity->worldBounds();
             auto enemyEntity = static_cast<EnemyEntity *>(entity.get());
             std::string tex = enemyEntity->textureId();
-            if (tex.empty()) tex = "shadow";
+            if (tex.empty())
+                tex = "shadow";
             bool isBoss = (enemyEntity->enemyTemplateId() == "enemy_boss");
             float size = isBoss ? 72.0f : 48.0f;
             float offset = (48.0f - size) / 2.0f;

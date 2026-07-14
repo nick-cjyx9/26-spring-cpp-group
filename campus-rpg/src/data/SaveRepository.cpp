@@ -168,7 +168,7 @@ namespace
 } // namespace
 
 bool SaveRepository::saveCharacter_(int slotId, const Character &character,
-                                   float posX, float posY, bool isNight)
+                                    float posX, float posY, bool isNight)
 {
     sqlite3 *db = DatabaseManager::instance().database();
     if (!db)
@@ -211,7 +211,7 @@ bool SaveRepository::saveCharacter_(int slotId, const Character &character,
 }
 
 bool SaveRepository::loadCharacter_(int slotId, Character &character,
-                                   float &posX, float &posY, bool &isNight)
+                                    float &posX, float &posY, bool &isNight)
 {
     sqlite3 *db = DatabaseManager::instance().database();
     if (!db)
