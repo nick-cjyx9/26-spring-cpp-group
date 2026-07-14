@@ -8,7 +8,7 @@
 
 ### 设计要点说明
 
-- **四层架构**：Engine（抽象接口 + SFML/Mock 实现）→ GameManager（单例总控）→ Core（纯 C++ 领域模型）+ Data（SQLite3 持久化）。
+- **三层架构**：Engine（抽象接口 + SFML/Mock 实现）→ GameManager（单例总控）→ Core（纯 C++ 领域模型）+ Data（SQLite3 持久化）。
 - **面向对象特征**：
   - 封装：`Character`、`Quest` 等类私有字段 + 公开 getter/setter。
   - 继承：抽象基类 `Item`、`Enemy`、`Entity`、`Scene`、`IRenderer`、`IWindow`、`IInput`。
@@ -27,7 +27,7 @@
 
 **已完成设计（检查点 2）**：
 - 最终玩法设计：早晨 Social Link + 夜晚同地图战斗 + Persona + 商店/背包。
-- 新四层架构与 CMake 库划分。
+- 新三层架构与 CMake 库划分。
 - 抽象引擎接口 `IRenderer` / `IWindow` / `IInput` 及 SFML/Mock 实现方案。
 - Core 域模型类图：`Character`、`Persona`、`Skill`、`Item` 体系、`Enemy` 体系、`BattleSystem`、`Shop`、`Quest`、`SocialLink`、`Entity`、`TileMap`。
 - Data 层 SQLite schema 扩展设计。

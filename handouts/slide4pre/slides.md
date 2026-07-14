@@ -217,11 +217,11 @@ class: text-center
 
 ---
 
-# 四层架构
+# 三层架构
 
 <div class="flex justify-center">
 
-```mermaid {scale: 0.4}
+```mermaid {theme: 'neutral', scale: 0.4}
 flowchart TB
     subgraph Engine["Engine / Rendering Layer"]
         E1[IRenderer]
